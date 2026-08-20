@@ -47,6 +47,15 @@ dotnet build ValidatedWorld.slnx --no-restore
 dotnet test ValidatedWorld.slnx --no-build --no-restore
 ```
 
+If restore fails with `Unauthorized access` while reading the user-level
+`NuGet.Config`, do not inspect, copy, modify, or search for credentials in that
+file. Rerun the exact restore command with the command tool's elevated,
+outside-sandbox permission and a narrowly scoped explanation that NuGet must
+read its configuration to restore dependencies. This is a sandbox permission
+workaround, not a product dependency or a reason to weaken restore. Keep the
+build and test commands sandboxed with `--no-restore` after the elevated
+restore succeeds.
+
 For the same failure, make at most two materially different repair attempts.
 Never rerun an unchanged failing command merely hoping it will pass. Give an
 infrastructure/dependency failure one diagnostic retry after a concrete repair;
