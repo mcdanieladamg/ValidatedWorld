@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T4 — affected-set analysis and manual review
+**Current task:** T5 — structured protocol and deterministic fingerprints
 
-**Last updated:** 2026-08-18
+**Last updated:** 2026-08-19
 
 This is the neutral implementation checklist and handoff record for humans and
 coding agents. It contains exactly one current task. The README defines the
@@ -74,6 +74,12 @@ dotnet build ValidatedWorld.slnx --no-restore
 dotnet test ValidatedWorld.slnx --no-build --no-restore
 ```
 
+If restore reports unauthorized access to the user-level NuGet configuration,
+follow the `AGENTS.md` NuGet restore permission workaround: rerun only the
+same restore command with elevated, outside-sandbox permission, without
+inspecting or copying that configuration. Keep build and test sandboxed after
+restore succeeds.
+
 If a changed-behavior test or full check fails, make at most two materially
 different repair attempts for the same failure. Never repeat an unchanged
 command merely hoping for a different result. An infrastructure or dependency
@@ -110,7 +116,7 @@ It does not authorize a Git commit.
 | T1 | complete | Common immutable graph domain |
 | T2 | complete | Graph index and structural validation |
 | T3 | complete | Change operations and projection |
-| T4 | pending | Affected-set analysis and manual review |
+| T4 | complete | Affected-set analysis and manual review |
 | T5 | pending | Structured protocol and deterministic fingerprints |
 | T6 | pending | SQLite current-state persistence and first public read slice |
 | T7 | pending | Application queries and in-memory session lifecycle |
@@ -139,9 +145,10 @@ Completed 2026-08-13.
 - Verified on 2026-08-13 that all Markdown links resolve, code fences balance,
   instruction/document lines stay within 120 characters, obsolete document
   references are absent, and the tracked diff has no whitespace errors.
-- `dotnet restore`, `dotnet build --no-restore`, and `dotnet test --no-build
-  --no-restore` succeeded on 2026-08-13. The scaffold build had 0 warnings and
-  0 errors; all 5 existing scaffold tests passed.
+- `dotnet restore ValidatedWorld.slnx`, `dotnet build --no-restore`, and
+  `dotnet test --no-build --no-restore`
+  succeeded on 2026-08-13. The scaffold build had 0 warnings and 0 errors;
+  all 5 existing scaffold tests passed.
 - No production feature is implemented. `Class1` files, `Hello, World!`, and
   placeholder tests are scaffold only.
 
@@ -240,6 +247,32 @@ Completed 2026-08-18.
   no-cascade removal clear; new nodes still need an explicit scope-parent
   operation, with the focus helper providing a bounded convenience for an
   unambiguous parent.
+
+### T4 — affected-set analysis and manual review
+
+Completed 2026-08-19.
+
+- Added deterministic affected analysis over the union of current and proposed
+  review arcs, including edge-operation changes, direct node seeds, scope-node
+  descendant expansion, breadth-first shortest explanations, and current/
+  proposed scope-upstream context.
+- Added explicit depth, affected-node, output, and cancellation omissions that
+  make bounded analysis inconclusive without silently truncating required work.
+- Added process-local review sessions with updated, reviewed-no-change,
+  not-applicable, and pending dispositions; required context presentation;
+  readiness blockers; and evidence-based staleness invalidation on refresh.
+- Added 9 focused T4 tests covering review directions, edge changes, scope/root
+  expansion, multiple chains, cycles, unrelated-branch exclusion, bounds,
+  manual review readiness, staleness, and a public-API smoke walkthrough.
+- Public API smoke completed a revised battery proposal, reviewed its runtime
+  consequence, presented purpose/power context, and reached write readiness.
+- Full checks on 2026-08-19: `dotnet restore ValidatedWorld.slnx`,
+  `dotnet build ValidatedWorld.slnx --no-restore` (0 warnings, 0 errors), and
+  `dotnet test ValidatedWorld.slnx --no-build --no-restore` (27 passed).
+- Modeling friction: changing a scope node intentionally selects its complete
+  descendant branch and then follows modeled semantic consequences; unrelated
+  sibling scopes remain excluded unless a relationship or direct change reaches
+  them.
 
 ## 6. Current and remaining tasks
 
@@ -543,9 +576,7 @@ README's review/write guarantees.
 
 ## 7. Attempt evidence
 
-No unresolved failed current-task attempt is recorded. The first sandboxed
-restore could not read the user NuGet configuration; the required restore then
-completed successfully with approved outside-sandbox access.
+No unresolved failed current-task attempt is recorded.
 
 ## 8. Handoff report template
 
