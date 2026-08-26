@@ -1,6 +1,6 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T6 — SQLite current-state persistence and first public read slice
+**Current task:** T7 — Application queries and in-memory session lifecycle
 
 **Last updated:** 2026-08-26
 
@@ -118,7 +118,7 @@ It does not authorize a Git commit.
 | T3 | complete | Change operations and projection |
 | T4 | complete | Affected-set analysis and manual review |
 | T5 | complete | Structured protocol and deterministic fingerprints |
-| T6 | pending | SQLite current-state persistence and first public read slice |
+| T6 | complete | SQLite current-state persistence and first public read slice |
 | T7 | pending | Application queries and in-memory session lifecycle |
 | T8 | pending | Atomic write and rollback behavior |
 | T9 | pending | Complete CLI/NDJSON manual workflow |
@@ -302,6 +302,46 @@ Completed 2026-08-26.
   typed fields rather than relying on JSON representations of Core structs;
   this makes malformed input fail at the domain boundary and keeps fingerprints
   independent of JSON property or collection ordering.
+
+### T6 — SQLite current-state persistence and first public read slice
+
+Completed 2026-08-26.
+
+- Added Application-owned persistence ports and public initialize, load, status,
+  verify, backup, and sample-creation use cases. Added the built-in
+  `technical-project` sample through public graph APIs rather than a populated
+  database fixture.
+- Added the fixed four-table SQLite v1 migration with checked application ID,
+  user version, migration checksum, exact schema objects, `STRICT` tables,
+  endpoint foreign keys, required indexes, the partial scope-parent index, and
+  project/node/edge/scope/review-arc read views.
+- Added bounded canonical row mapping, structural validation, logical state-
+  fingerprint verification, integrity and foreign-key checks, rollback-journal
+  and read-only connection policies, parameterized initialization, and verified
+  online backup to a new destination. Initialization and backup fully verify a
+  unique temporary database before exposing its final filename.
+- Replaced the CLI placeholder with help plus minimal `project init`, `status`,
+  `verify`, and `backup` and `sample list`/`create` commands. Existing
+  destinations are not overwritten, and paths containing spaces work.
+- Added 7 persistence behavior tests; the focused persistence project passed 8
+  tests including its existing assembly test. Coverage includes fresh/reopen
+  and byte-preserving reads, checked header/version/migration/schema rejection,
+  corrupt/malformed/oversized rows, strict tables, foreign keys, views/indexes,
+  physical row reinsertion order, backup equivalence, and safe rejection of
+  invalid graphs and existing destinations.
+- Public CLI smoke: followed help to list/create `technical-project` in a
+  disposable path containing spaces, read status, verified all nine checks,
+  made an online backup, and read the backup. Both files reported 7 nodes, 8
+  edges, schema v1, SQLite 3.53.3 from the bundled runtime, and state fingerprint
+  `c407e3498283ced8234835dc5dcce93d468e5b59b691d8ee235dcfbd96a7dba9`.
+- Full checks on 2026-08-26: `dotnet restore ValidatedWorld.slnx` succeeded with
+  the documented elevated NuGet.Config workaround; `dotnet build
+  ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
+  `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 37 tests.
+- Usability friction was low for the first slice: commands expose concise
+  key/value results and storage failures have stable codes. Status is
+  intentionally only the first read summary; bounded node, edge, search, scope,
+  and navigation queries remain T7.
 
 ## 6. Current and remaining tasks
 
