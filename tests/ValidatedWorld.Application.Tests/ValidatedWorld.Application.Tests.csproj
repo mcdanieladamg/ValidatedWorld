@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ValidatedWorld.Application\ValidatedWorld.Application.csproj" />
+    <ProjectReference Include="..\..\src\ValidatedWorld.Persistence.Sqlite\ValidatedWorld.Persistence.Sqlite.csproj" />
   </ItemGroup>
 
   <ItemGroup>

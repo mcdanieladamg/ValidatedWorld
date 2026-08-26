@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T7 — Application queries and in-memory session lifecycle
+**Current task:** T8 — Atomic write and rollback behavior
 
-**Current task estimate:** gigantic
+**Current task estimate:** large
 
 **Last updated:** 2026-08-26
 
@@ -147,7 +147,7 @@ It does not authorize a Git commit.
 | T4 | complete | Affected-set analysis and manual review |
 | T5 | complete | Structured protocol and deterministic fingerprints |
 | T6 | complete | SQLite current-state persistence and first public read slice |
-| T7 | pending | Application queries and in-memory session lifecycle |
+| T7 | complete | Application queries and in-memory session lifecycle |
 | T8 | pending | Atomic write and rollback behavior |
 | T9 | pending | Complete CLI/NDJSON manual workflow |
 | T10 | pending | Realistic MVP scenarios and usability hardening |
@@ -370,6 +370,42 @@ Completed 2026-08-26.
   key/value results and storage failures have stable codes. Status is
   intentionally only the first read summary; bounded node, edge, search, scope,
   and navigation queries remain T7.
+
+### T7 — application queries and in-memory session lifecycle
+
+Completed 2026-08-26.
+
+- Added verified immutable project-query snapshots with node/edge get and list,
+  combined text search, scope lineage and descendants, graph neighbors,
+  directional review dependencies, shortest dependency paths, and multi-node
+  scope context without sibling fan-out.
+- Added deterministic state-bound cursors, page limits, traversal depth/node/
+  cancellation limits, and explicit output/traversal omissions. Wrong project,
+  entity, and cursor inputs report stable application query errors.
+- Added the process-local begin/show/focus/expand/apply/affected/review/validate/
+  discard lifecycle with one active session per project in the application
+  coordinator, controlled clocks and IDs, exact base/operation/proposal/
+  affected/review fingerprints, external base-state rechecks, review evidence
+  refresh, and explicit unresolved-session exit warnings.
+- Proposal and review actions use only verified loads and immutable projection;
+  no session data is persisted. Tests compare the complete SQLite file bytes
+  before and after proposal, replacement, review, validation, and discard.
+- Added 5 focused T7 behavior tests plus the existing Application assembly test;
+  the focused Application suite passed all 6 tests. Coverage includes bounded
+  cursors and omissions, unrelated-sibling exclusion, wrong project/session
+  IDs, stale references and canonical state, replacement invalidation, focus,
+  discard, process-exit loss, and unchanged SQLite.
+- Public Application API smoke: created `technical-project` in a disposable path
+  containing spaces; queried scope/dependencies; revised and reviewed the
+  battery assumption; deliberately reused a stale reference and a wrong
+  project/session; exercised add-with-scope focus and an intentionally bounded
+  analysis; recovered, discarded, and confirmed byte-identical SQLite state.
+  Diagnostics were clear, unrelated privacy nodes stayed excluded, and no
+  confusing or material modeling issue was found.
+- Full checks on 2026-08-26: `dotnet restore ValidatedWorld.slnx` succeeded with
+  the documented elevated NuGet.Config workaround; `dotnet build
+  ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
+  `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 42 tests.
 
 ## 6. Current and remaining tasks
 

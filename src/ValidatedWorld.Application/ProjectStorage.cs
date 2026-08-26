@@ -74,16 +74,24 @@ public interface IProjectStore
     StoredProject Backup(string sourcePath, string destinationPath);
 }
 
-/// <summary>The first public project use cases over the configured store.</summary>
-public sealed class ProjectApplication
+/// <summary>Public project use cases over the configured store.</summary>
+public sealed partial class ProjectApplication
 {
     private readonly IProjectStore _store;
     private readonly GraphValidator _validator;
+    private readonly Func<DateTimeOffset> _utcNow;
+    private readonly Func<string> _sessionIdFactory;
 
-    public ProjectApplication(IProjectStore store, GraphValidator? validator = null)
+    public ProjectApplication(
+        IProjectStore store,
+        GraphValidator? validator = null,
+        Func<DateTimeOffset>? utcNow = null,
+        Func<string>? sessionIdFactory = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _validator = validator ?? new GraphValidator();
+        _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
+        _sessionIdFactory = sessionIdFactory ?? (() => Guid.NewGuid().ToString("N"));
     }
 
     public StoredProject Initialize(string path, ProjectGraph graph)
@@ -101,6 +109,19 @@ public sealed class ProjectApplication
 
     public StoredProject Backup(string sourcePath, string destinationPath) =>
         _store.Backup(sourcePath, destinationPath);
+
+    public ProjectQueries Queries(string path, ProjectId? expectedProjectId = null)
+    {
+        var project = _store.Load(path);
+        if (expectedProjectId is { } expected && project.Graph.ProjectId != expected)
+        {
+            throw new ProjectQueryException(
+                ProjectQueryErrorCode.ProjectMismatch,
+                $"Project '{project.Graph.ProjectId.Value}' does not match expected project '{expected.Value}'.");
+        }
+
+        return new ProjectQueries(project);
+    }
 
     public StoredProject CreateSample(string sampleName, string path) =>
         Initialize(path, SampleProjectCatalog.Create(sampleName));
