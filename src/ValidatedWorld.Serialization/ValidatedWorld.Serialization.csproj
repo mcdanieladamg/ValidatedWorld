@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ValidatedWorld.Core\ValidatedWorld.Core.csproj" />
+    <ProjectReference Include="..\ValidatedWorld.Validation\ValidatedWorld.Validation.csproj" />
   </ItemGroup>
 
 </Project>

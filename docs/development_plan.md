@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T5 — structured protocol and deterministic fingerprints
+**Current task:** T6 — SQLite current-state persistence and first public read slice
 
-**Last updated:** 2026-08-19
+**Last updated:** 2026-08-26
 
 This is the neutral implementation checklist and handoff record for humans and
 coding agents. It contains exactly one current task. The README defines the
@@ -117,7 +117,7 @@ It does not authorize a Git commit.
 | T2 | complete | Graph index and structural validation |
 | T3 | complete | Change operations and projection |
 | T4 | complete | Affected-set analysis and manual review |
-| T5 | pending | Structured protocol and deterministic fingerprints |
+| T5 | complete | Structured protocol and deterministic fingerprints |
 | T6 | pending | SQLite current-state persistence and first public read slice |
 | T7 | pending | Application queries and in-memory session lifecycle |
 | T8 | pending | Atomic write and rollback behavior |
@@ -273,6 +273,35 @@ Completed 2026-08-19.
   descendant branch and then follows modeled semantic consequences; unrelated
   sibling scopes remain excluded unless a relationship or direct change reaches
   them.
+
+### T5 — structured protocol and deterministic fingerprints
+
+Completed 2026-08-26.
+
+- Replaced the Serialization placeholder with strict System.Text.Json options,
+  versioned request/result envelopes, and explicit DTOs for graphs, nodes,
+  edges, scalar values, operations, batches, and bounded validation diagnostics.
+- Added public graph and operation DTO conversion with Core construction on
+  decode, preserving canonical collection ordering and rejecting malformed
+  values through the existing domain rules.
+- Added deterministic length-delimited SHA-256 fingerprints for current/
+  proposed graph state, ordered operations, affected analysis, and review
+  dispositions. Encoding includes all graph fields and evidence while excluding
+  timestamps and stored tokens; integer byte order is explicit.
+- Added 4 focused protocol tests covering graph/value round trips, strict
+  unknown-member rejection, insertion-order-independent state/operation
+  fingerprints, one-field hash changes, and affected/disposition separation.
+- Public API smoke: serialized and restored a graph containing tags, attributes,
+  scope-parent data, and operations; analyzed a replacement and confirmed the
+  affected and disposition tokens changed at the expected boundary.
+- Full checks on 2026-08-26: `dotnet restore ValidatedWorld.slnx` (required the
+  documented elevated NuGet.Config workaround), `dotnet build
+  ValidatedWorld.slnx --no-restore` (0 warnings, 0 errors), and `dotnet test
+  ValidatedWorld.slnx --no-build --no-restore` (29 passed).
+- Modeling friction: the protocol keeps graph IDs and scalar values as explicit
+  typed fields rather than relying on JSON representations of Core structs;
+  this makes malformed input fail at the domain boundary and keeps fingerprints
+  independent of JSON property or collection ordering.
 
 ## 6. Current and remaining tasks
 
