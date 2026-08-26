@@ -292,6 +292,20 @@ Completed 2026-08-19.
 - Added 9 focused T4 tests covering review directions, edge changes, scope/root
   expansion, multiple chains, cycles, unrelated-branch exclusion, bounds,
   manual review readiness, staleness, and a public-API smoke walkthrough.
+- Corrective amendment on 2026-08-26: changed `scope-parent` operations now
+  select old/new child subtrees and immediate parents, retain both ancestry
+  lineages, and block readiness without sibling fan-out. Validation and public
+  Application regressions cover a subtree redirect, add-with-scope, removal,
+  non-direct dispositions, and the former edge-only ready-with-zero-review bug.
+- Corrective public smoke used the NDJSON CLI with four disposable lore graphs
+  and 22 proposals. The former edge-only Skyrim reparent now selected 10
+  affected plus 3 context nodes and was not ready; adding a sixth continent
+  through a directional roster selected 5 plus 4 without existing local lore;
+  reviewed add/write/reopen/search verification succeeded at 18 nodes/27 edges.
+- Corrective full checks on 2026-08-26: restore succeeded through the documented
+  elevated NuGet.Config workaround; build completed with 0 warnings and 0
+  errors; and all 64 tests passed. Documentation links/fences and all 8 CLI JSON
+  examples also passed consistency checks.
 - Public API smoke completed a revised battery proposal, reviewed its runtime
   consequence, presented purpose/power context, and reached write readiness.
 - Full checks on 2026-08-19: `dotnet restore ValidatedWorld.slnx`,
@@ -544,11 +558,12 @@ smoke walkthrough, concerns, and decision are in
   documented elevated NuGet.Config workaround; `dotnet build
   ValidatedWorld.slnx --no-restore` completed with 0 warnings and 0 errors; and
   `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 62 tests.
-- No deterministic correctness defect remains known. Manual NDJSON/fingerprint
-  handling and explicit relationship direction remain high-burden; real-world
-  modeling evidence is small; maximum-scale opens are not interactive; and only
-  Windows x64 was run. The README remains accurate at the product-contract level
-  but is not an installation or operator guide.
+- A post-completion lore-modeling exercise found and corrected the
+  `scope-parent` edge-only review hole under T4, added a formal CLI operator
+  guide and durable graph guidance, and expanded the full suite to 64 tests.
+  No deterministic correctness defect remains known. Manual NDJSON/fingerprint
+  handling and explicit relationship direction remain high-burden;
+  maximum-scale opens are not interactive; and only Windows x64 was run.
 - Recommendation: continue, but narrow the result to an experimental Windows
   x64 developer preview of the manual engine. Do not claim semantic correctness
   or broad platform readiness. T12/T13 remain optional and unauthorized until a
@@ -651,18 +666,22 @@ Run full checks, mark complete, select T4, report, and stop.
 **Goal:** Select and explain the complete modeled review surface for a proposal.
 
 **Implement:** Current/proposed review-arc union; node and edge-operation seeds;
-directly changed scope descendant selection; deterministic breadth-first paths;
-current/proposed scope-upstream context through purpose; explicit bound/omission
-results; affected-node dispositions; context-presentation coverage; disposition
-staleness; and review-ready validation.
+directly changed scope descendant selection; old/new child-subtree and immediate-
+parent selection for `scope-parent` changes without sibling fan-out;
+deterministic breadth-first paths; current/proposed scope-upstream context
+through purpose; explicit bound/omission results; affected-node dispositions;
+context-presentation coverage; disposition staleness; and review-ready
+validation.
 
 **Tests and acceptance:** Cover all four directions, cycles/multiple paths,
 deterministic shortest explanations, added/removed/redirected edges, upward and
 lateral propagation, multiple scope lineages, leaf context without siblings,
-direct scope/root changes, operation changes invalidating only stale evidence,
-pending review blocking readiness, unrelated TechnicalProject exclusions, and
-bounds returning inconclusive. Complete a user-style manual review through
-public APIs, run full checks, mark complete, select T5, report, and stop.
+direct scope/root changes, scope-parent add/remove/redirect with current and
+proposed subtrees and parents, operation changes invalidating only stale
+evidence, pending review blocking readiness, unrelated TechnicalProject
+exclusions, and bounds returning inconclusive. Complete a user-style manual
+review through public APIs, run full checks, mark complete, select T5, report,
+and stop.
 
 ### T5 — structured protocol and deterministic fingerprints
 
@@ -815,7 +834,12 @@ preserving the full manual workflow.
 standalone English prompt; strict cited response; in-memory concern handling and
 staleness; disabled/unconfigured/inconclusive behavior; one OpenAI Responses
 client; explicit per-call authorization; time/usage metadata; and zero automatic
-paid retries.
+paid retries. The request and prompt must distinguish direct edits, semantic
+consequences, scope-topology membership changes, and context-only ancestors;
+identify old/new child subtrees and parents for a reparent; and explicitly ask
+the reviewer to inspect closed-world counts, complete lists, names, aliases, and
+words such as “all”, “only”, and “every” rather than treating absent facts as
+false.
 
 **Tests and acceptance:** Offline unit/integration tests cover exact request
 content, disjoint chains, required scope lineages, citations, malformed/refused/
@@ -823,8 +847,10 @@ timeout responses, no mutation/write, and manual fallback. An explicitly enabled
 live run must log and inspect the exact serialized request without credentials,
 then evaluate known-contradiction and unrelated-control cases for prompt quality,
 scope correctness, useful concerns, false positives/omissions, tokens, cost, and
-latency. Decide with the human whether to retain, revise, or omit the feature;
-do not automatically begin T13.
+latency. Include lore cases for adding a sixth roster member, changing a
+canonical name, a local fact, and a scope reparent; prove citations cover both
+scope lineages and do not invent sibling dependencies. Decide with the human
+whether to retain, revise, or omit the feature; do not automatically begin T13.
 
 ### T13 — optional OpenAI authoring agent
 
@@ -842,7 +868,15 @@ Application use cases while preserving exact human approval and manual use.
 context/tool/operation limits; material questions; affected/review iteration;
 new-project and change previews; exact short-lived approval binding; guarded
 normal write tool; disabled/unconfigured behavior; one OpenAI Responses client;
-and zero automatic paid retries.
+and zero automatic paid retries. The authoring prompt must teach the durable
+modeling defaults from the README: stable scope containers and IDs, volatile
+claims as focused nodes, source-of-truth-to-consumer direction, fan-in/fan-out
+roster hubs instead of sibling cliques, useful artifact-level anchors, and
+`both` only for genuine mutual reconsideration. Before changing counts, complete
+lists, or canonical names, the agent must search for aliases and closed-world
+wording, propose missing semantic edges when warranted, and ask when the set or
+reference is materially ambiguous. It must treat unexpectedly tiny or huge
+affected previews as a reason to inspect the model before seeking approval.
 
 **Tests and acceptance:** Scripted tests cover large-graph bounded search,
 duplicate/unrelated avoidance, material questions, session loss, review
@@ -851,6 +885,12 @@ fallback. An explicitly enabled live run must log and inspect the exact prompt,
 context, and tool schemas without credentials, then evaluate a known new-project
 and existing-project change for correctness, user burden, unrelated mutations,
 questions, affected coverage, approval binding, tokens, cost, and latency.
+Script the lore progression from a five-member world through a sixth member,
+roster/count reconciliation, canonical rename, local detail change, broad scope
+change, deletion, and reparent. Assert that the agent creates a roster hub rather
+than a sibling clique, preserves stable IDs, includes semantic consumers, sees
+old/new scope lineages, and neither hides a topology change nor needlessly pulls
+all local lore for a membership-only change.
 Retain the feature only if it meaningfully reduces burden without bypassing the
 README's review/write guarantees.
 

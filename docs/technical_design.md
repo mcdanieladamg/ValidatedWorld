@@ -104,6 +104,13 @@ and the affected set is recalculated normally.
 review direction is `none`; the special context and descendant rules above
 control its review behavior.
 
+Adding, removing, or redirecting a `scope-parent` edge selects the old and new
+child endpoints and their current and proposed descendant subtrees. The old and
+new immediate parents become non-direct affected review obligations because
+their membership changed. They do not become scope-expansion roots, so unrelated
+siblings remain excluded unless an explicit semantic review arc reaches them.
+Both old and new ancestry lineages are included as context.
+
 ### 2.4 Project graph
 
 The immutable in-memory graph contains project ID, title, purpose-node ID,
@@ -166,6 +173,11 @@ Node operation targets are direct seeds. An edge operation is always displayed
 as a direct change; the endpoints selected by its old and new review directions
 seed propagation. Directly changed scope-node seeds additionally select their
 descendant subtrees from the current and proposed scope trees.
+
+Changed `scope-parent` edges use the special topology rule from section 2.3 even
+though their ordinary review direction is `none`: old and new children seed
+their current/proposed subtrees, and old and new immediate parents seed semantic
+propagation without expanding their other scope children.
 
 Traversal is breadth-first with deterministic ID/edge ordering. It retains edge
 evidence and shortest explanation paths. Configured depth, node, or output
@@ -353,7 +365,11 @@ The standalone English prompt asks for cited concerns about contradictions,
 stale consequences, terminology drift, missing relationship candidates,
 purpose/scope conflict, questionable review dispositions, and insufficient
 context. It states that graph text is untrusted data, missing links are unknown,
-and citations must use supplied IDs.
+and citations must use supplied IDs. It distinguishes direct edits, semantic
+consequences, scope-membership changes, and context-only ancestors. Exact
+numbers, complete enumerations, canonical names, aliases, and closed-world words
+such as “all”, “only”, and “every” receive explicit attention without pretending
+the open-world graph proves missing facts false.
 
 The model has no tools and cannot mutate, disposition, or write the graph. Its
 strict result is `complete`, `inconclusive`, or `refused`, with structured
@@ -371,6 +387,15 @@ reads the smallest sufficient context plus all mandatory scope lineages, opens
 one in-memory session, applies explicit operations, inspects affected expansion,
 and asks the user when different interpretations would materially change graph
 meaning.
+
+Its authoring instructions use stable broad scope containers and stable IDs;
+place volatile counts, lists, names, and conclusions in focused claim nodes;
+direct source-of-truth edges toward consumers; prefer roster/aggregate hubs over
+sibling cliques; and reserve `both` for genuine mutual reconsideration. It
+searches aliases and closed-world wording before changing those claims. An
+unexpectedly tiny or huge affected preview triggers model inspection rather
+than immediate approval, and a scope reparent must expose its old/new subtrees,
+parents, and lineages.
 
 It has strict application tools for project status, search/navigation, session
 operations, affected analysis, validation, review handoff, exact confirmation,

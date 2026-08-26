@@ -144,6 +144,18 @@ permission workaround. Build completed with zero warnings and zero errors. All
 62 tests passed: 5 Core, 19 Validation, 4 Serialization, 21 Application, 8
 SQLite persistence, and 5 CLI tests.
 
+### Post-evidence corrective amendment — 2026-08-26
+
+A subsequent [lore modeling study](lore_modeling_study.md) found that an
+edge-only `scope-parent` redirect could produce no affected/context nodes and
+appear immediately review-ready. The T4 analyzer now selects old/new child
+subtrees and immediate parents, retains both lineages, and avoids unrelated
+sibling fan-out. Public Application and NDJSON smoke covered add, remove,
+reparent, review, atomic write, reopen, and search. The full suite now passes 64
+tests: 5 Core, 20 Validation, 4 Serialization, 22 Application, 8 SQLite
+persistence, and 5 CLI tests. A formal [CLI usage guide](cli_usage.md) now covers
+the manual surface and durable graph modeling.
+
 ## Unresolved defects, concerns, and recommendation
 
 No known deterministic correctness defect remained after the regression and
@@ -160,8 +172,8 @@ evidence gaps:
   missing or incorrectly directed edge remains a human modeling error.
 - There is no versioned distributable, installer, signing, cross-platform CI,
   upgrade history beyond SQLite v1, or recovery evidence for hostile operating-
-  system failures. The README is accurate at the product-contract level, but it
-  is not an installation or operator guide.
+  system failures. The README is accurate at the product-contract level and now
+  links an operator guide, but installation guidance remains incomplete.
 - Maximum-scale open and verification are seconds-to-tens-of-seconds operations
   with multi-gigabyte process memory on the evidence machine.
 

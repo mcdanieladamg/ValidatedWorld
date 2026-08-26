@@ -50,6 +50,9 @@ public sealed class AtomicWriteTests
                 GraphOperation.RemoveEdge(new EntityId("battery-requires-runtime")),
                 GraphOperation.RemoveEdge(new EntityId("battery-informs-power-anchor")),
             ]));
+        Assert.Contains(applied.Affected.AffectedNodes, node =>
+            node.NodeId == new EntityId("scope-power") && !node.IsDirectChange);
+        Assert.False(applied.Readiness.IsReady);
         var reviewed = application.ReviewChange(
             applied.Reference,
             new ChangeReviewUpdate(
