@@ -288,5 +288,7 @@ public sealed class ApplicationQueryAndSessionTests
         public ProjectVerification Verify(string path) => throw new NotSupportedException();
 
         public StoredProject Backup(string sourcePath, string destinationPath) => throw new NotSupportedException();
+
+        public ProjectWriteResult Write(ProjectWriteRequest request) => throw new NotSupportedException();
     }
 }

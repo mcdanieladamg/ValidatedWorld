@@ -63,6 +63,24 @@ public sealed record ChangeExitWarning(
 
 public sealed record DiscardedChange(ProjectId ProjectId, string SessionId, DateTimeOffset DiscardedUtc);
 
+public enum ChangeWriteStatus
+{
+    Written,
+    ReviewNotReady,
+    Stale,
+    Busy,
+    Failed,
+}
+
+/// <summary>The result of attempting to persist a reviewed in-memory proposal.</summary>
+public sealed record ChangeWriteResult(
+    ChangeWriteStatus Status,
+    ProjectId ProjectId,
+    string SessionId,
+    StoredProject? Project,
+    ProjectStorageErrorCode? StorageErrorCode,
+    string Message);
+
 public sealed record ChangeFocusResult(
     GraphOperationBatch ExpandedOperations,
     string OperationFingerprint,
@@ -303,6 +321,52 @@ public sealed partial class ProjectApplication
             var state = FindAndVerify(reference);
             VerifyBaseUnchanged(state);
             return Snapshot(state, refresh: null);
+        }
+    }
+
+    public ChangeWriteResult WriteChange(ChangeSessionReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        lock (_sessionLock)
+        {
+            var state = FindAndVerify(reference);
+            var readiness = state.Review.EvaluateReadiness();
+            if (!readiness.IsReady)
+            {
+                return new ChangeWriteResult(
+                    ChangeWriteStatus.ReviewNotReady,
+                    state.BaseProject.Graph.ProjectId,
+                    state.SessionId,
+                    null,
+                    null,
+                    string.Join(" ", readiness.Blockers));
+            }
+
+            var write = _store.Write(new ProjectWriteRequest(
+                state.BaseProject.Path,
+                state.BaseProject.Graph.ProjectId,
+                state.BaseProject.StateFingerprint,
+                state.Projection.Operations,
+                GraphFingerprints.Proposed(state.Projection.Graph)));
+            var result = new ChangeWriteResult(
+                write.Outcome switch
+                {
+                    ProjectWriteOutcome.Written => ChangeWriteStatus.Written,
+                    ProjectWriteOutcome.Stale => ChangeWriteStatus.Stale,
+                    ProjectWriteOutcome.Busy => ChangeWriteStatus.Busy,
+                    _ => ChangeWriteStatus.Failed,
+                },
+                state.BaseProject.Graph.ProjectId,
+                state.SessionId,
+                write.Project,
+                write.ErrorCode,
+                write.Message);
+            if (result.Status == ChangeWriteStatus.Written)
+            {
+                _activeSessions.Remove(state.BaseProject.Graph.ProjectId);
+            }
+
+            return result;
         }
     }
 

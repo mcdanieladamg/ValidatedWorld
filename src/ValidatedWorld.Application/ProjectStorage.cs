@@ -60,6 +60,29 @@ public sealed record ProjectVerification(
     int EdgeCount,
     IReadOnlyList<string> Checks);
 
+/// <summary>The immutable write request produced by one reviewed change session.</summary>
+public sealed record ProjectWriteRequest(
+    string Path,
+    ProjectId ProjectId,
+    string BaseFingerprint,
+    GraphOperationBatch Operations,
+    string ProposedFingerprint);
+
+public enum ProjectWriteOutcome
+{
+    Written,
+    Stale,
+    Busy,
+    Failed,
+}
+
+/// <summary>The storage result for an attempted atomic graph write.</summary>
+public sealed record ProjectWriteResult(
+    ProjectWriteOutcome Outcome,
+    StoredProject? Project,
+    ProjectStorageErrorCode? ErrorCode,
+    string Message);
+
 /// <summary>Persistence operations expressed in application/domain values.</summary>
 public interface IProjectStore
 {
@@ -72,6 +95,8 @@ public interface IProjectStore
     ProjectVerification Verify(string path);
 
     StoredProject Backup(string sourcePath, string destinationPath);
+
+    ProjectWriteResult Write(ProjectWriteRequest request);
 }
 
 /// <summary>Public project use cases over the configured store.</summary>

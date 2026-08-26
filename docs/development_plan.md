@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T8 — Atomic write and rollback behavior
+**Current task:** T9 — Complete CLI/NDJSON manual workflow
 
-**Current task estimate:** large
+**Current task estimate:** gigantic
 
 **Last updated:** 2026-08-26
 
@@ -148,7 +148,7 @@ It does not authorize a Git commit.
 | T5 | complete | Structured protocol and deterministic fingerprints |
 | T6 | complete | SQLite current-state persistence and first public read slice |
 | T7 | complete | Application queries and in-memory session lifecycle |
-| T8 | pending | Atomic write and rollback behavior |
+| T8 | complete | Atomic write and rollback behavior |
 | T9 | pending | Complete CLI/NDJSON manual workflow |
 | T10 | pending | Realistic MVP scenarios and usability hardening |
 | T11 | pending | MVP release evidence and stop decision |
@@ -406,6 +406,38 @@ Completed 2026-08-26.
   the documented elevated NuGet.Config workaround; `dotnet build
   ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
   `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 42 tests.
+
+### T8 — atomic write and rollback behavior
+
+Completed 2026-08-26.
+
+- Added a reviewed write request/result contract and `WriteChange` use case.
+  It blocks non-ready review states, returns structured written/stale/busy/
+  failure outcomes, removes the in-memory session only after success, and keeps
+  it available after every non-success result.
+- Added the SQLite `BEGIN IMMEDIATE` write path. It verifies the current state
+  inside the transaction, projects and validates the final batch again, removes
+  edges before nodes, writes nodes before edges, checks foreign keys, reloads
+  and validates the full graph, updates the state fingerprint once, then commits.
+- Added deterministic fault-injection points around every transaction/write
+  boundary. A failed SQLite setup now also disposes its connection, including
+  contention during connection policy setup.
+- Added 6 focused Application behavior tests; the focused Application suite
+  passed all 12 tests. Coverage includes successful replacement and explicit
+  edge/node removal, pending/invalid/inconclusive proposals, stale state,
+  bounded concurrent-writer busy behavior, rollback at every injected boundary,
+  and a validated retry after a one-time failure.
+- Public Application API smoke: created disposable `technical-project` databases
+  through the normal sample path, reviewed and wrote a battery-assumption
+  revision, then separately removed its incident edges and node. Deliberate
+  unreviewed, structurally invalid, bounded, stale, busy, and injected-fault
+  attempts left the canonical database unchanged and retained the session;
+  retrying a recovered session committed successfully. Diagnostics were clear,
+  and no material usability or modeling issue was found.
+- Full checks on 2026-08-26: `dotnet restore ValidatedWorld.slnx` succeeded with
+  the documented elevated NuGet.Config workaround; `dotnet build
+  ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
+  `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 48 tests.
 
 ## 6. Current and remaining tasks
 
