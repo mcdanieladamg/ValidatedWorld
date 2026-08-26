@@ -1,6 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T6 — SQLite current-state persistence and first public read slice
+**Current task:** T7 — Application queries and in-memory session lifecycle
+
+**Current task estimate:** gigantic
 
 **Last updated:** 2026-08-26
 
@@ -33,8 +35,11 @@ On success:
    evidence entry under Completed evidence.
 5. Change **Current task** at the top to the next numbered task. The next task is
    already specified here; refine it only when completed evidence requires it.
-6. Report the result, exact checks, smoke-test findings, uncertainty, and next
-   task to the human, then stop.
+6. Set **Current task estimate** directly below it to exactly `small`, `medium`,
+   `large`, or `gigantic` based on the next task's expected code-change volume
+   as one phase. Use `None` when there is no authorized Current task.
+7. Report the result, exact checks, smoke-test findings, uncertainty, Current
+   task estimate, and next task to the human, then stop.
 
 On failure:
 
@@ -59,8 +64,31 @@ Also perform an informal user-style smoke check:
 - After a CLI exists, start from public help and use a disposable
   application-created database. Do not rely on private APIs or direct canonical
   SQL writes.
-- Record the goal, commands/public calls, observed outcome, confusing behavior,
-  unrelated-node exclusions when relevant, and confidence.
+- Keep those entry conditions as a repeatable spine, but do not reduce smoke QA
+  to a fixed script or duplicate the automated suite. Add creative one-off probes
+  based on the changed behavior and anything confusing observed during the run.
+- Approach the workflow like a curious human: vary plausible inputs or order,
+  make a natural mistake when useful, inspect diagnostics and recovery, and try
+  an alternate path a user might reasonably choose.
+- Fix a finding when the repair is clearly in-scope, small, and straightforward,
+  and add a regression test. Escalate to the human if it requires a material
+  product, schema, dependency, provider, or scope decision, exposes an inherent
+  contradiction, or has no clear low-risk repair.
+- Record the goal, repeatable commands/public calls, exploratory probes, observed
+  outcomes, confusing behavior, unrelated-node exclusions when relevant, and
+  confidence. Exploratory probes need not be standardized across tasks.
+
+After implementation, automated checks, and smoke QA are complete, set the
+single **Current task estimate** field near the top for the newly selected task.
+Do not also copy the estimate into completed evidence or the handoff template.
+The estimate is about code-change breadth for that task as one phase rather than
+elapsed time and does not authorize starting, splitting, or redesigning it:
+
+- `small`: localized change with a narrow test surface;
+- `medium`: several related changes within one primary subsystem;
+- `large`: broad changes spanning multiple components or public behaviors;
+- `gigantic`: unusually wide change across many contracts, state paths, or
+  integration boundaries, with correspondingly extensive tests.
 
 Documentation-only tasks require link/format/consistency checks, not invented
 production tests.
@@ -118,7 +146,7 @@ It does not authorize a Git commit.
 | T3 | complete | Change operations and projection |
 | T4 | complete | Affected-set analysis and manual review |
 | T5 | complete | Structured protocol and deterministic fingerprints |
-| T6 | pending | SQLite current-state persistence and first public read slice |
+| T6 | complete | SQLite current-state persistence and first public read slice |
 | T7 | pending | Application queries and in-memory session lifecycle |
 | T8 | pending | Atomic write and rollback behavior |
 | T9 | pending | Complete CLI/NDJSON manual workflow |
@@ -302,6 +330,46 @@ Completed 2026-08-26.
   typed fields rather than relying on JSON representations of Core structs;
   this makes malformed input fail at the domain boundary and keeps fingerprints
   independent of JSON property or collection ordering.
+
+### T6 — SQLite current-state persistence and first public read slice
+
+Completed 2026-08-26.
+
+- Added Application-owned persistence ports and public initialize, load, status,
+  verify, backup, and sample-creation use cases. Added the built-in
+  `technical-project` sample through public graph APIs rather than a populated
+  database fixture.
+- Added the fixed four-table SQLite v1 migration with checked application ID,
+  user version, migration checksum, exact schema objects, `STRICT` tables,
+  endpoint foreign keys, required indexes, the partial scope-parent index, and
+  project/node/edge/scope/review-arc read views.
+- Added bounded canonical row mapping, structural validation, logical state-
+  fingerprint verification, integrity and foreign-key checks, rollback-journal
+  and read-only connection policies, parameterized initialization, and verified
+  online backup to a new destination. Initialization and backup fully verify a
+  unique temporary database before exposing its final filename.
+- Replaced the CLI placeholder with help plus minimal `project init`, `status`,
+  `verify`, and `backup` and `sample list`/`create` commands. Existing
+  destinations are not overwritten, and paths containing spaces work.
+- Added 7 persistence behavior tests; the focused persistence project passed 8
+  tests including its existing assembly test. Coverage includes fresh/reopen
+  and byte-preserving reads, checked header/version/migration/schema rejection,
+  corrupt/malformed/oversized rows, strict tables, foreign keys, views/indexes,
+  physical row reinsertion order, backup equivalence, and safe rejection of
+  invalid graphs and existing destinations.
+- Public CLI smoke: followed help to list/create `technical-project` in a
+  disposable path containing spaces, read status, verified all nine checks,
+  made an online backup, and read the backup. Both files reported 7 nodes, 8
+  edges, schema v1, SQLite 3.53.3 from the bundled runtime, and state fingerprint
+  `c407e3498283ced8234835dc5dcce93d468e5b59b691d8ee235dcfbd96a7dba9`.
+- Full checks on 2026-08-26: `dotnet restore ValidatedWorld.slnx` succeeded with
+  the documented elevated NuGet.Config workaround; `dotnet build
+  ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
+  `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 37 tests.
+- Usability friction was low for the first slice: commands expose concise
+  key/value results and storage failures have stable codes. Status is
+  intentionally only the first read summary; bounded node, edge, search, scope,
+  and navigation queries remain T7.
 
 ## 6. Current and remaining tasks
 
