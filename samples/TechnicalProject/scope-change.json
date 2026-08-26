@@ -1,0 +1,36 @@
+{
+  "goal": "Revise the power scope and require review of its whole direct scope subtree without sibling fan-out.",
+  "operations": {
+    "operations": [
+      {
+        "kind": 1,
+        "entityKind": 0,
+        "entityId": "scope-power",
+        "node": {
+          "id": "scope-power",
+          "text": "Revised power behavior",
+          "kind": "scope",
+          "tags": [],
+          "attributes": []
+        },
+        "edge": null
+      }
+    ]
+  },
+  "expected": {
+    "affectedNodeIds": [
+      "battery-assumption",
+      "power-design-anchor",
+      "runtime-test",
+      "scope-power"
+    ],
+    "scopeContextNodeIds": [
+      "purpose"
+    ],
+    "excludedNodeIds": [
+      "retention-policy",
+      "scope-privacy"
+    ],
+    "expectedEdgeChangeIds": []
+  }
+}

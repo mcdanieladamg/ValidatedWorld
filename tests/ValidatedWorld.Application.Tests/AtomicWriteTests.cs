@@ -47,7 +47,8 @@ public sealed class AtomicWriteTests
             [
                 GraphOperation.RemoveNode(new EntityId("battery-assumption")),
                 GraphOperation.RemoveEdge(new EntityId("battery-scope-parent")),
-                GraphOperation.RemoveEdge(new EntityId("battery-requires-test")),
+                GraphOperation.RemoveEdge(new EntityId("battery-requires-runtime")),
+                GraphOperation.RemoveEdge(new EntityId("battery-informs-power-anchor")),
             ]));
         var reviewed = application.ReviewChange(
             applied.Reference,
@@ -61,10 +62,11 @@ public sealed class AtomicWriteTests
         var written = application.WriteChange(reviewed.Reference);
 
         Assert.Equal(ChangeWriteStatus.Written, written.Status);
-        Assert.Equal(6, written.Project!.Graph.Nodes.Count);
-        Assert.Equal(6, written.Project.Graph.Edges.Count);
+        Assert.Equal(12, written.Project!.Graph.Nodes.Count);
+        Assert.Equal(14, written.Project.Graph.Edges.Count);
         Assert.DoesNotContain(written.Project.Graph.Nodes, node => node.Id.Value == "battery-assumption");
-        Assert.DoesNotContain(written.Project.Graph.Edges, edge => edge.Id.Value is "battery-scope-parent" or "battery-requires-test");
+        Assert.DoesNotContain(written.Project.Graph.Edges, edge => edge.Id.Value is
+            "battery-scope-parent" or "battery-requires-runtime" or "battery-informs-power-anchor");
         Assert.True(application.Verify(path).IsValid);
     }
 

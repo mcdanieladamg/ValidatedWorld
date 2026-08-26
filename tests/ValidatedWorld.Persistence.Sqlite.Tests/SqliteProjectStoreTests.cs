@@ -26,8 +26,8 @@ public sealed class SqliteProjectStoreTests
         Assert.Equal(created.Graph, loaded.Graph);
         Assert.Equal(created.StateFingerprint, loaded.StateFingerprint);
         Assert.Equal(FixedUtc, loaded.CreatedUtc);
-        Assert.Equal(7, status.NodeCount);
-        Assert.Equal(8, status.EdgeCount);
+        Assert.Equal(13, status.NodeCount);
+        Assert.Equal(17, status.EdgeCount);
         Assert.Equal(1, status.SchemaVersion);
         Assert.NotEmpty(status.SqliteVersion);
         Assert.True(verification.IsValid);
@@ -99,10 +99,10 @@ public sealed class SqliteProjectStoreTests
         Assert.Equal("delete", Scalar<string>(connection, "PRAGMA journal_mode"));
         Assert.Equal(4, Scalar<long>(connection, "SELECT count(*) FROM pragma_table_list WHERE strict = 1"));
         Assert.Equal(1, Scalar<long>(connection, "SELECT count(*) FROM vw_project"));
-        Assert.Equal(7, Scalar<long>(connection, "SELECT count(*) FROM vw_nodes"));
-        Assert.Equal(8, Scalar<long>(connection, "SELECT count(*) FROM vw_edges"));
-        Assert.Equal(6, Scalar<long>(connection, "SELECT count(*) FROM vw_scope"));
-        Assert.Equal(2, Scalar<long>(connection, "SELECT count(*) FROM vw_review_arcs"));
+        Assert.Equal(13, Scalar<long>(connection, "SELECT count(*) FROM vw_nodes"));
+        Assert.Equal(17, Scalar<long>(connection, "SELECT count(*) FROM vw_edges"));
+        Assert.Equal(12, Scalar<long>(connection, "SELECT count(*) FROM vw_scope"));
+        Assert.Equal(5, Scalar<long>(connection, "SELECT count(*) FROM vw_review_arcs"));
         Assert.Equal(4, Scalar<long>(connection, """
             SELECT count(*) FROM sqlite_schema
             WHERE type = 'index' AND name IN (

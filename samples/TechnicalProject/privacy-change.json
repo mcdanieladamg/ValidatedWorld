@@ -1,0 +1,38 @@
+{
+  "goal": "Revise retention and review architecture, verification, and documentation without pulling power work.",
+  "operations": {
+    "operations": [
+      {
+        "kind": 1,
+        "entityKind": 0,
+        "entityId": "retention-policy",
+        "node": {
+          "id": "retention-policy",
+          "text": "Collected data is retained only for the revised required interval",
+          "kind": "requirement",
+          "tags": [],
+          "attributes": []
+        },
+        "edge": null
+      }
+    ]
+  },
+  "expected": {
+    "affectedNodeIds": [
+      "privacy-architecture",
+      "privacy-documentation",
+      "retention-policy",
+      "retention-test"
+    ],
+    "scopeContextNodeIds": [
+      "purpose",
+      "scope-documentation",
+      "scope-privacy"
+    ],
+    "excludedNodeIds": [
+      "battery-assumption",
+      "runtime-test"
+    ],
+    "expectedEdgeChangeIds": []
+  }
+}

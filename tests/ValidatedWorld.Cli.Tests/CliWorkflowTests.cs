@@ -37,19 +37,19 @@ public sealed class CliWorkflowTests
         Assert.Equal("technical-project", JsonNode.Parse(created.Output)!["projectId"]!.GetValue<string>());
 
         var opened = await Run(["project", "open", project]);
-        Assert.Equal(7, JsonNode.Parse(opened.Output)!["graph"]!["nodes"]!.AsArray().Count);
+        Assert.Equal(13, JsonNode.Parse(opened.Output)!["graph"]!["nodes"]!.AsArray().Count);
 
         var search = await Run(["read", "search", project, "battery", "--limit", "1"]);
         Assert.Equal(CliRunner.SuccessExitCode, search.ExitCode);
         var searchJson = JsonNode.Parse(search.Output)!;
-        Assert.Equal(3, searchJson["totalCount"]!.GetValue<int>());
+        Assert.Equal(4, searchJson["totalCount"]!.GetValue<int>());
         Assert.Equal("battery-assumption", searchJson["items"]![0]!["entityId"]!.GetValue<string>());
 
         Assert.Equal(2, JsonNode.Parse((await Run(["read", "nodes", project, "--limit", "2"])).Output)!
             ["items"]!.AsArray().Count);
         Assert.NotEmpty(JsonNode.Parse((await Run(["read", "edges", project])).Output)!["items"]!.AsArray());
-        Assert.Equal("battery-requires-test",
-            JsonNode.Parse((await Run(["read", "edge", project, "battery-requires-test"])).Output)!
+        Assert.Equal("battery-requires-runtime",
+            JsonNode.Parse((await Run(["read", "edge", project, "battery-requires-runtime"])).Output)!
                 ["id"]!.GetValue<string>());
         Assert.Equal("scope-power",
             JsonNode.Parse((await Run(["read", "scope", project, "battery-assumption"])).Output)!

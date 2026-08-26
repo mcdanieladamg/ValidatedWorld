@@ -1,0 +1,45 @@
+{
+  "goal": "Redirect retention to accessibility while retaining former and new review consequences.",
+  "operations": {
+    "operations": [
+      {
+        "kind": 1,
+        "entityKind": 1,
+        "entityId": "retention-requires-architecture",
+        "node": null,
+        "edge": {
+          "id": "retention-requires-architecture",
+          "source": "retention-policy",
+          "target": "accessibility-acceptance",
+          "relationship": "requires",
+          "reviewDirection": 1,
+          "rationale": null,
+          "tags": [],
+          "attributes": []
+        }
+      }
+    ]
+  },
+  "expected": {
+    "affectedNodeIds": [
+      "accessibility-acceptance",
+      "privacy-architecture",
+      "privacy-documentation",
+      "retention-policy",
+      "retention-test"
+    ],
+    "scopeContextNodeIds": [
+      "purpose",
+      "scope-accessibility",
+      "scope-documentation",
+      "scope-privacy"
+    ],
+    "excludedNodeIds": [
+      "battery-assumption",
+      "runtime-test"
+    ],
+    "expectedEdgeChangeIds": [
+      "retention-requires-architecture"
+    ]
+  }
+}

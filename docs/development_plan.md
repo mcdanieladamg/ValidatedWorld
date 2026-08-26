@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T10 — Realistic MVP scenarios and usability hardening
+**Current task:** T11 — MVP release evidence and stop decision
 
-**Current task estimate:** large
+**Current task estimate:** gigantic
 
 **Last updated:** 2026-08-26
 
@@ -150,7 +150,7 @@ It does not authorize a Git commit.
 | T7 | complete | Application queries and in-memory session lifecycle |
 | T8 | complete | Atomic write and rollback behavior |
 | T9 | complete | Complete CLI/NDJSON manual workflow |
-| T10 | pending | Realistic MVP scenarios and usability hardening |
+| T10 | complete | Realistic MVP scenarios and usability hardening |
 | T11 | pending | MVP release evidence and stop decision |
 | T12 | optional | OpenAI semantic reviewer, only after human authorization |
 | T13 | optional | OpenAI authoring agent, only after human authorization |
@@ -477,6 +477,39 @@ Completed 2026-08-26.
   `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 53 tests.
   No provider was referenced or contacted, and no material usability or
   modeling problem was found.
+
+### T10 — realistic MVP scenarios and usability hardening
+
+Completed 2026-08-26.
+
+- Expanded the disposable `technical-project` to 13 nodes and 17 edges across
+  power, privacy, documentation, and accessibility scopes. Its five explicit
+  semantic review arcs model power runtime/anchor consequences, retention
+  architecture/verification/documentation consequences, and a redirect target.
+- Added reviewed text-only source and scenario assets under
+  `samples/TechnicalProject`: a protocol-shaped baseline, five complete
+  operation batches, public affected/context goldens, and stated scenario
+  goals. No populated `.vw.db` is tracked or used as a fixture.
+- Added reusable SQLite-backed end-to-end scenario helpers. The suite proves
+  source/built-in-sample equivalence; power, privacy, redirected-edge,
+  scope-subtree, and purpose-wide affected results; complete review and write;
+  incomplete-review blocking; stale state; injected rollback; verified backup;
+  bounded omissions; and unrelated-branch exclusion.
+- Scenario review burden was: power 3 affected + 2 context; privacy 4 + 3;
+  redirect 5 + 4; power scope 4 + 1; and purpose 13 + 0. The golden checks found
+  no expected-node omissions or unrelated false positives. The sample's 12
+  scope-parent plus 5 semantic edges were straightforward to model, though
+  edge direction remains a detail authors must state deliberately.
+- Public CLI smoke: from `--help`, created a disposable database in a path with
+  spaces; a `missing-battery` lookup returned the precise node-not-found error;
+  a bounded power-scope query returned two of three descendants with a clear
+  cursor/remaining-count diagnostic; the retention-to-documentation path used
+  the expected two review arcs; and a backup verified with the identical state
+  fingerprint. No confusing recovery behavior or material defect was found.
+- Full checks on 2026-08-26: `dotnet restore ValidatedWorld.slnx` succeeded with
+  the documented elevated NuGet.Config permission workaround; `dotnet build
+  ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
+  `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 62 tests.
 
 ## 6. Current and remaining tasks
 

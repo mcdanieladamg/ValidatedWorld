@@ -191,6 +191,8 @@ public static class SampleProjectCatalog
         var purpose = new GraphNode(new EntityId("purpose"), "An offline privacy-preserving sensor");
         var power = new GraphNode(new EntityId("scope-power"), "Power behavior", "scope");
         var privacy = new GraphNode(new EntityId("scope-privacy"), "Privacy behavior", "scope");
+        var documentation = new GraphNode(new EntityId("scope-documentation"), "Documentation behavior", "scope");
+        var accessibility = new GraphNode(new EntityId("scope-accessibility"), "Accessibility behavior", "scope");
         var battery = new GraphNode(
             new EntityId("battery-assumption"),
             "The battery lasts for the target duty cycle",
@@ -203,11 +205,28 @@ public static class SampleProjectCatalog
             new EntityId("runtime-test"),
             "Runtime behavior is verified on the target device",
             "verification");
-        var designAnchor = new GraphNode(
-            new EntityId("design-anchor"),
-            "Design record for the sensor",
+        var powerDesignAnchor = new GraphNode(
+            new EntityId("power-design-anchor"),
+            "Power design record for the sensor",
             "external-anchor",
             ["artifact"]);
+        var privacyArchitecture = new GraphNode(
+            new EntityId("privacy-architecture"),
+            "The architecture enforces the required data-retention interval",
+            "decision");
+        var retentionTest = new GraphNode(
+            new EntityId("retention-test"),
+            "Retention behavior is verified against the documented interval",
+            "verification");
+        var privacyDocumentation = new GraphNode(
+            new EntityId("privacy-documentation"),
+            "The privacy documentation states the retention interval",
+            "external-anchor",
+            ["artifact"]);
+        var accessibilityAcceptance = new GraphNode(
+            new EntityId("accessibility-acceptance"),
+            "Accessibility acceptance covers the sensor configuration workflow",
+            "verification");
 
         GraphEdge Scope(string id, GraphNode child, GraphNode parent) => new(
             new EntityId(id), child.Id, parent.Id, "scope-parent", ReviewDirection.None);
@@ -216,26 +235,53 @@ public static class SampleProjectCatalog
             new ProjectId(TechnicalProject),
             "Technical Project",
             purpose.Id,
-            [purpose, power, privacy, battery, retention, runtimeTest, designAnchor],
+            [
+                purpose, power, privacy, documentation, accessibility, battery, retention, runtimeTest,
+                powerDesignAnchor, privacyArchitecture, retentionTest, privacyDocumentation, accessibilityAcceptance,
+            ],
             [
                 Scope("scope-power-parent", power, purpose),
                 Scope("scope-privacy-parent", privacy, purpose),
+                Scope("scope-documentation-parent", documentation, purpose),
+                Scope("scope-accessibility-parent", accessibility, purpose),
                 Scope("battery-scope-parent", battery, power),
                 Scope("retention-scope-parent", retention, privacy),
                 Scope("runtime-scope-parent", runtimeTest, power),
-                Scope("anchor-scope-parent", designAnchor, power),
+                Scope("power-anchor-scope-parent", powerDesignAnchor, power),
+                Scope("privacy-architecture-scope-parent", privacyArchitecture, privacy),
+                Scope("retention-test-scope-parent", retentionTest, privacy),
+                Scope("privacy-documentation-scope-parent", privacyDocumentation, documentation),
+                Scope("accessibility-acceptance-scope-parent", accessibilityAcceptance, accessibility),
                 new GraphEdge(
-                    new EntityId("battery-requires-test"),
+                    new EntityId("battery-requires-runtime"),
                     battery.Id,
                     runtimeTest.Id,
                     "requires",
                     ReviewDirection.SourceToTarget),
                 new GraphEdge(
-                    new EntityId("retention-informs-design"),
-                    retention.Id,
-                    designAnchor.Id,
+                    new EntityId("battery-informs-power-anchor"),
+                    battery.Id,
+                    powerDesignAnchor.Id,
                     "informs",
-                    ReviewDirection.TargetToSource),
+                    ReviewDirection.SourceToTarget),
+                new GraphEdge(
+                    new EntityId("retention-requires-architecture"),
+                    retention.Id,
+                    privacyArchitecture.Id,
+                    "requires",
+                    ReviewDirection.SourceToTarget),
+                new GraphEdge(
+                    new EntityId("architecture-requires-retention-test"),
+                    privacyArchitecture.Id,
+                    retentionTest.Id,
+                    "requires",
+                    ReviewDirection.SourceToTarget),
+                new GraphEdge(
+                    new EntityId("architecture-informs-privacy-documentation"),
+                    privacyArchitecture.Id,
+                    privacyDocumentation.Id,
+                    "informs",
+                    ReviewDirection.SourceToTarget),
             ]);
     }
 }

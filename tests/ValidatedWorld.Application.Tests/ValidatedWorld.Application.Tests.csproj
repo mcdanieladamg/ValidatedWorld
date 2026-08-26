@@ -17,6 +17,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ValidatedWorld.Application\ValidatedWorld.Application.csproj" />
     <ProjectReference Include="..\..\src\ValidatedWorld.Persistence.Sqlite\ValidatedWorld.Persistence.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\ValidatedWorld.Serialization\ValidatedWorld.Serialization.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\samples\TechnicalProject\**\*">
+      <Link>TechnicalProject\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
