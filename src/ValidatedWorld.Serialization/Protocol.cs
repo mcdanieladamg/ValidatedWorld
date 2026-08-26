@@ -18,6 +18,7 @@ public static class Protocol
         DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         NumberHandling = JsonNumberHandling.Strict,
+        RespectRequiredConstructorParameters = true,
         WriteIndented = false,
     };
 
@@ -127,14 +128,14 @@ public static class GraphProtocol
     public static GraphOperationBatch FromDto(OperationBatchDto dto) =>
         new(dto.Operations.Select(FromDto));
 
-    private static NodeDto ToDto(GraphNode node) => new(node.Id.Value, node.Text, node.Kind,
+    public static NodeDto ToDto(GraphNode node) => new(node.Id.Value, node.Text, node.Kind,
         node.Tags.ToArray(), node.Attributes.Select(ToDto).ToArray());
 
-    private static EdgeDto ToDto(GraphEdge edge) => new(edge.Id.Value, edge.Source.Value, edge.Target.Value,
+    public static EdgeDto ToDto(GraphEdge edge) => new(edge.Id.Value, edge.Source.Value, edge.Target.Value,
         edge.Relationship, edge.ReviewDirection, edge.Rationale, edge.Tags.ToArray(),
         edge.Attributes.Select(ToDto).ToArray());
 
-    private static OperationDto ToDto(GraphOperation operation) => new(
+    public static OperationDto ToDto(GraphOperation operation) => new(
         operation.Kind, operation.EntityKind, operation.EntityId.Value,
         operation.Node is null ? null : ToDto(operation.Node),
         operation.Edge is null ? null : ToDto(operation.Edge));
@@ -152,7 +153,7 @@ public static class GraphProtocol
         _ => throw new JsonException("The graph value is uninitialized.")
     };
 
-    private static GraphOperation FromDto(OperationDto dto)
+    public static GraphOperation FromDto(OperationDto dto)
     {
         var id = new EntityId(dto.EntityId);
         return dto.Kind == GraphOperationKind.Remove
@@ -162,10 +163,10 @@ public static class GraphProtocol
                 : new GraphOperation(dto.Kind, FromDto(dto.Edge ?? throw new JsonException("Edge is required.")));
     }
 
-    private static GraphNode FromDto(NodeDto dto) => new(new EntityId(dto.Id), dto.Text, dto.Kind, dto.Tags,
+    public static GraphNode FromDto(NodeDto dto) => new(new EntityId(dto.Id), dto.Text, dto.Kind, dto.Tags,
         dto.Attributes.Select(attribute => new KeyValuePair<string, GraphValue>(attribute.Name, FromDto(attribute.Value))));
 
-    private static GraphEdge FromDto(EdgeDto dto) => new(new EntityId(dto.Id), new EntityId(dto.Source),
+    public static GraphEdge FromDto(EdgeDto dto) => new(new EntityId(dto.Id), new EntityId(dto.Source),
         new EntityId(dto.Target), dto.Relationship, dto.ReviewDirection, dto.Rationale, dto.Tags,
         dto.Attributes.Select(attribute => new KeyValuePair<string, GraphValue>(attribute.Name, FromDto(attribute.Value))));
 

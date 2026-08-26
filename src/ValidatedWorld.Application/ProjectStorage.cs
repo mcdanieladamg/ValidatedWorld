@@ -60,6 +60,9 @@ public sealed record ProjectVerification(
     int EdgeCount,
     IReadOnlyList<string> Checks);
 
+/// <summary>A deterministic SQL representation of one verified current project.</summary>
+public sealed record ProjectSqlExport(string Path, string StateFingerprint, string Sql);
+
 /// <summary>The immutable write request produced by one reviewed change session.</summary>
 public sealed record ProjectWriteRequest(
     string Path,
@@ -95,6 +98,8 @@ public interface IProjectStore
     ProjectVerification Verify(string path);
 
     StoredProject Backup(string sourcePath, string destinationPath);
+
+    ProjectSqlExport ExportSql(string path);
 
     ProjectWriteResult Write(ProjectWriteRequest request);
 }
@@ -134,6 +139,8 @@ public sealed partial class ProjectApplication
 
     public StoredProject Backup(string sourcePath, string destinationPath) =>
         _store.Backup(sourcePath, destinationPath);
+
+    public ProjectSqlExport ExportSql(string path) => _store.ExportSql(path);
 
     public ProjectQueries Queries(string path, ProjectId? expectedProjectId = null)
     {

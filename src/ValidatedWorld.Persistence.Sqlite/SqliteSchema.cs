@@ -114,6 +114,9 @@ internal static class SqliteSchema
         SHA256.HashData(Encoding.UTF8.GetBytes(string.Join(";\n", Objects.Select(value => value.Sql)))))
         .ToLowerInvariant();
 
+    public static IReadOnlyList<string> DefinitionStatements { get; } =
+        Array.AsReadOnly(Objects.Select(value => value.Sql).ToArray());
+
     public static void ApplyMigration(SqliteConnection connection, DateTimeOffset appliedUtc)
     {
         using var transaction = connection.BeginTransaction();

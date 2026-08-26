@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ValidatedWorld.Application.Tests/ValidatedWorld.Application.Tests.csproj" />
+    <Project Path="tests/ValidatedWorld.Cli.Tests/ValidatedWorld.Cli.Tests.csproj" />
     <Project Path="tests/ValidatedWorld.Core.Tests/ValidatedWorld.Core.Tests.csproj" />
     <Project Path="tests/ValidatedWorld.Persistence.Sqlite.Tests/ValidatedWorld.Persistence.Sqlite.Tests.csproj" />
     <Project Path="tests/ValidatedWorld.Serialization.Tests/ValidatedWorld.Serialization.Tests.csproj" />

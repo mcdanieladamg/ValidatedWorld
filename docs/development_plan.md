@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T9 — Complete CLI/NDJSON manual workflow
+**Current task:** T10 — Realistic MVP scenarios and usability hardening
 
-**Current task estimate:** gigantic
+**Current task estimate:** large
 
 **Last updated:** 2026-08-26
 
@@ -149,7 +149,7 @@ It does not authorize a Git commit.
 | T6 | complete | SQLite current-state persistence and first public read slice |
 | T7 | complete | Application queries and in-memory session lifecycle |
 | T8 | complete | Atomic write and rollback behavior |
-| T9 | pending | Complete CLI/NDJSON manual workflow |
+| T9 | complete | Complete CLI/NDJSON manual workflow |
 | T10 | pending | Realistic MVP scenarios and usability hardening |
 | T11 | pending | MVP release evidence and stop decision |
 | T12 | optional | OpenAI semantic reviewer, only after human authorization |
@@ -438,6 +438,45 @@ Completed 2026-08-26.
   the documented elevated NuGet.Config workaround; `dotnet build
   ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
   `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 48 tests.
+
+### T9 — complete CLI/NDJSON manual workflow
+
+Completed 2026-08-26.
+
+- Replaced the minimal CLI with stable English project, read, sample, and
+  NDJSON-host help. One-shot commands now expose project init/open/status/
+  verify/backup/export and every bounded query through JSON stdout, with
+  diagnostics confined to stderr and explicit success, usage, domain,
+  unexpected, broken-pipe, and cancellation exit codes.
+- Added the long-lived versioned NDJSON host for every implemented project,
+  read, sample, and change use case. It rejects unknown fields and protocol
+  versions, returns one structured result per input line, preserves exact
+  fingerprint references across in-memory sessions, continues after malformed
+  requests, and warns on stderr before unresolved sessions are lost at exit.
+- Added deterministic SQLite v1 SQL export through the Application persistence
+  port. The export emits the checked schema and complete canonical current graph,
+  quotes SQLite text safely, preserves timestamps and the state fingerprint,
+  and contains no in-memory session/review data.
+- Added 5 CLI behavior tests covering every one-shot read and NDJSON change
+  command, strict malformed-command recovery, help, paging and traversal,
+  quoted paths/text, stable output, real subprocess lifetime, no session
+  persistence, cancellation, broken pipes, exit codes, provider independence,
+  SQL determinism/replay, and a help-driven init-to-write-to-backup workflow.
+- Black-box smoke: started from public help, created `technical-project` in a
+  disposable path containing spaces, deliberately mistyped a node ID and got a
+  precise not-found diagnostic, then revised the battery assumption through the
+  NDJSON begin/apply/review/validate/write sequence. A deliberately stale
+  reference was rejected as `change-stale-operation-fingerprint`; the affected
+  set contained only `battery-assumption` and `runtime-test`, context contained
+  only `scope-power` and `purpose`, and `retention-policy` remained excluded.
+  The exact reviewed proposal wrote successfully, the process exited without a
+  warning, and a one-shot read plus verified online backup confirmed the result.
+- Full checks on 2026-08-26: `dotnet restore ValidatedWorld.slnx` succeeded with
+  the documented elevated NuGet.Config workaround; `dotnet build
+  ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
+  `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 53 tests.
+  No provider was referenced or contacted, and no material usability or
+  modeling problem was found.
 
 ## 6. Current and remaining tasks
 
