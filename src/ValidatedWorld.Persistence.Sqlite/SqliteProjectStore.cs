@@ -8,6 +8,19 @@ using ValidatedWorld.Validation;
 
 namespace ValidatedWorld.Persistence.Sqlite;
 
+/// <summary>Deterministic fault-injection points before an atomic write commits.</summary>
+public enum SqliteWriteBoundary
+{
+    AfterBeginImmediate,
+    AfterBaseVerification,
+    AfterEdgeRemovals,
+    AfterNodeRemovals,
+    AfterNodeUpserts,
+    AfterEdgeUpserts,
+    AfterProjectUpdate,
+    AfterFinalVerification,
+}
+
 /// <summary>SQLite v1 storage for one immutable current project graph.</summary>
 public sealed class SqliteProjectStore : IProjectStore
 {
@@ -21,11 +34,15 @@ public sealed class SqliteProjectStore : IProjectStore
     private static bool _nativeInitialized;
 
     private readonly Func<DateTimeOffset> _utcNow;
+    private readonly Func<SqliteWriteBoundary, Exception?>? _writeFault;
     private readonly GraphValidator _validator = new();
 
-    public SqliteProjectStore(Func<DateTimeOffset>? utcNow = null)
+    public SqliteProjectStore(
+        Func<DateTimeOffset>? utcNow = null,
+        Func<SqliteWriteBoundary, Exception?>? writeFault = null)
     {
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
+        _writeFault = writeFault;
     }
 
     public StoredProject Initialize(string path, ProjectGraph graph)
@@ -163,6 +180,118 @@ public sealed class SqliteProjectStore : IProjectStore
         }
     }
 
+    public ProjectWriteResult Write(ProjectWriteRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Operations);
+        var fullPath = NormalizeExistingPath(request.Path);
+        var transactionStarted = false;
+        SqliteConnection? connection = null;
+        try
+        {
+            connection = OpenConnection(fullPath, SqliteOpenMode.ReadWrite);
+            ExecuteTransactionCommand(connection, "BEGIN IMMEDIATE");
+            transactionStarted = true;
+            InjectFault(SqliteWriteBoundary.AfterBeginImmediate);
+
+            var current = LoadAndVerify(connection, fullPath);
+            if (current.Graph.ProjectId != request.ProjectId ||
+                !StringComparer.Ordinal.Equals(current.StateFingerprint, request.BaseFingerprint))
+            {
+                Rollback(connection);
+                transactionStarted = false;
+                return new ProjectWriteResult(
+                    ProjectWriteOutcome.Stale,
+                    null,
+                    null,
+                    "The canonical project changed after the reviewed session began.");
+            }
+
+            InjectFault(SqliteWriteBoundary.AfterBaseVerification);
+            var projection = new GraphProjector().Project(current.Graph, request.Operations);
+            if (!projection.IsValid)
+            {
+                Rollback(connection);
+                transactionStarted = false;
+                return new ProjectWriteResult(
+                    ProjectWriteOutcome.Failed,
+                    null,
+                    ProjectStorageErrorCode.InvalidGraph,
+                    "The proposal is not structurally valid at write time.");
+            }
+
+            var expectedFingerprint = GraphFingerprints.Proposed(projection.Graph);
+            if (!StringComparer.Ordinal.Equals(expectedFingerprint, request.ProposedFingerprint))
+            {
+                Rollback(connection);
+                transactionStarted = false;
+                return new ProjectWriteResult(
+                    ProjectWriteOutcome.Failed,
+                    null,
+                    ProjectStorageErrorCode.MappingFailure,
+                    "The proposal fingerprint no longer matches the final operation batch.");
+            }
+
+            DeleteEdges(connection, request.Operations);
+            InjectFault(SqliteWriteBoundary.AfterEdgeRemovals);
+            DeleteNodes(connection, request.Operations);
+            InjectFault(SqliteWriteBoundary.AfterNodeRemovals);
+            UpsertNodes(connection, projection.Graph.ProjectId, request.Operations);
+            InjectFault(SqliteWriteBoundary.AfterNodeUpserts);
+            InsertEdges(connection, projection.Graph.ProjectId, request.Operations);
+            InjectFault(SqliteWriteBoundary.AfterEdgeUpserts);
+
+            var now = _utcNow().ToUniversalTime();
+            UpdateProjectFingerprint(connection, projection.Graph.ProjectId, expectedFingerprint, now);
+            InjectFault(SqliteWriteBoundary.AfterProjectUpdate);
+            VerifyForeignKeys(connection, transaction: null);
+            var written = LoadAndVerify(connection, fullPath);
+            if (!StringComparer.Ordinal.Equals(written.StateFingerprint, expectedFingerprint))
+            {
+                throw new ProjectStorageException(
+                    ProjectStorageErrorCode.FingerprintMismatch,
+                    "The committed graph does not match the final proposal fingerprint.");
+            }
+
+            InjectFault(SqliteWriteBoundary.AfterFinalVerification);
+            ExecuteTransactionCommand(connection, "COMMIT");
+            transactionStarted = false;
+            return new ProjectWriteResult(
+                ProjectWriteOutcome.Written,
+                written,
+                null,
+                "The reviewed proposal was written atomically.");
+        }
+        catch (Exception exception)
+        {
+            if (transactionStarted && connection is not null)
+            {
+                Rollback(connection);
+            }
+
+            if (exception is SqliteException sqlite && IsBusy(sqlite))
+            {
+                return new ProjectWriteResult(
+                    ProjectWriteOutcome.Busy,
+                    null,
+                    null,
+                    "SQLite is busy; the proposal remains available for retry.");
+            }
+
+            var translated = Translate(exception, $"Could not write SQLite project '{fullPath}'.")
+                as ProjectStorageException ?? throw new InvalidOperationException();
+            return new ProjectWriteResult(
+                ProjectWriteOutcome.Failed,
+                null,
+                translated.Code,
+                translated.Message);
+        }
+        finally
+        {
+            connection?.Dispose();
+        }
+    }
+
     private StoredProject LoadAndVerify(SqliteConnection connection, string fullPath)
     {
         SqliteSchema.Verify(connection);
@@ -260,6 +389,143 @@ public sealed class SqliteProjectStore : IProjectStore
         VerifyForeignKeys(connection, transaction);
         transaction.Commit();
     }
+
+    private static void DeleteEdges(SqliteConnection connection, GraphOperationBatch operations)
+    {
+        foreach (var operation in operations.Operations.Where(operation =>
+                     operation.EntityKind == GraphEntityKind.Edge &&
+                     (operation.Kind == GraphOperationKind.Remove || operation.Kind == GraphOperationKind.Replace)))
+        {
+            using var command = CreateCommand(connection, "DELETE FROM edges WHERE edge_id = $id");
+            command.Parameters.AddWithValue("$id", operation.EntityId.Value);
+            EnsureOneRow(command, $"edge '{operation.EntityId.Value}' removal");
+        }
+    }
+
+    private static void DeleteNodes(SqliteConnection connection, GraphOperationBatch operations)
+    {
+        foreach (var operation in operations.Operations.Where(operation =>
+                     operation.EntityKind == GraphEntityKind.Node && operation.Kind == GraphOperationKind.Remove))
+        {
+            using var command = CreateCommand(connection, "DELETE FROM nodes WHERE node_id = $id");
+            command.Parameters.AddWithValue("$id", operation.EntityId.Value);
+            EnsureOneRow(command, $"node '{operation.EntityId.Value}' removal");
+        }
+    }
+
+    private static void UpsertNodes(
+        SqliteConnection connection,
+        ProjectId projectId,
+        GraphOperationBatch operations)
+    {
+        foreach (var operation in operations.Operations.Where(operation =>
+                     operation.EntityKind == GraphEntityKind.Node && operation.Kind != GraphOperationKind.Remove))
+        {
+            var node = operation.Node!;
+            using var command = CreateCommand(connection, operation.Kind == GraphOperationKind.Add
+                ? """
+                    INSERT INTO nodes (node_id, project_id, text, kind, tags_json, attributes_json)
+                    VALUES ($id, $projectId, $text, $kind, $tags, $attributes)
+                    """
+                : """
+                    UPDATE nodes
+                    SET text = $text, kind = $kind, tags_json = $tags, attributes_json = $attributes
+                    WHERE node_id = $id AND project_id = $projectId
+                    """);
+            command.Parameters.AddWithValue("$id", node.Id.Value);
+            command.Parameters.AddWithValue("$projectId", projectId.Value);
+            command.Parameters.AddWithValue("$text", node.Text);
+            command.Parameters.AddWithValue("$kind", (object?)node.Kind ?? DBNull.Value);
+            command.Parameters.AddWithValue("$tags", EncodeTags(node.Tags));
+            command.Parameters.AddWithValue("$attributes", EncodeAttributes(node.Attributes));
+            EnsureOneRow(command, $"node '{node.Id.Value}' {operation.Kind.ToString().ToLowerInvariant()}");
+        }
+    }
+
+    private static void InsertEdges(
+        SqliteConnection connection,
+        ProjectId projectId,
+        GraphOperationBatch operations)
+    {
+        foreach (var operation in operations.Operations.Where(operation =>
+                     operation.EntityKind == GraphEntityKind.Edge && operation.Kind != GraphOperationKind.Remove))
+        {
+            var edge = operation.Edge!;
+            using var command = CreateCommand(connection, """
+                INSERT INTO edges (
+                    edge_id, project_id, source_node_id, target_node_id, relationship,
+                    review_direction, rationale, tags_json, attributes_json)
+                VALUES (
+                    $id, $projectId, $source, $target, $relationship,
+                    $reviewDirection, $rationale, $tags, $attributes)
+                """);
+            command.Parameters.AddWithValue("$id", edge.Id.Value);
+            command.Parameters.AddWithValue("$projectId", projectId.Value);
+            command.Parameters.AddWithValue("$source", edge.Source.Value);
+            command.Parameters.AddWithValue("$target", edge.Target.Value);
+            command.Parameters.AddWithValue("$relationship", edge.Relationship);
+            command.Parameters.AddWithValue("$reviewDirection", (int)edge.ReviewDirection);
+            command.Parameters.AddWithValue("$rationale", (object?)edge.Rationale ?? DBNull.Value);
+            command.Parameters.AddWithValue("$tags", EncodeTags(edge.Tags));
+            command.Parameters.AddWithValue("$attributes", EncodeAttributes(edge.Attributes));
+            EnsureOneRow(command, $"edge '{edge.Id.Value}' {operation.Kind.ToString().ToLowerInvariant()}");
+        }
+    }
+
+    private static void UpdateProjectFingerprint(
+        SqliteConnection connection,
+        ProjectId projectId,
+        string fingerprint,
+        DateTimeOffset updatedUtc)
+    {
+        using var command = CreateCommand(connection, """
+            UPDATE projects
+            SET updated_utc = $updatedUtc, state_fingerprint = $fingerprint
+            WHERE project_id = $projectId
+            """);
+        command.Parameters.AddWithValue("$updatedUtc", SqliteSchema.FormatUtc(updatedUtc));
+        command.Parameters.AddWithValue("$fingerprint", fingerprint);
+        command.Parameters.AddWithValue("$projectId", projectId.Value);
+        EnsureOneRow(command, "project fingerprint update");
+    }
+
+    private void InjectFault(SqliteWriteBoundary boundary)
+    {
+        var exception = _writeFault?.Invoke(boundary);
+        if (exception is not null)
+        {
+            throw exception;
+        }
+    }
+
+    private static void EnsureOneRow(SqliteCommand command, string operation)
+    {
+        if (command.ExecuteNonQuery() != 1)
+        {
+            throw MappingFailure($"SQLite did not apply exactly one row for {operation}.");
+        }
+    }
+
+    private static void ExecuteTransactionCommand(SqliteConnection connection, string commandText)
+    {
+        using var command = CreateCommand(connection, commandText);
+        command.ExecuteNonQuery();
+    }
+
+    private static void Rollback(SqliteConnection connection)
+    {
+        try
+        {
+            ExecuteTransactionCommand(connection, "ROLLBACK");
+        }
+        catch (SqliteException)
+        {
+            // The original write failure is more useful than a failed cleanup attempt.
+        }
+    }
+
+    private static bool IsBusy(SqliteException exception) =>
+        exception.SqliteErrorCode is 5 or 6;
 
     private static ProjectRow ReadProjectRow(SqliteConnection connection)
     {
@@ -465,38 +731,45 @@ public sealed class SqliteProjectStore : IProjectStore
             DefaultTimeout = CommandTimeoutSeconds,
         }.ToString();
         var connection = new SqliteConnection(connectionString);
-        connection.Open();
-
-        using (var policy = CreateCommand(connection, mode == SqliteOpenMode.ReadOnly
-            ? """
-                PRAGMA foreign_keys = ON;
-                PRAGMA query_only = ON;
-                PRAGMA trusted_schema = OFF;
-                PRAGMA recursive_triggers = OFF;
-                PRAGMA busy_timeout = 10000;
-                """
-            : """
-                PRAGMA foreign_keys = ON;
-                PRAGMA journal_mode = DELETE;
-                PRAGMA synchronous = FULL;
-                PRAGMA trusted_schema = OFF;
-                PRAGMA recursive_triggers = OFF;
-                PRAGMA busy_timeout = 10000;
-                """))
+        try
         {
-            policy.ExecuteNonQuery();
-        }
+            connection.Open();
 
-        using var check = CreateCommand(connection, "PRAGMA foreign_keys");
-        if (Convert.ToInt32(check.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
+            using (var policy = CreateCommand(connection, mode == SqliteOpenMode.ReadOnly
+                ? """
+                    PRAGMA foreign_keys = ON;
+                    PRAGMA query_only = ON;
+                    PRAGMA trusted_schema = OFF;
+                    PRAGMA recursive_triggers = OFF;
+                    PRAGMA busy_timeout = 10000;
+                    """
+                : """
+                    PRAGMA foreign_keys = ON;
+                    PRAGMA journal_mode = DELETE;
+                    PRAGMA synchronous = FULL;
+                    PRAGMA trusted_schema = OFF;
+                    PRAGMA recursive_triggers = OFF;
+                    PRAGMA busy_timeout = 10000;
+                    """))
+            {
+                policy.ExecuteNonQuery();
+            }
+
+            using var check = CreateCommand(connection, "PRAGMA foreign_keys");
+            if (Convert.ToInt32(check.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
+            {
+                throw new ProjectStorageException(
+                    ProjectStorageErrorCode.StorageFailure,
+                    "SQLite foreign-key enforcement could not be enabled.");
+            }
+
+            return connection;
+        }
+        catch
         {
             connection.Dispose();
-            throw new ProjectStorageException(
-                ProjectStorageErrorCode.StorageFailure,
-                "SQLite foreign-key enforcement could not be enabled.");
+            throw;
         }
-
-        return connection;
     }
 
     private static void EnsureNativeProvider()
