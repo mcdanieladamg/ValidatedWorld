@@ -21,19 +21,27 @@ public sealed class ApplicationQueryAndSessionTests
         var second = queries.ListNodes(new QueryPageRequest(2, first.NextCursor));
         var search = queries.Search("POWER", new QueryPageRequest(10));
 
-        Assert.Equal(new[] { "battery-assumption", "design-anchor" }, first.Items.Select(node => node.Id.Value));
-        Assert.Equal(7, first.TotalCount);
-        Assert.Equal(5, first.Omission!.RemainingCount);
+        Assert.Equal(new[] { "accessibility-acceptance", "battery-assumption" }, first.Items.Select(node => node.Id.Value));
+        Assert.Equal(13, first.TotalCount);
+        Assert.Equal(11, first.Omission!.RemainingCount);
         Assert.NotNull(first.NextCursor);
-        Assert.Equal(new[] { "purpose", "retention-policy" }, second.Items.Select(node => node.Id.Value));
-        Assert.Equal(new[] { "scope-power", "scope-power-parent" },
+        Assert.Equal(new[] { "power-design-anchor", "privacy-architecture" }, second.Items.Select(node => node.Id.Value));
+        Assert.Equal(new[]
+            {
+                "battery-informs-power-anchor", "power-anchor-scope-parent", "power-design-anchor", "scope-power",
+                "scope-power-parent",
+            },
             search.Items.Select(hit => hit.EntityId.Value));
-        Assert.Equal(new[] { GraphEntityKind.Node, GraphEntityKind.Edge },
+        Assert.Equal(new[]
+            {
+                GraphEntityKind.Edge, GraphEntityKind.Edge, GraphEntityKind.Node, GraphEntityKind.Node,
+                GraphEntityKind.Edge,
+            },
             search.Items.Select(hit => hit.EntityKind));
         Assert.Equal("Power behavior", queries.GetNode(new EntityId("scope-power")).Text);
         Assert.Equal(
             "requires",
-            queries.GetEdge(new EntityId("battery-requires-test")).Relationship);
+            queries.GetEdge(new EntityId("battery-requires-runtime")).Relationship);
 
         var cursorError = Assert.Throws<ProjectQueryException>(() =>
             queries.ListEdges(new QueryPageRequest(2, first.NextCursor)));
@@ -60,21 +68,21 @@ public sealed class ApplicationQueryAndSessionTests
 
         Assert.Equal(new[] { "purpose" }, scope.Upstream.Select(node => node.Id.Value));
         Assert.Equal(
-            new[] { "battery-assumption", "design-anchor", "runtime-test" },
+            new[] { "battery-assumption", "power-design-anchor", "runtime-test" },
             scope.Descendants.Items.Select(node => node.Id.Value));
         Assert.DoesNotContain(scope.Descendants.Items, node => node.Id.Value == "scope-privacy");
         Assert.Equal(
-            new[] { "runtime-test", "scope-power" },
+            new[] { "power-design-anchor", "runtime-test", "scope-power" },
             neighbors.Items.Select(entry => entry.NodeId.Value));
-        Assert.Single(dependencies.Items);
-        Assert.True(dependencies.Items[0].IsOutgoing);
+        Assert.Equal(2, dependencies.Items.Count);
+        Assert.All(dependencies.Items, dependency => Assert.True(dependency.IsOutgoing));
         Assert.True(pathResult.Found);
         Assert.Equal(new[] { "battery-assumption", "runtime-test" }, pathResult.Nodes.Select(id => id.Value));
-        Assert.Equal(new[] { "battery-requires-test" }, pathResult.Edges.Select(id => id.Value));
+        Assert.Equal(new[] { "battery-requires-runtime" }, pathResult.Edges.Select(id => id.Value));
         Assert.Equal(
             new[] { "battery-assumption", "purpose", "retention-policy", "scope-power", "scope-privacy" },
             context.ContextNodes.Select(node => node.Id.Value));
-        Assert.DoesNotContain(context.ContextNodes, node => node.Id.Value is "runtime-test" or "design-anchor");
+        Assert.DoesNotContain(context.ContextNodes, node => node.Id.Value is "runtime-test" or "power-design-anchor");
 
         var bounded = queries.GetScope(
             new EntityId("purpose"),
@@ -82,7 +90,7 @@ public sealed class ApplicationQueryAndSessionTests
             new QueryTraversalOptions { MaxDepth = 1, MaxVisitedNodes = 100 });
         Assert.Contains(bounded.Omissions, omission =>
             omission.Reason == QueryOmissionReason.TraversalDepthLimit);
-        Assert.Equal(new[] { "scope-power", "scope-privacy" },
+        Assert.Equal(new[] { "scope-accessibility", "scope-documentation", "scope-power", "scope-privacy" },
             bounded.Descendants.Items.Select(node => node.Id.Value));
 
         var cancelled = queries.FindDependencyPath(
@@ -116,7 +124,7 @@ public sealed class ApplicationQueryAndSessionTests
             begun.Reference,
             new GraphOperationBatch([GraphOperation.ReplaceNode(replacement)]));
 
-        Assert.Equal(new[] { "battery-assumption", "runtime-test" },
+        Assert.Equal(new[] { "battery-assumption", "power-design-anchor", "runtime-test" },
             applied.Affected.AffectedNodes.Select(node => node.NodeId.Value));
         Assert.Equal(new[] { "purpose", "scope-power" },
             applied.Affected.ScopeContext.Select(entry => entry.NodeId.Value));
@@ -131,6 +139,7 @@ public sealed class ApplicationQueryAndSessionTests
             new ChangeReviewUpdate(
                 [
                     new ReviewDisposition(battery.Id, ReviewDispositionKind.Updated, null),
+                    new ReviewDisposition(new EntityId("power-design-anchor"), ReviewDispositionKind.ReviewedNoChange, null),
                     new ReviewDisposition(new EntityId("runtime-test"), ReviewDispositionKind.ReviewedNoChange, null),
                 ],
                 [new EntityId("purpose"), new EntityId("scope-power")]));

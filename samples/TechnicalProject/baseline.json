@@ -1,0 +1,274 @@
+{
+  "projectId": "technical-project",
+  "title": "Technical Project",
+  "purposeNodeId": "purpose",
+  "nodes": [
+    {
+      "id": "purpose",
+      "text": "An offline privacy-preserving sensor",
+      "kind": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "scope-power",
+      "text": "Power behavior",
+      "kind": "scope",
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "scope-privacy",
+      "text": "Privacy behavior",
+      "kind": "scope",
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "scope-documentation",
+      "text": "Documentation behavior",
+      "kind": "scope",
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "scope-accessibility",
+      "text": "Accessibility behavior",
+      "kind": "scope",
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "battery-assumption",
+      "text": "The battery lasts for the target duty cycle",
+      "kind": "assumption",
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "runtime-test",
+      "text": "Runtime behavior is verified on the target device",
+      "kind": "verification",
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "power-design-anchor",
+      "text": "Power design record for the sensor",
+      "kind": "external-anchor",
+      "tags": [
+        "artifact"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "retention-policy",
+      "text": "Collected data is retained only for the required interval",
+      "kind": "requirement",
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "privacy-architecture",
+      "text": "The architecture enforces the required data-retention interval",
+      "kind": "decision",
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "retention-test",
+      "text": "Retention behavior is verified against the documented interval",
+      "kind": "verification",
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "privacy-documentation",
+      "text": "The privacy documentation states the retention interval",
+      "kind": "external-anchor",
+      "tags": [
+        "artifact"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "accessibility-acceptance",
+      "text": "Accessibility acceptance covers the sensor configuration workflow",
+      "kind": "verification",
+      "tags": [],
+      "attributes": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "scope-power-parent",
+      "source": "scope-power",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "scope-privacy-parent",
+      "source": "scope-privacy",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "scope-documentation-parent",
+      "source": "scope-documentation",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "scope-accessibility-parent",
+      "source": "scope-accessibility",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "battery-scope-parent",
+      "source": "battery-assumption",
+      "target": "scope-power",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "runtime-scope-parent",
+      "source": "runtime-test",
+      "target": "scope-power",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "power-anchor-scope-parent",
+      "source": "power-design-anchor",
+      "target": "scope-power",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "retention-scope-parent",
+      "source": "retention-policy",
+      "target": "scope-privacy",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "privacy-architecture-scope-parent",
+      "source": "privacy-architecture",
+      "target": "scope-privacy",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "retention-test-scope-parent",
+      "source": "retention-test",
+      "target": "scope-privacy",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "privacy-documentation-scope-parent",
+      "source": "privacy-documentation",
+      "target": "scope-documentation",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "accessibility-acceptance-scope-parent",
+      "source": "accessibility-acceptance",
+      "target": "scope-accessibility",
+      "relationship": "scope-parent",
+      "reviewDirection": 0,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "battery-requires-runtime",
+      "source": "battery-assumption",
+      "target": "runtime-test",
+      "relationship": "requires",
+      "reviewDirection": 1,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "battery-informs-power-anchor",
+      "source": "battery-assumption",
+      "target": "power-design-anchor",
+      "relationship": "informs",
+      "reviewDirection": 1,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "retention-requires-architecture",
+      "source": "retention-policy",
+      "target": "privacy-architecture",
+      "relationship": "requires",
+      "reviewDirection": 1,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "architecture-requires-retention-test",
+      "source": "privacy-architecture",
+      "target": "retention-test",
+      "relationship": "requires",
+      "reviewDirection": 1,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "architecture-informs-privacy-documentation",
+      "source": "privacy-architecture",
+      "target": "privacy-documentation",
+      "relationship": "informs",
+      "reviewDirection": 1,
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "goal": "Revise the target duty-cycle battery assumption and review only its modeled power consequences.",
+  "operations": {
+    "operations": [
+      {
+        "kind": 1,
+        "entityKind": 0,
+        "entityId": "battery-assumption",
+        "node": {
+          "id": "battery-assumption",
+          "text": "The battery lasts for the revised target duty cycle",
+          "kind": "assumption",
+          "tags": [],
+          "attributes": []
+        },
+        "edge": null
+      }
+    ]
+  },
+  "expected": {
+    "affectedNodeIds": [
+      "battery-assumption",
+      "power-design-anchor",
+      "runtime-test"
+    ],
+    "scopeContextNodeIds": [
+      "purpose",
+      "scope-power"
+    ],
+    "excludedNodeIds": [
+      "retention-policy",
+      "accessibility-acceptance"
+    ],
+    "expectedEdgeChangeIds": []
+  }
+}

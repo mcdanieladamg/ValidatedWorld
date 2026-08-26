@@ -1,0 +1,40 @@
+{
+  "goal": "Revise the project purpose and require review of the complete project.",
+  "operations": {
+    "operations": [
+      {
+        "kind": 1,
+        "entityKind": 0,
+        "entityId": "purpose",
+        "node": {
+          "id": "purpose",
+          "text": "A revised offline privacy-preserving sensor",
+          "kind": null,
+          "tags": [],
+          "attributes": []
+        },
+        "edge": null
+      }
+    ]
+  },
+  "expected": {
+    "affectedNodeIds": [
+      "accessibility-acceptance",
+      "battery-assumption",
+      "power-design-anchor",
+      "privacy-architecture",
+      "privacy-documentation",
+      "purpose",
+      "retention-policy",
+      "retention-test",
+      "runtime-test",
+      "scope-accessibility",
+      "scope-documentation",
+      "scope-power",
+      "scope-privacy"
+    ],
+    "scopeContextNodeIds": [],
+    "excludedNodeIds": [],
+    "expectedEdgeChangeIds": []
+  }
+}
