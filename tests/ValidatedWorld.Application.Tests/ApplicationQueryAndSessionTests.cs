@@ -289,6 +289,8 @@ public sealed class ApplicationQueryAndSessionTests
 
         public StoredProject Backup(string sourcePath, string destinationPath) => throw new NotSupportedException();
 
+        public ProjectSqlExport ExportSql(string path) => throw new NotSupportedException();
+
         public ProjectWriteResult Write(ProjectWriteRequest request) => throw new NotSupportedException();
     }
 }

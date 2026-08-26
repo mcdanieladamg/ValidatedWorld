@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using ValidatedWorld.Application;
@@ -178,6 +179,47 @@ public sealed class SqliteProjectStore : IProjectStore
             DeleteOwnedTemporaryFile(temporaryPath);
             throw Translate(exception, $"Could not back up SQLite project to '{destinationFullPath}'.");
         }
+    }
+
+    public ProjectSqlExport ExportSql(string path)
+    {
+        var project = Load(path);
+        var sql = new StringBuilder();
+        sql.AppendLine("PRAGMA foreign_keys = ON;");
+        sql.Append("PRAGMA application_id = ").Append(SqliteSchema.ApplicationId).AppendLine(";");
+        sql.Append("PRAGMA user_version = ").Append(SqliteSchema.CurrentVersion).AppendLine(";");
+        foreach (var statement in SqliteSchema.DefinitionStatements)
+        {
+            sql.Append(statement.Trim()).AppendLine(";");
+        }
+
+        sql.AppendLine("BEGIN TRANSACTION;");
+        AppendInsert(sql, "schema_migrations", ["migration_id", "checksum", "applied_utc"],
+            [SqliteSchema.MigrationId, SqliteSchema.MigrationChecksum, SqliteSchema.FormatUtc(project.CreatedUtc)]);
+        AppendInsert(sql, "projects",
+            ["project_id", "title", "purpose_node_id", "created_utc", "updated_utc", "state_fingerprint"],
+            [project.Graph.ProjectId.Value, project.Graph.Title, project.Graph.PurposeNodeId.Value,
+                SqliteSchema.FormatUtc(project.CreatedUtc), SqliteSchema.FormatUtc(project.UpdatedUtc),
+                project.StateFingerprint]);
+        foreach (var node in project.Graph.Nodes)
+        {
+            AppendInsert(sql, "nodes", ["node_id", "project_id", "text", "kind", "tags_json", "attributes_json"],
+                [node.Id.Value, project.Graph.ProjectId.Value, node.Text, node.Kind,
+                    EncodeTags(node.Tags), EncodeAttributes(node.Attributes)]);
+        }
+
+        foreach (var edge in project.Graph.Edges)
+        {
+            AppendInsert(sql, "edges",
+                ["edge_id", "project_id", "source_node_id", "target_node_id", "relationship",
+                    "review_direction", "rationale", "tags_json", "attributes_json"],
+                [edge.Id.Value, project.Graph.ProjectId.Value, edge.Source.Value, edge.Target.Value,
+                    edge.Relationship, (int)edge.ReviewDirection, edge.Rationale,
+                    EncodeTags(edge.Tags), EncodeAttributes(edge.Attributes)]);
+        }
+
+        sql.AppendLine("COMMIT;");
+        return new ProjectSqlExport(project.Path, project.StateFingerprint, sql.ToString().Replace("\r\n", "\n"));
     }
 
     public ProjectWriteResult Write(ProjectWriteRequest request)
@@ -792,6 +834,35 @@ public sealed class SqliteProjectStore : IProjectStore
     }
 
     private static string EncodeTags(IEnumerable<string> tags) => Protocol.Serialize(tags.ToArray());
+
+    private static void AppendInsert(
+        StringBuilder sql,
+        string table,
+        IReadOnlyList<string> columns,
+        IReadOnlyList<object?> values)
+    {
+        sql.Append("INSERT INTO ").Append(table).Append(" (")
+            .Append(string.Join(", ", columns)).Append(") VALUES (");
+        for (var index = 0; index < values.Count; index++)
+        {
+            if (index > 0) sql.Append(", ");
+            if (values[index] is null)
+            {
+                sql.Append("NULL");
+            }
+            else if (values[index] is int number)
+            {
+                sql.Append(number.ToString(CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                sql.Append('\'').Append(Convert.ToString(values[index], CultureInfo.InvariantCulture)!
+                    .Replace("'", "''", StringComparison.Ordinal)).Append('\'');
+            }
+        }
+
+        sql.AppendLine(");");
+    }
 
     private static string EncodeAttributes(IEnumerable<GraphAttribute> attributes) => Protocol.Serialize(
         attributes.Select(attribute => new AttributeDto(attribute.Name, EncodeValue(attribute.Value))).ToArray());

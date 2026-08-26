@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ValidatedWorld.Application\ValidatedWorld.Application.csproj" />
     <ProjectReference Include="..\ValidatedWorld.Persistence.Sqlite\ValidatedWorld.Persistence.Sqlite.csproj" />
+    <ProjectReference Include="..\ValidatedWorld.Serialization\ValidatedWorld.Serialization.csproj" />
   </ItemGroup>
 
 </Project>
