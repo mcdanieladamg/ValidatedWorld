@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ValidatedWorld.Serialization\ValidatedWorld.Serialization.csproj" />
+    <ProjectReference Include="..\..\src\ValidatedWorld.Validation\ValidatedWorld.Validation.csproj" />
   </ItemGroup>
 
 </Project>
