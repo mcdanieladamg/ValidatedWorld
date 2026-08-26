@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T11 — MVP release evidence and stop decision
+**Current task:** None — MVP evidence complete; human direction required
 
-**Current task estimate:** gigantic
+**Current task estimate:** None
 
 **Last updated:** 2026-08-26
 
@@ -151,7 +151,7 @@ It does not authorize a Git commit.
 | T8 | complete | Atomic write and rollback behavior |
 | T9 | complete | Complete CLI/NDJSON manual workflow |
 | T10 | complete | Realistic MVP scenarios and usability hardening |
-| T11 | pending | MVP release evidence and stop decision |
+| T11 | complete | MVP release evidence and stop decision |
 | T12 | optional | OpenAI semantic reviewer, only after human authorization |
 | T13 | optional | OpenAI authoring agent, only after human authorization |
 
@@ -510,6 +510,49 @@ Completed 2026-08-26.
   the documented elevated NuGet.Config permission workaround; `dotnet build
   ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
   `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 62 tests.
+
+### T11 — MVP release evidence and stop decision
+
+Completed 2026-08-26. The detailed measurements, environment, limits audit,
+smoke walkthrough, concerns, and decision are in
+[manual MVP release evidence](mvp_release_evidence.md).
+
+- Published the framework-dependent Release CLI cleanly and ran its Windows x64
+  executable through public help, sample creation, status, all nine verification
+  checks, reviewed write, readback, and verified backup. Bundled SQLite 3.53.3
+  loaded without an external SQLite installation. The 41-file publish included
+  22 native runtime assets and totaled 34,997,121 bytes.
+- Measured cold representative, expected, and stress processes at 1,000/10,000,
+  10,000/100,000, and 100,000/1,000,000 nodes/review-arcs. The stress graph had
+  599,999 stored edges, completed affected analysis in 4.156 seconds, initialized
+  an 89,276,416-byte database in 45.366 seconds, loaded it in 19.193 seconds,
+  verified it in 18.732 seconds, and peaked at 2,683,940,864 bytes of working set
+  on the recorded 6-core/12-thread, 68,334,764,032-byte workstation.
+- In the stress comparison, a local explicit-link lookup exposed 100 immediate
+  arcs while deterministic recursive analysis selected all 99,999 relevant
+  non-purpose nodes in at most two steps and added only the purpose as context.
+  TechnicalProject goldens continued to have no expected omissions or unrelated
+  false positives.
+- Reviewed the configured identity, text, paging, traversal, affected-output,
+  SQLite row-count, metadata, file-size, and command-time bounds. Stress results
+  are topology- and hardware-specific evidence, not a universal latency claim.
+- Published-artifact smoke deliberately recovered from two incorrect IDs via
+  precise diagnostics and search, observed bounded paging, rejected a stale
+  change reference, excluded `retention-policy`, wrote the fully reviewed exact
+  proposal, exited without warnings, and verified the equal-fingerprint backup.
+- Final checks: `dotnet restore ValidatedWorld.slnx` succeeded through the
+  documented elevated NuGet.Config workaround; `dotnet build
+  ValidatedWorld.slnx --no-restore` completed with 0 warnings and 0 errors; and
+  `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 62 tests.
+- No deterministic correctness defect remains known. Manual NDJSON/fingerprint
+  handling and explicit relationship direction remain high-burden; real-world
+  modeling evidence is small; maximum-scale opens are not interactive; and only
+  Windows x64 was run. The README remains accurate at the product-contract level
+  but is not an installation or operator guide.
+- Recommendation: continue, but narrow the result to an experimental Windows
+  x64 developer preview of the manual engine. Do not claim semantic correctness
+  or broad platform readiness. T12/T13 remain optional and unauthorized until a
+  human explicitly selects a new Current task.
 
 ## 6. Current and remaining tasks
 
