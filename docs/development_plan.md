@@ -2,6 +2,8 @@
 
 **Current task:** T7 — Application queries and in-memory session lifecycle
 
+**Current task estimate:** gigantic
+
 **Last updated:** 2026-08-26
 
 This is the neutral implementation checklist and handoff record for humans and
@@ -33,8 +35,11 @@ On success:
    evidence entry under Completed evidence.
 5. Change **Current task** at the top to the next numbered task. The next task is
    already specified here; refine it only when completed evidence requires it.
-6. Report the result, exact checks, smoke-test findings, uncertainty, and next
-   task to the human, then stop.
+6. Set **Current task estimate** directly below it to exactly `small`, `medium`,
+   `large`, or `gigantic` based on the next task's expected code-change volume
+   as one phase. Use `None` when there is no authorized Current task.
+7. Report the result, exact checks, smoke-test findings, uncertainty, Current
+   task estimate, and next task to the human, then stop.
 
 On failure:
 
@@ -59,8 +64,31 @@ Also perform an informal user-style smoke check:
 - After a CLI exists, start from public help and use a disposable
   application-created database. Do not rely on private APIs or direct canonical
   SQL writes.
-- Record the goal, commands/public calls, observed outcome, confusing behavior,
-  unrelated-node exclusions when relevant, and confidence.
+- Keep those entry conditions as a repeatable spine, but do not reduce smoke QA
+  to a fixed script or duplicate the automated suite. Add creative one-off probes
+  based on the changed behavior and anything confusing observed during the run.
+- Approach the workflow like a curious human: vary plausible inputs or order,
+  make a natural mistake when useful, inspect diagnostics and recovery, and try
+  an alternate path a user might reasonably choose.
+- Fix a finding when the repair is clearly in-scope, small, and straightforward,
+  and add a regression test. Escalate to the human if it requires a material
+  product, schema, dependency, provider, or scope decision, exposes an inherent
+  contradiction, or has no clear low-risk repair.
+- Record the goal, repeatable commands/public calls, exploratory probes, observed
+  outcomes, confusing behavior, unrelated-node exclusions when relevant, and
+  confidence. Exploratory probes need not be standardized across tasks.
+
+After implementation, automated checks, and smoke QA are complete, set the
+single **Current task estimate** field near the top for the newly selected task.
+Do not also copy the estimate into completed evidence or the handoff template.
+The estimate is about code-change breadth for that task as one phase rather than
+elapsed time and does not authorize starting, splitting, or redesigning it:
+
+- `small`: localized change with a narrow test surface;
+- `medium`: several related changes within one primary subsystem;
+- `large`: broad changes spanning multiple components or public behaviors;
+- `gigantic`: unusually wide change across many contracts, state paths, or
+  integration boundaries, with correspondingly extensive tests.
 
 Documentation-only tasks require link/format/consistency checks, not invented
 production tests.

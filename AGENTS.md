@@ -27,8 +27,9 @@ ordered backlog. A human prompt starts each development run.
 - Add meaningful automated tests for changed behavior and perform the current
   task's informal user-style smoke check.
 - On success, record exact evidence, mark the task complete, point Current task
-  to the next prewritten task, report to the human, and stop. The human reviews
-  and merges before starting another run.
+  to the next prewritten task, and set the **Current task estimate** directly
+  below it to `small`, `medium`, `large`, or `gigantic`. Report to the human and
+  stop. The human reviews and merges before starting another run.
 - On failure, leave Current task unchanged, record only useful evidence, report
   the command/output/cause/repairs, and stop.
 - If Current task is `None`, make no changes. Report the recorded state and ask
@@ -64,6 +65,45 @@ test failure.
 
 Documentation-only changes need link/format/consistency checks, not artificial
 production tests.
+
+## Human-style smoke testing
+
+The smoke check is informal product QA, not another fully standardized test
+suite. Keep a small repeatable spine: enter through the public surface, use
+disposable realistic data, attempt the task's main user goal, and record the
+commands or calls and observed result. Within that spine, deliberately make
+room for creative one-off exploration chosen from the behavior just changed and
+anything confusing observed during the run.
+
+Act like a curious human tester. Follow help without relying on implementation
+knowledge, vary plausible inputs and operation order, make at least one natural
+mistake when useful, inspect recovery and diagnostics, and try an alternate path
+that a real user might choose. These probes need not become permanent scripts or
+be identical across tasks. Automated tests remain the deterministic regression
+layer; the smoke check should retain its ability to uncover surprising usability
+or integration problems.
+
+Fix a smoke finding during the current task when the correction is clearly
+in-scope, small, and straightforward, then add an appropriate regression test.
+If the finding implies a material product, schema, dependency, provider, or
+scope decision; reveals an inherent contradiction; or has no clear low-risk
+repair, stop and escalate it to the human instead of improvising a redesign.
+Record both the repeatable walkthrough and the exploratory probes, including
+confusing behavior and confidence.
+
+The Current task estimate is set only after implementation, testing, and smoke
+QA are complete, while advancing the development-plan header. It describes
+expected code-change volume for the newly selected Current task as one phase,
+not elapsed time and not permission to split, start, or redesign that task. Keep
+the estimate only in that header field and use the four labels consistently:
+
+- `small`: a localized change with a narrow test surface;
+- `medium`: several related changes within one primary subsystem;
+- `large`: broad changes spanning multiple components or public behaviors; or
+- `gigantic`: an unusually wide phase with many contracts, state paths, or
+  integration boundaries and correspondingly extensive tests.
+
+When there is no authorized Current task, set the estimate to `None`.
 
 ## Git boundary
 
