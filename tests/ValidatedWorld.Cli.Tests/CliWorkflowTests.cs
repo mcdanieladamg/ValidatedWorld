@@ -45,6 +45,16 @@ public sealed class CliWorkflowTests
         Assert.Equal(4, searchJson["totalCount"]!.GetValue<int>());
         Assert.Equal("battery-assumption", searchJson["items"]![0]!["entityId"]!.GetValue<string>());
 
+        var tagged = await Run(["read", "tag", project, "artifact"]);
+        Assert.Equal(CliRunner.SuccessExitCode, tagged.ExitCode);
+        var taggedJson = JsonNode.Parse(tagged.Output)!;
+        Assert.Equal(2, taggedJson["totalCount"]!.GetValue<int>());
+        Assert.All(taggedJson["items"]!.AsArray(), item =>
+            Assert.Contains("artifact", item!["node"]!["tags"]!.AsArray()
+                .Select(tag => tag!.GetValue<string>())));
+        Assert.Equal(0, JsonNode.Parse((await Run(["read", "tag", project, "Artifact"])).Output)!
+            ["totalCount"]!.GetValue<int>());
+
         Assert.Equal(2, JsonNode.Parse((await Run(["read", "nodes", project, "--limit", "2"])).Output)!
             ["items"]!.AsArray().Count);
         Assert.NotEmpty(JsonNode.Parse((await Run(["read", "edges", project])).Output)!["items"]!.AsArray());
@@ -113,6 +123,11 @@ public sealed class CliWorkflowTests
         Assert.Equal("ok", help["status"]!.GetValue<string>());
         Assert.Contains("change.write", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
+        Assert.Contains("read.tag", help["payload"]!["commands"]!.AsArray()
+            .Select(value => value!.GetValue<string>()));
+
+        var tagged = await host.Send("read.tag", new { path = project, tag = "artifact" });
+        Assert.Equal(2, tagged["payload"]!["totalCount"]!.GetValue<int>());
 
         var begin = await host.Send("change.begin", new
         {

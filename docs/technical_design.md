@@ -58,7 +58,13 @@ A node contains:
 - optional kind, tags, and scalar attributes.
 
 Kinds and tags help authors search and organize a graph. The common engine does
-not assign them hidden semantics.
+not assign them hidden semantics. Tags are canonical, ordinal case-sensitive
+labels. The application exposes both broad case-insensitive substring search
+across entity text and metadata and exact case-sensitive tag lookup across nodes
+and edges. Exact tag lookup is a bounded view operation only: it does not create
+review arcs, alter scope, or filter the required affected/context sets. Full
+node and edge values, including tags, remain visible in read and affected
+results. Replacing an entity to change its tags is an ordinary direct change.
 
 An edge contains:
 
@@ -290,7 +296,8 @@ The public text/structured surface eventually supports:
 
 ```text
 project: init, open, verify, status, backup, export-sql
-read:    node/edge get and list, search, scope traversal, graph navigation/path
+read:    node/edge get and list, text search, exact-tag lookup, scope traversal,
+         graph navigation/path
 change:  begin, show, focus, expand, apply, affected, review, validate, write,
          discard
 sample:  list and create

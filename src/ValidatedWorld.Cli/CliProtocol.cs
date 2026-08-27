@@ -47,6 +47,12 @@ internal sealed record SearchRequest(
     int Limit = QueryPageRequest.DefaultLimit,
     string? Cursor = null,
     string? ExpectedProjectId = null);
+internal sealed record TagRequest(
+    string Path,
+    string Tag,
+    int Limit = QueryPageRequest.DefaultLimit,
+    string? Cursor = null,
+    string? ExpectedProjectId = null);
 internal sealed record ScopeRequest(
     string Path,
     string NodeId,

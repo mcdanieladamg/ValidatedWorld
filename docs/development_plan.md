@@ -393,6 +393,24 @@ Completed 2026-08-26.
   combined text search, scope lineage and descendants, graph neighbors,
   directional review dependencies, shortest dependency paths, and multi-node
   scope context without sibling fan-out.
+- Corrective extension on 2026-08-26: added bounded exact, ordinal
+  case-sensitive tag lookup across nodes and edges through Application, one-shot
+  CLI, and NDJSON. Broad search remains case-insensitive substring discovery;
+  tag lookup is only a view and does not create dependencies or narrow affected
+  review. Public documentation now distinguishes tags, attributes, explicit
+  edges, and external runtime interpretation.
+- Corrective regression coverage verifies node and edge hits, stable paging,
+  cursor isolation, invalid input, case sensitivity, one-shot output, NDJSON
+  discovery and execution, and complete tag-bearing entity DTOs.
+- Corrective public smoke used a disposable seven-node Skyrim-like quest graph.
+  Exact `enable:lucan-dead` lookup returned only its two dialogue nodes, a case
+  mismatch returned none, and `enable:dragon-dead` returned only the unrelated
+  control. Replacing the Lucan state node's text and tags displayed old/new tags
+  and selected its two explicit consumers without tag-based fan-out; discard
+  left the database valid.
+- Corrective full checks on 2026-08-26: restore succeeded through the documented
+  elevated NuGet.Config workaround; build completed with 0 warnings and 0
+  errors; and all 65 tests passed.
 - Added deterministic state-bound cursors, page limits, traversal depth/node/
   cancellation limits, and explicit output/traversal omissions. Wrong project,
   entity, and cursor inputs report stable application query errors.
@@ -839,7 +857,9 @@ consequences, scope-topology membership changes, and context-only ancestors;
 identify old/new child subtrees and parents for a reparent; and explicitly ask
 the reviewer to inspect closed-world counts, complete lists, names, aliases, and
 words such as “all”, “only”, and “every” rather than treating absent facts as
-false.
+false. Tags must be presented as entity metadata when included in the reviewed
+set, but shared tags must not be treated as dependency evidence or used to omit
+required affected/context items.
 
 **Tests and acceptance:** Offline unit/integration tests cover exact request
 content, disjoint chains, required scope lineages, citations, malformed/refused/
@@ -877,6 +897,11 @@ lists, or canonical names, the agent must search for aliases and closed-world
 wording, propose missing semantic edges when warranted, and ask when the set or
 reference is materially ambiguous. It must treat unexpectedly tiny or huge
 affected previews as a reason to inspect the model before seeking approval.
+For externally organized sets, it should reuse deliberate namespaced tags,
+perform exact-tag lookup before inventing a tag, and explain that tags do not
+create review dependencies or executable conditions. It must use attributes
+for named scalar values and explicit edges for stale-if-changed relationships,
+and it must never tag-filter the required affected preview or context.
 
 **Tests and acceptance:** Scripted tests cover large-graph bounded search,
 duplicate/unrelated avoidance, material questions, session loss, review

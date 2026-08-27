@@ -93,6 +93,7 @@ commands when only part of a project is needed.
 ./ValidatedWorld.Cli.exe read nodes world.vw.db --limit 100
 ./ValidatedWorld.Cli.exe read edges world.vw.db --limit 100
 ./ValidatedWorld.Cli.exe read search world.vw.db continent --limit 25
+./ValidatedWorld.Cli.exe read tag world.vw.db quest:golden-claw --limit 25
 ./ValidatedWorld.Cli.exe read scope world.vw.db tamriel --limit 100 `
     --max-depth 1000 --max-nodes 10000
 ./ValidatedWorld.Cli.exe read neighbors world.vw.db tamriel --limit 100
@@ -112,6 +113,11 @@ review arcs. `path` follows review arcs, not the scope tree. `scope` returns the
 selected node, its upstream scope, and paged descendants. `context` returns the
 combined scope-upstream context for the requested node IDs without sibling
 fan-out.
+
+`search` is case-insensitive substring discovery across node IDs/text/kinds/tags
+and edge IDs/labels/rationales/tags. `tag` is an exact case-sensitive lookup
+across node and edge tags. Both return the same bounded search-hit shape,
+including the complete matching node or edge.
 
 ## Graph rules needed by CLI authors
 
@@ -133,6 +139,49 @@ fan-out.
 Nodes and edges may use any `kind`, tags, and scalar attributes. The common
 engine does not give those values hidden semantics. A meaningful connection must
 be represented as an edge if it is expected to affect review selection.
+
+### Tags and external views
+
+Tags are useful when a system outside ValidatedWorld needs a stable secondary
+index. Prefer short namespaced labels so ownership and intent remain obvious:
+
+```text
+quest:golden-claw
+runtime:content
+enable:lucan-dead
+region:whiterun
+```
+
+An external game build tool could use exact tag lookup to collect every node
+marked `enable:lucan-dead`, then compile that already-authored content into its
+own runtime representation. ValidatedWorld does not toggle nodes, execute the
+condition, or participate during gameplay. This keeps shipped runtime state
+separate from design-time review while avoiding condition syntax hidden inside
+ordinary prose.
+
+Keep these boundaries when designing tag conventions:
+
+- A tag answers “which labeled set contains this entity?” It is unordered and
+  carries no value beyond exact membership.
+- Use a scalar attribute for named data such as `chapter = 3` or
+  `runtime-key = lucan-status` when equality to a value is the important fact.
+- Use an explicit directed edge when changing one entity can make another
+  stale. Shared tags do not form a dependency clique and are not traversed by
+  affected analysis.
+- Exact tag lookup may narrow a working view or find candidate entities. It
+  must not filter an affected preview, required scope context, or review
+  obligations after a change has been proposed.
+- Tags on affected nodes and edges are present in the structured result, so an
+  integration may group or annotate the review without losing graph evidence.
+- Changing tags means replacing the node or edge through the normal reviewed
+  transaction. Treat tag names and casing as a small external API once another
+  system consumes them.
+
+This provides practical runtime organization without claiming that arbitrary
+tag combinations are statically valid gameplay states. If a product later
+needs rules such as mutual exclusion, transition legality, or scenario
+coverage, those are explicit validation-profile concerns rather than implicit
+tag behavior in the common engine.
 
 ## Modeling graphs that age well
 

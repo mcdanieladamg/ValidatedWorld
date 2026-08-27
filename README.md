@@ -154,6 +154,19 @@ affected preview: a surprisingly small set often signals a missing edge, while
 a surprisingly large set may signal an unstable claim stored too high in scope
 or an over-broad review direction.
 
+Use tags for an additional, explicitly non-semantic organization layer. A tag
+is an exact, case-sensitive label on a node or edge; bounded exact-tag lookup is
+separate from broad text search. Namespaced labels such as `quest:golden-claw`,
+`runtime:content`, or `enable:lucan-dead` can let an external tool assemble a
+view or prevalidated content bundle without putting control syntax in prose.
+Tags are returned with graph entities and affected previews, and changing tags
+is a direct change to that entity. Shared tags never create review dependencies,
+alter scope, or narrow required review context. If one fact can make another
+stale, model that relationship with an explicit directed edge; if a scalar value
+has a defined name, prefer an attribute. The external system owns any runtime
+meaning assigned to tags—ValidatedWorld stores, searches, reviews, and exports
+them but does not execute them as conditions.
+
 A `scope-parent` change is itself meaningful topology. Adding, removing, or
 redirecting one selects the old and new child subtrees and makes the old and new
 immediate parents review obligations; both ancestry lineages are included

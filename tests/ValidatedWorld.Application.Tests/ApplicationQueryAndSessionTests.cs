@@ -53,6 +53,45 @@ public sealed class ApplicationQueryAndSessionTests
     }
 
     [Fact]
+    public void Exact_tag_search_is_case_sensitive_entity_complete_and_cursor_bound()
+    {
+        var graph = SampleProjectCatalog.Create(SampleProjectCatalog.TechnicalProject);
+        var edge = graph.Edges.Single(candidate => candidate.Id.Value == "battery-requires-runtime");
+        var taggedEdge = new GraphEdge(
+            edge.Id,
+            edge.Source,
+            edge.Target,
+            edge.Relationship,
+            edge.ReviewDirection,
+            edge.Rationale,
+            ["artifact"]);
+        var taggedGraph = new ProjectGraph(
+            graph.ProjectId,
+            graph.Title,
+            graph.PurposeNodeId,
+            graph.Nodes,
+            graph.Edges.Where(candidate => candidate.Id != edge.Id).Append(taggedEdge));
+        var application = new ProjectApplication(new MutableStore(taggedGraph));
+        var queries = application.Queries("memory.vw.db");
+
+        var first = queries.SearchByTag("artifact", new QueryPageRequest(2));
+        var second = queries.SearchByTag("artifact", new QueryPageRequest(2, first.NextCursor));
+
+        Assert.Equal(3, first.TotalCount);
+        Assert.Equal(new[] { "battery-requires-runtime", "power-design-anchor" },
+            first.Items.Select(hit => hit.EntityId.Value));
+        Assert.Equal(new[] { GraphEntityKind.Edge, GraphEntityKind.Node },
+            first.Items.Select(hit => hit.EntityKind));
+        Assert.Equal(new[] { "privacy-documentation" }, second.Items.Select(hit => hit.EntityId.Value));
+        Assert.Empty(queries.SearchByTag("Artifact").Items);
+        Assert.Equal(
+            ProjectQueryErrorCode.InvalidCursor,
+            Assert.Throws<ProjectQueryException>(() =>
+                queries.Search("artifact", new QueryPageRequest(2, first.NextCursor))).Code);
+        Assert.Throws<ArgumentException>(() => queries.SearchByTag("  "));
+    }
+
+    [Fact]
     public void Scope_neighbor_dependency_path_and_context_queries_exclude_unrelated_siblings()
     {
         using var workspace = new TestWorkspace();
