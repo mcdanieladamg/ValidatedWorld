@@ -1,10 +1,10 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T12 — Realistic MVP scenarios and usability hardening
+**Current task:** T13 — Optional OpenAI authoring agent
 
-**Current task estimate:** large
+**Current task estimate:** gigantic
 
-**Last updated:** 2026-08-26
+**Last updated:** 2026-08-27
 
 This is the neutral implementation checklist and handoff record for humans and
 coding agents. It contains exactly one current task. The README defines the
@@ -118,6 +118,11 @@ Ordinary tests are offline and deterministic. Live OpenAI tests follow the
 additional key, opt-in, logging, cost, and no-retry rules in technical design
 section 8.
 
+If any live OpenAI request encounters trouble of any kind, including exhausted
+credits, quota, authentication, transport, timeout, refusal, or malformed
+provider output, stop immediately. Make no further paid call, report what was
+being evaluated and the exact non-secret failure, and ask the human for feedback.
+
 ## 3. Repository and scope guardrails
 
 - Preserve unrelated human changes and never overwrite work just to simplify a
@@ -152,7 +157,7 @@ It does not authorize a Git commit.
 | T9 | complete | Complete CLI/NDJSON manual workflow |
 | T10 | complete | Realistic MVP scenarios and usability hardening |
 | T11 | complete | MVP release evidence and stop decision |
-| T12 | pending | OpenAI semantic reviewer |
+| T12 | complete | OpenAI semantic reviewer |
 | T13 | pending | OpenAI authoring agent |
 | T14 | optional | Evaluate feasibility of OpenAI plugin format, in a discussion with human. If feasible and desired, human will ask to implement this as a phase |
 
@@ -587,6 +592,60 @@ smoke walkthrough, concerns, and decision are in
   x64 developer preview of the manual engine. Do not claim semantic correctness
   or broad platform readiness. T12/T13 remain pending.
 
+### T12 — optional OpenAI semantic reviewer
+
+Completed 2026-08-27. The human directed retaining T12 and advancing the plan
+to T13 after this phase; T13 remains unstarted and pending review of these edits.
+
+- Added an immutable, deterministic request planner and coverage manifest over
+  the complete current/proposed operation, affected-path, evidence-edge,
+  required scope-lineage, topology-change, validation, and disposition state.
+  Model-facing enums serialize as descriptive names rather than numbers. The
+  standalone English prompt treats graph text as untrusted data, distinguishes
+  all four review roles, covers closed lists/counts/names/aliases and reparent
+  lineages, treats missing facts as unknown, and forbids tag inference.
+- Added one raw OpenAI Responses background client for `gpt-5.6-terra`, strict
+  cited structured output, same-response polling, a 2,000-output-token bound,
+  usage/duration metadata, sanitized refusal/failure fallback, no tools, and no
+  automatic POST retry or fallback provider/model. Results remain in the
+  process-local session, are bound to all current fingerprints, become stale
+  after proposal/review changes, never set dispositions, and never write.
+- Added default-enabled .NET configuration with safe unconfigured fallback,
+  one-time User Secrets/environment setup, `ai.status`, and an `ai.review`
+  command whose explicit boolean is tied to the exact affected reference. Moved
+  setup guidance to the README and CLI guide and removed the nonfunctional
+  `.env.example`; no credential is persisted or logged.
+- Small offline coverage includes deterministic request equality and manifest
+  counts, disjoint roster/name/local-fact chains, a sixth member, canonical-name
+  change, current/proposed reparent paths, both parent lineages, sibling
+  exclusion, tags, known-only citations, explicit single-call authorization,
+  stale results, no write/mutation, create-plus-poll, usage, request logging,
+  refusal, malformed output, and timeout/manual fallback.
+- Public synthetic live smoke used a disposable five-node purpose/policy/test
+  graph, two operations, three affected nodes, two context ancestors, five
+  evidence edges, ten allowed citation IDs, and no omissions. A false
+  authorization made no call. The first small call found the intended permanent-
+  retention purpose conflict and stale seven-day verification while ignoring
+  an unrelated wording-only control. Exact-request inspection then found and
+  corrected numeric model-facing enums; the second call confirmed named roles
+  and returned the same two useful concerns while explicitly accepting the
+  control. The two calls used 5,438 input and 579 output tokens (6,017 total),
+  cost approximately $0.0178 at the recorded $2/$12 per-million Terra rates,
+  and took 8.7 and 7.7 seconds. No further call was needed (2 of the 20-call
+  troubleshooting allowance used). An earlier sandboxed transport attempt made
+  before that allowance returned no response ID or usage and was not retried
+  until the human authorized troubleshooting.
+- Exploratory recovery omitted the required null `edge` member from a node
+  operation and received a precise `malformed-json` diagnostic before any paid
+  call; public help now states that both `node` and `edge` members are required
+  with the unused one null. Live proposals were never written to SQLite.
+- Final checks on 2026-08-27: `dotnet restore ValidatedWorld.slnx` succeeded via
+  the documented elevated NuGet.Config workaround; `dotnet build
+  ValidatedWorld.slnx --no-restore` succeeded with 0 warnings and 0 errors; and
+  `dotnet test ValidatedWorld.slnx --no-build --no-restore` passed all 72 tests.
+  Markdown/link/fence checks and `git diff --check` also passed, with no stale
+  `.env.example` references.
+
 ## 6. Current and remaining tasks
 
 ### T1 — common graph domain
@@ -838,8 +897,8 @@ report, and stop. Do not automatically select T12 or T13.
 
 ### T12 — optional OpenAI semantic reviewer
 
-**Prerequisites:** T11 complete; explicit human decision to make T12 current;
-human-configured local `OPENAI_API_KEY`; and an explicitly enabled live-test flag.
+**Prerequisites:** T11 complete; T12 is current; human-configured local
+`OPENAI_API_KEY`; and an explicitly enabled live-test flag.
 If the key is not configured, make no code changes and ask the human to set it
 locally. Never set or display it.
 
@@ -861,21 +920,22 @@ false. Tags must be presented as entity metadata when included in the reviewed
 set, but shared tags must not be treated as dependency evidence or used to omit
 required affected/context items.
 
-**Tests and acceptance:** Offline unit/integration tests cover exact request
+**Tests and acceptance:** Small offline unit/integration tests cover exact request
 content, disjoint chains, required scope lineages, citations, malformed/refused/
 timeout responses, no mutation/write, and manual fallback. An explicitly enabled
-live run must log and inspect the exact serialized request without credentials,
-then evaluate known-contradiction and unrelated-control cases for prompt quality,
-scope correctness, useful concerns, false positives/omissions, tokens, cost, and
-latency. Include lore cases for adding a sixth roster member, changing a
+minimal live run must make one compact request combining a known contradiction
+and unrelated control, log and inspect the exact serialized request without
+credentials, and evaluate prompt quality, scope correctness, useful concerns,
+false positives/omissions, tokens, cost, and latency. Include small offline lore
+cases for adding a sixth roster member, changing a
 canonical name, a local fact, and a scope reparent; prove citations cover both
 scope lineages and do not invent sibling dependencies. Decide with the human
 whether to retain, revise, or omit the feature; do not automatically begin T13.
 
 ### T13 — optional OpenAI authoring agent
 
-**Prerequisites:** T12 retain/omit decision; explicit human decision to make T13
-current; human-configured local `OPENAI_API_KEY`; and an explicitly enabled
+**Prerequisites:** T12 retain/omit decision; T13 is current; human-configured
+local `OPENAI_API_KEY`; and an explicitly enabled
 live-test flag. If the key is not configured, make no code changes and ask the
 human to set it locally. Never set or display it.
 
@@ -903,13 +963,14 @@ create review dependencies or executable conditions. It must use attributes
 for named scalar values and explicit edges for stale-if-changed relationships,
 and it must never tag-filter the required affected preview or context.
 
-**Tests and acceptance:** Scripted tests cover large-graph bounded search,
+**Tests and acceptance:** Small scripted tests cover bounded search,
 duplicate/unrelated avoidance, material questions, session loss, review
 iteration, stale approval, no SQL/direct write/automatic disposition, and manual
 fallback. An explicitly enabled live run must log and inspect the exact prompt,
-context, and tool schemas without credentials, then evaluate a known new-project
-and existing-project change for correctness, user burden, unrelated mutations,
-questions, affected coverage, approval binding, tokens, cost, and latency.
+context, and tool schemas without credentials, then use the smallest practical
+known new-project and existing-project cases to evaluate correctness, user
+burden, unrelated mutations, questions, affected coverage, approval binding,
+tokens, cost, and latency.
 Script the lore progression from a five-member world through a sixth member,
 roster/count reconciliation, canonical rename, local detail change, broad scope
 change, deletion, and reparent. Assert that the agent creates a roster hub rather

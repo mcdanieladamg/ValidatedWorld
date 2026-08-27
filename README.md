@@ -262,3 +262,37 @@ possible use, not the common engine's only purpose.
 The [CLI usage guide](docs/cli_usage.md) documents the current manual workflow.
 Technical requirements and the one-task-at-a-time implementation checklist are
 in the [development plan](docs/development_plan.md).
+
+## Optional OpenAI configuration
+
+The manual workflow needs no API key. Optional AI features are enabled by
+default but report themselves unavailable and fall back to the manual workflow
+when no key is configured. Live development tests remain disabled by default.
+
+For a source checkout, store the key once in the existing .NET User Secrets
+store. It stays outside the repository and persists across terminals:
+
+```powershell
+dotnet user-secrets set "AiReview:OpenAI:ApiKey" "<key>" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
+```
+
+Enable the separately invoked T12 live evaluation only when intentionally
+authorizing a paid development call:
+
+```powershell
+dotnet user-secrets set "AiReview:LiveTests" "true" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
+```
+
+Configuration uses ordinary .NET keys. Environment variables replace `:` with
+`__` and use the `VW_` prefix, for example `VW_AIREVIEW__MODEL`; the standard
+`OPENAI_API_KEY` variable is also accepted. Reviewer defaults are `Enabled=true`,
+`Provider=openai`, `Model=gpt-5.6-terra`, `TimeoutSeconds=1200`, and
+`LiveTests=false`. T13 uses the equivalent `AiAuthoring`/`VW_AIAUTHORING__`
+names. Never commit, log, or paste an API key into project data.
+
+The reviewer never calls OpenAI merely because a key exists. Each `ai.review`
+request must explicitly authorize its one provider call and bind that approval
+to the current affected fingerprint. That call sends the proposed operations,
+affected evidence, and required scope context to OpenAI. The response runs in
+background/store mode so the application can poll that same response; no
+automatic paid retry or fallback model is used.

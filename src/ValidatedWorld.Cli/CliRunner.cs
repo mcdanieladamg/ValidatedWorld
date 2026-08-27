@@ -28,9 +28,16 @@ public static class CliRunner
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(error);
-        var application = new ProjectApplication(new SqliteProjectStore());
+        using var httpClient = new HttpClient { BaseAddress = new Uri("https://api.openai.com/") };
         try
         {
+            var aiReview = AiReviewConfiguration.Load();
+            var requestLogPath = Path.Combine(
+                Directory.GetCurrentDirectory(), "artifacts", "ai-review-live-request.json");
+            var application = new ProjectApplication(
+                new SqliteProjectStore(),
+                semanticReviewProvider: aiReview.CreateProvider(httpClient, requestLogPath),
+                semanticReviewOptions: aiReview.RuntimeOptions());
             cancellationToken.ThrowIfCancellationRequested();
             if (arguments.Length == 0 || IsHelp(arguments[0]))
             {

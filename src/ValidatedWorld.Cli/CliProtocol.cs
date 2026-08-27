@@ -108,6 +108,7 @@ internal sealed record ReviewRequest(
     SessionReferenceDto Reference,
     IReadOnlyList<ReviewDispositionDto> Dispositions,
     IReadOnlyList<string> PresentedContextNodeIds);
+internal sealed record AiReviewRequest(SessionReferenceDto Reference, bool AuthorizeProviderCall);
 
 internal sealed record ErrorDto(string Code, string Message);
 internal sealed record StoredProjectDto(
@@ -228,7 +229,8 @@ internal sealed record SessionSnapshotDto(
     IReadOnlyList<DispositionDto> Dispositions,
     IReadOnlyList<string> PresentedContextNodeIds,
     ReadinessDto Readiness,
-    RefreshDto? Refresh);
+    RefreshDto? Refresh,
+    SemanticReviewResultDto? SemanticReview);
 internal sealed record FocusResultDto(
     OperationBatchDto ExpandedOperations,
     string OperationFingerprint,
@@ -248,6 +250,33 @@ internal sealed record ExitWarningDto(
     int OperationCount,
     int PendingReviewCount,
     string Message);
+internal sealed record AiReviewAvailabilityDto(
+    bool Enabled,
+    bool Configured,
+    string Provider,
+    string Model,
+    int TimeoutSeconds,
+    bool LiveTests,
+    string Message);
+internal sealed record SemanticReviewUsageDto(int InputTokens, int OutputTokens, int TotalTokens);
+internal sealed record SemanticReviewConcernResultDto(
+    string Code,
+    string Message,
+    IReadOnlyList<string> Citations);
+internal sealed record SemanticReviewResultDto(
+    SemanticReviewStatus Status,
+    string Provider,
+    string Model,
+    string RequestFingerprint,
+    SemanticReviewBindingDto Binding,
+    string Summary,
+    IReadOnlyList<SemanticReviewConcernResultDto> Concerns,
+    SemanticReviewUsageDto? Usage,
+    string? ResponseId,
+    double DurationMilliseconds,
+    string CompletedUtc,
+    bool IsCurrent,
+    string? FailureCode);
 
 internal static class CliDto
 {
@@ -325,7 +354,8 @@ internal static class CliDto
         Readiness(value.Readiness),
         value.Refresh is null ? null : new RefreshDto(
             value.Refresh.InvalidatedDispositionNodeIds.Select(id => id.Value).ToArray(),
-            value.Refresh.InvalidatedContextNodeIds.Select(id => id.Value).ToArray()));
+            value.Refresh.InvalidatedContextNodeIds.Select(id => id.Value).ToArray()),
+        value.SemanticReview is null ? null : SemanticReview(value.SemanticReview));
 
     public static AffectedDto Affected(AffectedAnalysis value) => new(
         value.Status,
@@ -373,6 +403,29 @@ internal static class CliDto
     public static ExitWarningDto Warning(ChangeExitWarning value) => new(
         value.ProjectId.Value, value.SessionId, value.Path,
         value.OperationCount, value.PendingReviewCount, value.Message);
+
+    public static AiReviewAvailabilityDto Availability(SemanticReviewAvailability value) => new(
+        value.Enabled, value.Configured, value.Provider, value.Model,
+        value.TimeoutSeconds, value.LiveTests, value.Message);
+
+    public static SemanticReviewResultDto SemanticReview(SemanticReviewResult value) => new(
+        value.Status,
+        value.Provider,
+        value.Model,
+        value.RequestFingerprint,
+        value.Binding,
+        value.Summary,
+        value.Concerns.Select(concern => new SemanticReviewConcernResultDto(
+            concern.Code,
+            concern.Message,
+            concern.Citations.Select(id => id.Value).ToArray())).ToArray(),
+        value.Usage is null ? null : new SemanticReviewUsageDto(
+            value.Usage.InputTokens, value.Usage.OutputTokens, value.Usage.TotalTokens),
+        value.ResponseId,
+        value.Duration.TotalMilliseconds,
+        Utc(value.CompletedUtc),
+        value.IsCurrent,
+        value.FailureCode);
 
     public static ChangeSessionLocator Locator(SessionLocatorDto value) =>
         new(new ProjectId(value.ProjectId), Required(value.SessionId, nameof(value.SessionId)));

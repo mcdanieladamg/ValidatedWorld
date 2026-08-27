@@ -460,3 +460,49 @@ Use `change.show` or `change.affected` with
 `{"session":{"projectId":"...","sessionId":"..."}}` for non-mutating session
 inspection. Use the latest complete reference for `change.expand`,
 `change.validate`, `change.write`, or `change.discard`.
+
+## Optional semantic AI review
+
+The root README documents one-time OpenAI configuration. With or without a key,
+inspect runtime availability inside the NDJSON process without making a provider
+call:
+
+```json
+{"version":1,"command":"ai.status","payload":{}}
+```
+
+After `change.apply` or `change.expand`, copy the entire latest reference into
+`ai.review`. A false authorization is an offline fallback check and never calls
+the provider:
+
+```json
+{
+  "version": 1,
+  "command": "ai.review",
+  "payload": {
+    "reference": {
+      "projectId": "...",
+      "sessionId": "...",
+      "baseFingerprint": "...",
+      "operationFingerprint": "...",
+      "proposedFingerprint": "...",
+      "affectedFingerprint": "...",
+      "reviewFingerprint": "..."
+    },
+    "authorizeProviderCall": false
+  }
+}
+```
+
+Set `authorizeProviderCall` to `true` only when intentionally authorizing one
+paid review of that exact affected fingerprint. The request sends the complete
+proposed operation/affected/context slice to OpenAI, uses no tools, and performs
+no automatic paid retry. Polling continues only the response created by that
+single call. The result includes status, cited concerns, usage, duration, a
+request fingerprint, and its exact session binding.
+
+AI concerns are advisory and exist only in the in-memory session. They never
+change dispositions, make an invalid proposal writable, write SQLite, or replace
+the manual `change.review` workflow. If the proposal changes, the prior result
+is reported as stale. A disabled, unconfigured, refused, timed-out, or malformed
+provider result leaves the complete manual workflow available.

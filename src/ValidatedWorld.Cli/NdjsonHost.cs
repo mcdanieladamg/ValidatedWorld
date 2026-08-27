@@ -22,6 +22,7 @@ internal sealed class NdjsonHost(
         "read.neighbors", "read.dependencies", "read.path", "read.context",
         "change.begin", "change.show", "change.focus", "change.apply", "change.expand",
         "change.affected", "change.review", "change.validate", "change.write", "change.discard",
+        "ai.status", "ai.review",
     ];
 
     public async Task<int> RunAsync()
@@ -44,7 +45,7 @@ internal sealed class NdjsonHost(
                 if (request.Payload.ValueKind != JsonValueKind.Object)
                     throw new JsonException("The command payload must be a JSON object.");
 
-                var (payload, shouldExit) = Dispatch(command, request.Payload);
+                var (payload, shouldExit) = await DispatchAsync(command, request.Payload);
                 await WriteResult(command, "ok", payload);
                 if (shouldExit)
                 {
@@ -62,6 +63,12 @@ internal sealed class NdjsonHost(
                 await WriteResult(command, "error", new ErrorDto(code, message));
             }
         }
+    }
+
+    private async Task<(object Payload, bool ShouldExit)> DispatchAsync(string command, JsonElement payload)
+    {
+        if (command == "ai.review") return (await AiReview(payload), false);
+        return Dispatch(command, payload);
     }
 
     private (object Payload, bool ShouldExit) Dispatch(string command, JsonElement payload) => command switch
@@ -97,6 +104,7 @@ internal sealed class NdjsonHost(
         "change.validate" => (ChangeValidate(payload), false),
         "change.write" => (ChangeWrite(payload), false),
         "change.discard" => (ChangeDiscard(payload), false),
+        "ai.status" => (AiStatus(payload), false),
         _ => throw new ArgumentException($"Unknown NDJSON command '{command}'.", nameof(command)),
     };
 
@@ -128,7 +136,8 @@ internal sealed class NdjsonHost(
                     "focus {reference,operations,scopeParents}; apply {reference,operations,limits?}; " +
                     "expand {reference,limits?}; review {reference,dispositions,presentedContextNodeIds}; " +
                     "validate|write|discard {reference}",
-                operations = "{operations:[{kind:add|replace|remove,entityKind:node|edge,entityId,node?,edge?}]}",
+                ai = "status {}; review {reference,authorizeProviderCall}; provider calls require explicit true",
+                operations = "{operations:[{kind:add|replace|remove,entityKind:node|edge,entityId,node|null,edge|null}]}",
                 review = "dispositions use {nodeId,kind:updated|reviewedNoChange|notApplicable|pending,rationale?}",
             },
         }, false);
@@ -357,6 +366,25 @@ internal sealed class NdjsonHost(
             result.SessionId,
             result.DiscardedUtc.ToUniversalTime().ToString(
                 "O", System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private object AiStatus(JsonElement payload)
+    {
+        _ = CliJson.Payload<EmptyRequest>(payload);
+        return CliDto.Availability(application.SemanticReviewAvailability);
+    }
+
+    private async Task<object> AiReview(JsonElement payload)
+    {
+        var request = CliJson.Payload<AiReviewRequest>(payload);
+        var reference = CliDto.Reference(request.Reference);
+        var result = await application.ReviewSemanticsAsync(
+            reference,
+            new SemanticReviewCallAuthorization(
+                request.AuthorizeProviderCall,
+                reference.AffectedFingerprint),
+            cancellationToken);
+        return CliDto.SemanticReview(result);
     }
 
     private ProjectQueries Queries(string path, string? expectedProjectId) => application.Queries(

@@ -116,12 +116,16 @@ public sealed partial class ProjectApplication
         IProjectStore store,
         GraphValidator? validator = null,
         Func<DateTimeOffset>? utcNow = null,
-        Func<string>? sessionIdFactory = null)
+        Func<string>? sessionIdFactory = null,
+        ISemanticReviewProvider? semanticReviewProvider = null,
+        SemanticReviewRuntimeOptions? semanticReviewOptions = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _validator = validator ?? new GraphValidator();
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
         _sessionIdFactory = sessionIdFactory ?? (() => Guid.NewGuid().ToString("N"));
+        _semanticReviewProvider = semanticReviewProvider;
+        _semanticReviewOptions = (semanticReviewOptions ?? new SemanticReviewRuntimeOptions()).Validate();
     }
 
     public StoredProject Initialize(string path, ProjectGraph graph)

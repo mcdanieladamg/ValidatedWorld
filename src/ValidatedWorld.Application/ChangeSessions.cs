@@ -101,7 +101,8 @@ public sealed class ChangeSessionSnapshot
         IReadOnlyList<ReviewDisposition> dispositions,
         IReadOnlyList<EntityId> presentedContextNodeIds,
         ReviewReadinessResult readiness,
-        ReviewRefreshResult? refresh)
+        ReviewRefreshResult? refresh,
+        SemanticReviewResult? semanticReview)
     {
         Path = path;
         Author = author;
@@ -116,6 +117,7 @@ public sealed class ChangeSessionSnapshot
         PresentedContextNodeIds = new ReadOnlyCollection<EntityId>(presentedContextNodeIds.ToArray());
         Readiness = readiness;
         Refresh = refresh;
+        SemanticReview = semanticReview;
     }
 
     public string Path { get; }
@@ -143,6 +145,8 @@ public sealed class ChangeSessionSnapshot
     public ReviewReadinessResult Readiness { get; }
 
     public ReviewRefreshResult? Refresh { get; }
+
+    public SemanticReviewResult? SemanticReview { get; }
 }
 
 public sealed partial class ProjectApplication
@@ -545,7 +549,17 @@ public sealed partial class ProjectApplication
             state.Review.Dispositions,
             state.Review.PresentedContextNodeIds,
             state.Review.EvaluateReadiness(),
-            refresh);
+            refresh,
+            CurrentSemanticReview(state));
+    }
+
+    private static SemanticReviewResult? CurrentSemanticReview(ActiveChangeSession state)
+    {
+        if (state.SemanticReview is null) return null;
+        return state.SemanticReview with
+        {
+            IsCurrent = SameBinding(state.SemanticReview.Binding, BuildReference(state)),
+        };
     }
 
     private static ChangeSessionReference BuildReference(ActiveChangeSession state)
@@ -656,5 +670,7 @@ public sealed partial class ProjectApplication
         public AffectedAnalysis Affected { get; set; }
 
         public AffectedReviewSession Review { get; }
+
+        public SemanticReviewResult? SemanticReview { get; set; }
     }
 }

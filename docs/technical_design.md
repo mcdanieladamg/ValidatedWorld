@@ -312,9 +312,8 @@ graph queries rather than provider calls.
 
 OpenAI is the only provider planned for the initial AI features. Provider choice
 and all user-facing instructions/prompts are hardcoded in English. Defaults and
-opt-in flags are documented in the root `.env.example`; the application uses
-.NET configuration, user-secrets, or process environment and does not load that
-file automatically.
+local setup are documented in the README; the application uses .NET
+configuration, user-secrets, or process environment.
 
 The planned provider path uses OpenAI Responses background mode and polls the
 same response within the configured 1,200-second end-to-end deadline. Returning
@@ -328,7 +327,7 @@ workflow usable.
 
 AI integration work is deliberately different from ordinary tasks:
 
-1. A human must explicitly make that AI task current in the development plan.
+1. The AI task must be current in the development plan.
 2. Before changing code, the developer/agent checks only whether a locally
    configured `OPENAI_API_KEY` is available. It must never print, read back,
    copy, infer, acquire, or set the key.
@@ -340,6 +339,10 @@ AI integration work is deliberately different from ordinary tasks:
 5. There are no automatic paid retries, parallel paid calls, fallback models,
    or surprise provider calls. Polling or continuing the same response is not a
    retry.
+6. At the first live-provider problem of any kind, including exhausted credits,
+   quota, authentication, transport, timeout, refusal, or malformed output,
+   development stops immediately. No further paid call is made; the developer
+   reports the non-secret failure and asks the human for feedback.
 
 During each AI feature's development, at least one explicitly enabled live test
 must capture and log the complete outbound request as actually serialized,
