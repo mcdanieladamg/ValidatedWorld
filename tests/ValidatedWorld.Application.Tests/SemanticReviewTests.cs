@@ -196,9 +196,11 @@ public sealed class SemanticReviewTests
             JsonResponse(Completed(modelOutput)));
         using var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.openai.com/") };
         string? logged = null;
+        string? responseLogged = null;
         var provider = new OpenAiResponsesSemanticReviewProvider(
             http, "test-secret", timeout: TimeSpan.FromSeconds(2), pollInterval: TimeSpan.Zero,
-            serializedRequestLogger: value => logged = value);
+            serializedRequestLogger: value => logged = value,
+            serializedResponseLogger: value => responseLogged = value);
 
         var result = await provider.ReviewAsync(plan);
 
@@ -210,8 +212,10 @@ public sealed class SemanticReviewTests
         Assert.Equal(11, result.Usage!.InputTokens);
         Assert.Equal(7, result.Usage.OutputTokens);
         Assert.DoesNotContain("test-secret", logged, StringComparison.Ordinal);
+        Assert.DoesNotContain("test-secret", responseLogged, StringComparison.Ordinal);
         Assert.Contains("\"background\":true", logged, StringComparison.Ordinal);
         Assert.Contains("\"tool_choice\":\"none\"", logged, StringComparison.Ordinal);
+        Assert.Contains("\"status\":\"completed\"", responseLogged, StringComparison.Ordinal);
     }
 
     [Theory]

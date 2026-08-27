@@ -272,7 +272,8 @@ in the [development plan](docs/development_plan.md).
 The manual workflow needs no API key. Semantic review defaults on but is
 effective only when its key is configured. Without a key—or when explicitly
 disabled—`change.write` uses the complete manual workflow without contacting
-OpenAI. Live development-test request logging remains disabled by default.
+OpenAI. Live development-test request/response logging remains disabled by
+default.
 
 For a source checkout, store the key once in the existing .NET User Secrets
 store. It stays outside the repository and persists across terminals:
@@ -281,12 +282,27 @@ store. It stays outside the repository and persists across terminals:
 dotnet user-secrets set "AiReview:OpenAI:ApiKey" "<key>" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
 ```
 
-Enable credential-free request capture only while intentionally running a paid
-T12 development check:
+Enable credential-free request/response capture only while intentionally
+running a paid T12 development check:
 
 ```powershell
 dotnet user-secrets set "AiReview:LiveTests" "true" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
 ```
+
+Run the small, explicitly categorized live T12 check separately from the
+ordinary offline suite:
+
+```powershell
+dotnet test tests/ValidatedWorld.Cli.Tests/ValidatedWorld.Cli.Tests.csproj `
+    --filter Category=LiveOpenAI
+```
+
+When enabled, the check writes credential-free
+`artifacts/ai-review-live-request.json` and
+`artifacts/ai-review-live-response.json` files relative to its working
+directory. These ignored development artifacts can contain project text and
+model feedback. Sandbox network permission is handled as documented in
+`AGENTS.md`.
 
 Configuration uses ordinary .NET keys. Environment variables replace `:` with
 `__` and use the `VW_` prefix, for example `VW_AIREVIEW__MODEL`; the standard

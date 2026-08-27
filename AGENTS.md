@@ -57,6 +57,15 @@ workaround, not a product dependency or a reason to weaken restore. Keep the
 build and test commands sandboxed with `--no-restore` after the elevated
 restore succeeds.
 
+If an explicitly opted-in live OpenAI call fails with a transport or network
+access error inside the sandbox before receiving a provider response, rerun the
+exact filtered live-call command with the command tool's elevated,
+outside-sandbox permission and a narrowly scoped explanation that the call must
+reach the OpenAI API. This is a sandbox network workaround, not a provider or
+product failure. Do not elevate ordinary offline app permission, broaden the
+live-test filter, print or inspect the API key, or change the request merely to
+obtain permission.
+
 For the same failure, make at most two materially different repair attempts.
 Never rerun an unchanged failing command merely hoping it will pass. Give an
 infrastructure/dependency failure one diagnostic retry after a concrete repair;

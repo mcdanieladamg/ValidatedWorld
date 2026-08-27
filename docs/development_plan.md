@@ -59,13 +59,15 @@ walkthrough and findings to the human rather than adding a dated evidence
 section here.
 
 Ordinary tests are offline. Live OpenAI development checks require the local
-key and explicit `LiveTests` flag described in technical design section 8. Log
-and inspect the exact credential-free serialized request, use the smallest
+key, explicit `LiveTests` flag, and separately filtered `LiveOpenAI` test command
+described in the README and technical design section 8. Log and inspect the exact
+credential-free serialized request and provider response, use the smallest
 meaningful known/control cases, and make no automatic paid retries, parallel
 paid calls, or fallback-model calls. At any provider trouble—including quota,
 authentication, transport, timeout, refusal, malformed output, or exhausted
 credit—stop paid calls immediately, report the non-secret failure, and ask the
-human for feedback.
+human for feedback. Follow the sandbox network workaround in `AGENTS.md` when a
+filtered live test cannot reach the provider from inside the sandbox.
 
 ## Repository guardrails
 
@@ -117,7 +119,8 @@ independent semantic write gate, and complete manual use.
 
 - Strict read/change tools with bounded context, tool-call, search, traversal,
   and operation limits; no raw SQL or direct canonical writes. Prefer compact
-  incremental entity operations over complete-batch retransmission.
+  incremental entity operations over complete-batch retransmission, and omit
+  complete proposed graphs and accumulated batches from iterative tool results.
 - Search-before-create behavior, material clarification questions, one
   process-local change session, affected/review iteration, and new/existing
   project previews.

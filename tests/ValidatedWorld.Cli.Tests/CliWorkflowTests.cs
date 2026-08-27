@@ -260,6 +260,8 @@ public sealed class CliWorkflowTests
         Assert.Equal("ok", help["status"]!.GetValue<string>());
         Assert.Contains("change.write", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
+        Assert.Contains("change.patch", help["payload"]!["commands"]!.AsArray()
+            .Select(value => value!.GetValue<string>()));
         Assert.Contains("read.tag", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
         Assert.DoesNotContain("ai.review", help["payload"]!["commands"]!.AsArray()
@@ -349,6 +351,126 @@ public sealed class CliWorkflowTests
             JsonNode.Parse(nodeResult.Output)!["text"]!.GetValue<string>());
         Assert.Equal(0, (await RunProcess(["project", "backup", project, backup])).ExitCode);
         Assert.Equal(0, (await RunProcess(["project", "verify", backup])).ExitCode);
+    }
+
+    [Fact]
+    public async Task Ndjson_patch_accumulates_small_edits_and_supports_compact_responses()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "incremental NDJSON project.vw.db");
+        Assert.Equal(0, (await Run(["sample", "create", "technical-project", project])).ExitCode);
+
+        await using var host = await NdjsonProcess.Start();
+        var battery = (JsonObject)(await host.Send("read.node", new
+        {
+            path = project,
+            entityId = "battery-assumption",
+        }))["payload"]!.DeepClone();
+        var runtime = (JsonObject)(await host.Send("read.node", new
+        {
+            path = project,
+            entityId = "runtime-test",
+        }))["payload"]!.DeepClone();
+
+        var begin = await host.Send("change.begin", new
+        {
+            path = project,
+            projectId = "technical-project",
+            author = "incremental protocol tester",
+            intent = "Accumulate two small patches",
+            includeOperations = false,
+            includeProposedGraph = false,
+        });
+        Assert.Equal(0, begin["payload"]!["operationCount"]!.GetValue<int>());
+        Assert.Null(begin["payload"]!["operations"]);
+        Assert.Null(begin["payload"]!["proposedGraph"]);
+
+        var first = await host.SendNode("change.patch", new JsonObject
+        {
+            ["reference"] = begin["payload"]!["reference"]!.DeepClone(),
+            ["operations"] = Batch(ReplaceNode(
+                battery,
+                "The battery lasts for the incremental NDJSON target duty cycle")),
+            ["includeOperations"] = false,
+            ["includeProposedGraph"] = false,
+        });
+        Assert.Equal(1, first["payload"]!["operationCount"]!.GetValue<int>());
+        Assert.Null(first["payload"]!["operations"]);
+        Assert.Null(first["payload"]!["proposedGraph"]);
+
+        var second = await host.SendNode("change.patch", new JsonObject
+        {
+            ["reference"] = first["payload"]!["reference"]!.DeepClone(),
+            ["operations"] = Batch(ReplaceNode(
+                runtime,
+                "The runtime test covers the incremental NDJSON target")),
+            ["includeOperations"] = false,
+            ["includeProposedGraph"] = false,
+        });
+        Assert.Equal(2, second["payload"]!["operationCount"]!.GetValue<int>());
+
+        var normalized = await host.SendNode("change.patch", new JsonObject
+        {
+            ["reference"] = second["payload"]!["reference"]!.DeepClone(),
+            ["operations"] = Batch(ReplaceNode(battery, battery["text"]!.GetValue<string>())),
+            ["includeOperations"] = false,
+            ["includeProposedGraph"] = false,
+        });
+        Assert.Equal(1, normalized["payload"]!["operationCount"]!.GetValue<int>());
+
+        var locator = new JsonObject
+        {
+            ["projectId"] = "technical-project",
+            ["sessionId"] = normalized["payload"]!["reference"]!["sessionId"]!.GetValue<string>(),
+        };
+        var finalOperations = await host.SendNode("change.show", new JsonObject
+        {
+            ["session"] = locator,
+            ["includeOperations"] = true,
+            ["includeProposedGraph"] = false,
+        });
+        var operations = finalOperations["payload"]!["operations"]!["operations"]!.AsArray();
+        Assert.Single(operations);
+        Assert.Equal("runtime-test", operations[0]!["entityId"]!.GetValue<string>());
+        Assert.Null(finalOperations["payload"]!["proposedGraph"]);
+
+        var stale = await host.SendNode("change.patch", new JsonObject
+        {
+            ["reference"] = first["payload"]!["reference"]!.DeepClone(),
+            ["operations"] = Batch(ReplaceNode(runtime, "A stale patch must be rejected")),
+            ["includeOperations"] = false,
+            ["includeProposedGraph"] = false,
+        });
+        Assert.Equal("error", stale["status"]!.GetValue<string>());
+        Assert.Equal("change-stale-operation-fingerprint", stale["payload"]!["code"]!.GetValue<string>());
+
+        var discarded = await host.SendNode("change.discard", new JsonObject
+        {
+            ["reference"] = normalized["payload"]!["reference"]!.DeepClone(),
+        });
+        Assert.Equal("ok", discarded["status"]!.GetValue<string>());
+        _ = await host.Send("host.exit", new { });
+        Assert.Equal(0, await host.WaitForExit());
+        Assert.Equal(string.Empty, await host.ErrorText());
+
+        static JsonObject Batch(JsonObject operation) => new()
+        {
+            ["operations"] = new JsonArray(operation),
+        };
+
+        static JsonObject ReplaceNode(JsonObject original, string text)
+        {
+            var node = (JsonObject)original.DeepClone();
+            node["text"] = text;
+            return new JsonObject
+            {
+                ["kind"] = "replace",
+                ["entityKind"] = "node",
+                ["entityId"] = node["id"]!.GetValue<string>(),
+                ["node"] = node,
+                ["edge"] = null,
+            };
+        }
     }
 
     [Fact]

@@ -75,7 +75,13 @@ internal sealed record ContextRequest(
     int MaxVisitedNodes = 100_000,
     string? ExpectedProjectId = null);
 
-internal sealed record SessionBeginRequest(string Path, string ProjectId, string Author, string Intent);
+internal sealed record SessionBeginRequest(
+    string Path,
+    string ProjectId,
+    string Author,
+    string Intent,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 internal sealed record SessionLocatorDto(string ProjectId, string SessionId);
 internal sealed record SessionReferenceDto(
     string ProjectId,
@@ -86,29 +92,43 @@ internal sealed record SessionReferenceDto(
     string AffectedFingerprint,
     string ReviewFingerprint);
 internal sealed record SessionLocatorRequest(SessionLocatorDto Session);
+internal sealed record SessionShowRequest(
+    SessionLocatorDto Session,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 internal sealed record SessionReferenceRequest(SessionReferenceDto Reference);
+internal sealed record SessionValidateRequest(
+    SessionReferenceDto Reference,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 internal sealed record ChangeWriteRequest(SessionReferenceDto Reference, bool BypassAiReview = false);
 internal sealed record ScopeParentDto(string ChildId, string ParentId, string EdgeId);
 internal sealed record FocusRequest(
     SessionReferenceDto Reference,
     OperationBatchDto Operations,
     IReadOnlyList<ScopeParentDto> ScopeParents);
-internal sealed record ApplyRequest(
+internal sealed record ChangeOperationsRequest(
     SessionReferenceDto Reference,
     OperationBatchDto Operations,
     int MaxTraversalDepth = 100_000,
     int MaxAffectedNodes = 1_000_000,
-    int MaxOutputItems = 1_000_000);
+    int MaxOutputItems = 1_000_000,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 internal sealed record ExpandRequest(
     SessionReferenceDto Reference,
     int MaxTraversalDepth = 100_000,
     int MaxAffectedNodes = 1_000_000,
-    int MaxOutputItems = 1_000_000);
+    int MaxOutputItems = 1_000_000,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 internal sealed record ReviewDispositionDto(string NodeId, ReviewDispositionKind Kind, string? Rationale = null);
 internal sealed record ReviewRequest(
     SessionReferenceDto Reference,
     IReadOnlyList<ReviewDispositionDto> Dispositions,
-    IReadOnlyList<string> PresentedContextNodeIds);
+    IReadOnlyList<string> PresentedContextNodeIds,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 
 internal sealed record ErrorDto(string Code, string Message);
 internal sealed record StoredProjectDto(
@@ -223,8 +243,11 @@ internal sealed record SessionSnapshotDto(
     string CreatedUtc,
     string UpdatedUtc,
     SessionReferenceDto Reference,
-    OperationBatchDto Operations,
-    GraphDto ProposedGraph,
+    int OperationCount,
+    int ProposedNodeCount,
+    int ProposedEdgeCount,
+    OperationBatchDto? Operations,
+    GraphDto? ProposedGraph,
     AffectedDto Affected,
     IReadOnlyList<DispositionDto> Dispositions,
     IReadOnlyList<string> PresentedContextNodeIds,
@@ -347,10 +370,16 @@ internal static class CliDto
         value.ProjectId.Value, value.SessionId, value.BaseFingerprint, value.OperationFingerprint,
         value.ProposedFingerprint, value.AffectedFingerprint, value.ReviewFingerprint);
 
-    public static SessionSnapshotDto Snapshot(ChangeSessionSnapshot value) => new(
+    public static SessionSnapshotDto Snapshot(
+        ChangeSessionSnapshot value,
+        bool includeOperations = true,
+        bool includeProposedGraph = true) => new(
         value.Path, value.Author, value.Intent, Utc(value.CreatedUtc), Utc(value.UpdatedUtc),
-        Reference(value.Reference), GraphProtocol.ToDto(value.Operations),
-        GraphProtocol.ToDto(value.ProposedGraph), Affected(value.Affected),
+        Reference(value.Reference), value.Operations.Operations.Count,
+        value.ProposedGraph.Nodes.Count, value.ProposedGraph.Edges.Count,
+        includeOperations ? GraphProtocol.ToDto(value.Operations) : null,
+        includeProposedGraph ? GraphProtocol.ToDto(value.ProposedGraph) : null,
+        Affected(value.Affected),
         value.Dispositions.Select(disposition => new DispositionDto(
             disposition.NodeId.Value, disposition.Kind, disposition.Rationale)).ToArray(),
         value.PresentedContextNodeIds.Select(id => id.Value).ToArray(),

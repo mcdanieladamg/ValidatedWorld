@@ -4,7 +4,7 @@ ValidatedWorld is currently a local, headless .NET 10 command-line application.
 One-shot commands cover project storage and bounded reads. Long-lived change
 sessions have two interfaces over the same Application behavior:
 
-- `shell <database>` is the flag-based human interface. It remembers the
+- `shell <database>` is the stateful flag-based interface. It remembers the
   selected entity, pending operation batch, review state, and fingerprints.
 - `ndjson` is the strict structured interface for AIs, scripts, and integrations.
 
@@ -126,7 +126,7 @@ and edge IDs/labels/rationales/tags. `tag` is an exact case-sensitive lookup
 across node and edge tags. Both return the same bounded search-hit shape,
 including the complete matching node or edge.
 
-## Stateful shell as an Alternative Interface
+## Stateful shell
 
 Open one project and keep the process running:
 
@@ -386,11 +386,26 @@ stderr warning. No operation or review state is written to SQLite until
 
 NDJSON intentionally remains an explicit request/result protocol. Mutating
 commands require the complete latest `reference` so asynchronous or external
-clients cannot accidentally act on stale state. `change.apply` treats its
-`operations` value as the complete replacement batch; clients that want several
-incremental edits must combine them before that call. The human shell instead
-uses the incremental Application patch operation and retains the latest
-reference internally.
+clients cannot accidentally act on stale state. The reference is a small bundle
+of opaque fingerprints, not graph content, and every successful mutation
+returns the next reference.
+
+`change.patch` is the normal incremental path for an interactive client or
+authoring agent. Its `operations` contains only the entities being changed in
+that request; the host merges them into the session's normalized pending batch.
+`change.apply` remains available when a client deliberately wants to replace the
+complete pending batch. Both commands recalculate projection, validation,
+affected analysis, review invalidation, counts, and fingerprints.
+
+Change-session responses retain their original complete form by default for
+protocol compatibility. Set `includeOperations:false` and
+`includeProposedGraph:false` on `change.begin`, `change.show`, `change.apply`,
+`change.patch`, `change.expand`, `change.review`, or `change.validate` when the
+client does not need those large fields. The response still includes the exact
+reference, operation/node/edge counts, affected evidence, review state, and
+readiness. For a final proposal preview, use `change.show` with
+`includeOperations:true` and `includeProposedGraph:false` to retrieve the
+normalized operation batch without retrieving the whole graph.
 
 ## Create a complete graph through NDJSON
 
@@ -453,7 +468,7 @@ The normal sequence is:
 ```text
 change.begin
 → change.focus (optional helper for new-node scope parents)
-→ change.apply
+→ change.patch (repeat with one or a few entity operations)
 → inspect change.affected / change.validate
 → change.review
 → change.write or change.discard
@@ -470,7 +485,9 @@ Begin a session:
     "path": "world.vw.db",
     "projectId": "world-id",
     "author": "operator",
-    "intent": "Add a sixth continent"
+    "intent": "Add a sixth continent",
+    "includeOperations": false,
+    "includeProposedGraph": false
   }
 }
 ```
@@ -548,7 +565,14 @@ request:
 }
 ```
 
-Use the returned `expandedOperations` in `change.apply`. Inspect the resulting
+Use the returned `expandedOperations` in `change.patch`. A patch carries only
+the new operations; do not resend operations already accumulated in the
+session. Replacing a pending addition keeps it as one final `add`, removing a
+pending addition cancels it, and replacing a base entity with its exact base
+value removes that pending operation. Use only the latest returned reference;
+an older reference is rejected as stale.
+
+Inspect the resulting
 `affected.affectedNodes`, explanation paths, `edgeChanges`, `scopeContext`, both
 validation results, and any omissions. Directly changed nodes normally receive
 `updated`; every other affected node begins `pending`. Context-only nodes need

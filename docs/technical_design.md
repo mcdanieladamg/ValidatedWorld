@@ -321,8 +321,14 @@ edges are never presented as scope children. Its flag-based edit commands
 incrementally patch one or a few entity values and
 `commit [--bypass-ai-review]` needs no JSON. The NDJSON host retains its strict
 explicit-reference request/result contract for AIs, scripts, and integrations.
-Structured results go to stdout and diagnostics to stderr. Search and
-navigation are deterministic bounded graph queries rather than provider calls.
+Its incremental `change.patch` command merges one or a few supplied entity
+operations into the current normalized batch; `change.apply` explicitly
+replaces that batch. Iterative clients can omit the complete operation batch and
+proposed graph from session responses while retaining exact references, counts,
+affected evidence, review state, and readiness. They can retrieve the normalized
+operations without the whole graph for final preview. Structured results go to
+stdout and diagnostics to stderr. Search and navigation are deterministic
+bounded graph queries rather than provider calls.
 
 Application exposes both complete-batch replacement and incremental patching.
 Incremental patches compose against the current proposal, normalize repeated
@@ -369,9 +375,10 @@ AI integration work is deliberately different from ordinary tasks:
    reports the non-secret failure and asks the human for feedback.
 
 During each AI feature's development, at least one explicitly enabled live test
-must capture and log the complete outbound request as actually serialized,
-excluding credentials and transport-only authorization headers. The log is a
-local development artifact, not tracked project data and not written to SQLite.
+must capture and log the complete outbound request as actually serialized and
+the provider response used by the check, excluding credentials and
+transport-only authorization headers. These logs are local development
+artifacts, not tracked project data and not written to SQLite.
 The developer must inspect and report that:
 
 - every required node, edge, operation, path, scope lineage, manifest entry,

@@ -34,9 +34,11 @@ public static class CliRunner
             var aiReview = AiReviewConfiguration.Load();
             var requestLogPath = Path.Combine(
                 Directory.GetCurrentDirectory(), "artifacts", "ai-review-live-request.json");
+            var responseLogPath = Path.Combine(
+                Directory.GetCurrentDirectory(), "artifacts", "ai-review-live-response.json");
             var application = new ProjectApplication(
                 new SqliteProjectStore(),
-                semanticReviewProvider: aiReview.CreateProvider(httpClient, requestLogPath),
+                semanticReviewProvider: aiReview.CreateProvider(httpClient, requestLogPath, responseLogPath),
                 semanticReviewOptions: aiReview.RuntimeOptions());
             cancellationToken.ThrowIfCancellationRequested();
             if (arguments.Length == 0 || IsHelp(arguments[0]))
@@ -339,6 +341,10 @@ public static class CliRunner
         await output.WriteLineAsync(
             "Change responses return an exact reference containing all stale-state fingerprints.");
         await output.WriteLineAsync("Pass that complete reference to the next mutating change command.");
+        await output.WriteLineAsync(
+            "Use change.patch for small accumulated edits; change.apply replaces the complete pending batch.");
+        await output.WriteLineAsync(
+            "Set includeOperations/includeProposedGraph false for compact iterative responses.");
         await output.WriteLineAsync(
             "EOF, cancellation, or host.exit ends the process; unresolved sessions are lost with a stderr warning.");
         return SuccessExitCode;

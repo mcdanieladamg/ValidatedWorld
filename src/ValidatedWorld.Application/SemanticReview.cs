@@ -395,6 +395,7 @@ public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvi
     private readonly TimeSpan _timeout;
     private readonly TimeSpan _pollInterval;
     private readonly Action<string>? _serializedRequestLogger;
+    private readonly Action<string>? _serializedResponseLogger;
 
     public OpenAiResponsesSemanticReviewProvider(
         HttpClient httpClient,
@@ -402,7 +403,8 @@ public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvi
         string model = "gpt-5.6-terra",
         TimeSpan? timeout = null,
         TimeSpan? pollInterval = null,
-        Action<string>? serializedRequestLogger = null)
+        Action<string>? serializedRequestLogger = null,
+        Action<string>? serializedResponseLogger = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         if (string.IsNullOrWhiteSpace(apiKey)) throw new ArgumentException("An API key is required.", nameof(apiKey));
@@ -413,6 +415,7 @@ public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvi
         _pollInterval = pollInterval ?? TimeSpan.FromSeconds(1);
         if (_pollInterval < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(pollInterval));
         _serializedRequestLogger = serializedRequestLogger;
+        _serializedResponseLogger = serializedResponseLogger;
     }
 
     public string Provider => "openai";
@@ -435,6 +438,7 @@ public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvi
             create.Content = new StringContent(body, Encoding.UTF8, "application/json");
             using var createResponse = await _httpClient.SendAsync(create, timeout.Token);
             var responseJson = await createResponse.Content.ReadAsStringAsync(timeout.Token);
+            _serializedResponseLogger?.Invoke(responseJson);
             if (!createResponse.IsSuccessStatusCode)
                 return Failure("http-" + (int)createResponse.StatusCode,
                     $"OpenAI Responses create returned HTTP {(int)createResponse.StatusCode}.", started.Elapsed);
@@ -450,6 +454,7 @@ public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvi
                     using var poll = NewRequest(HttpMethod.Get, $"v1/responses/{Uri.EscapeDataString(responseId)}");
                     using var pollResponse = await _httpClient.SendAsync(poll, timeout.Token);
                     responseJson = await pollResponse.Content.ReadAsStringAsync(timeout.Token);
+                    _serializedResponseLogger?.Invoke(responseJson);
                     if (!pollResponse.IsSuccessStatusCode)
                         return Failure("poll-http-" + (int)pollResponse.StatusCode,
                             $"OpenAI Responses retrieve returned HTTP {(int)pollResponse.StatusCode}.", started.Elapsed);

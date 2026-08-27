@@ -20,7 +20,7 @@ internal sealed class NdjsonHost(
         "sample.list", "sample.create",
         "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.tag", "read.scope",
         "read.neighbors", "read.dependencies", "read.path", "read.context",
-        "change.begin", "change.show", "change.focus", "change.apply", "change.expand",
+        "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand",
         "change.affected", "change.review", "change.validate", "change.write", "change.discard",
         "ai.status",
     ];
@@ -98,6 +98,7 @@ internal sealed class NdjsonHost(
         "change.show" => (ChangeShow(payload), false),
         "change.focus" => (ChangeFocus(payload), false),
         "change.apply" => (ChangeApply(payload), false),
+        "change.patch" => (ChangePatch(payload), false),
         "change.expand" => (ChangeExpand(payload), false),
         "change.affected" => (ChangeAffected(payload), false),
         "change.review" => (ChangeReview(payload), false),
@@ -131,10 +132,18 @@ internal sealed class NdjsonHost(
                     "maxVisitedNodes?,expectedProjectId?}; neighbors|dependencies {path,entityId,limit?,cursor?," +
                     "expectedProjectId?}; path {path,sourceNodeId,targetNodeId,maxDepth?,maxVisitedNodes?," +
                     "expectedProjectId?}; context {path,nodeIds,maxDepth?,maxVisitedNodes?,expectedProjectId?}",
-                change = "begin {path,projectId,author,intent}; show|affected {session:{projectId,sessionId}}; " +
-                    "focus {reference,operations,scopeParents}; apply {reference,operations,limits?}; " +
-                    "expand {reference,limits?}; review {reference,dispositions,presentedContextNodeIds}; " +
-                    "validate|discard {reference}; write {reference,bypassAiReview?}",
+                change = "begin {path,projectId,author,intent,includeOperations?,includeProposedGraph?}; " +
+                    "show {session:{projectId,sessionId},includeOperations?,includeProposedGraph?}; affected {session}; " +
+                    "focus {reference,operations,scopeParents}; " +
+                    "apply|patch {reference,operations,limits?,includeOperations?,includeProposedGraph?}; " +
+                    "expand {reference,limits?,includeOperations?,includeProposedGraph?}; " +
+                    "review {reference,dispositions,presentedContextNodeIds,includeOperations?," +
+                    "includeProposedGraph?}; validate {reference,includeOperations?,includeProposedGraph?}; " +
+                    "discard {reference}; " +
+                    "write {reference,bypassAiReview?}",
+                changeSemantics = "apply replaces the complete pending batch; patch merges only the supplied entity " +
+                    "operations into it. includeOperations and includeProposedGraph default true for compatibility; " +
+                    "set them false during bounded iterative work.",
                 ai = "status {}; semantic review automatically gates change.write when enabled and configured",
                 operations = "{operations:[{kind:add|replace|remove,entityKind:node|edge,entityId,node|null,edge|null}]}",
                 review = "dispositions use {nodeId,kind:updated|reviewedNoChange|notApplicable|pending,rationale?}",
@@ -283,14 +292,20 @@ internal sealed class NdjsonHost(
     private object ChangeBegin(JsonElement payload)
     {
         var request = CliJson.Payload<SessionBeginRequest>(payload);
-        return CliDto.Snapshot(application.BeginChange(
-            request.Path, new ProjectId(request.ProjectId), request.Author, request.Intent));
+        return CliDto.Snapshot(
+            application.BeginChange(
+                request.Path, new ProjectId(request.ProjectId), request.Author, request.Intent),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeShow(JsonElement payload)
     {
-        var request = CliJson.Payload<SessionLocatorRequest>(payload);
-        return CliDto.Snapshot(application.ShowChange(CliDto.Locator(request.Session)));
+        var request = CliJson.Payload<SessionShowRequest>(payload);
+        return CliDto.Snapshot(
+            application.ShowChange(CliDto.Locator(request.Session)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeFocus(JsonElement payload)
@@ -308,21 +323,40 @@ internal sealed class NdjsonHost(
 
     private object ChangeApply(JsonElement payload)
     {
-        var request = CliJson.Payload<ApplyRequest>(payload);
-        return CliDto.Snapshot(application.ApplyChange(
-            CliDto.Reference(request.Reference),
-            GraphProtocol.FromDto(request.Operations),
-            CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
-                request.MaxOutputItems, cancellationToken)));
+        var request = CliJson.Payload<ChangeOperationsRequest>(payload);
+        return CliDto.Snapshot(
+            application.ApplyChange(
+                CliDto.Reference(request.Reference),
+                GraphProtocol.FromDto(request.Operations),
+                CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
+                    request.MaxOutputItems, cancellationToken)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
+    }
+
+    private object ChangePatch(JsonElement payload)
+    {
+        var request = CliJson.Payload<ChangeOperationsRequest>(payload);
+        return CliDto.Snapshot(
+            application.PatchChange(
+                CliDto.Reference(request.Reference),
+                GraphProtocol.FromDto(request.Operations),
+                CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
+                    request.MaxOutputItems, cancellationToken)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeExpand(JsonElement payload)
     {
         var request = CliJson.Payload<ExpandRequest>(payload);
-        return CliDto.Snapshot(application.ExpandChange(
-            CliDto.Reference(request.Reference),
-            CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
-                request.MaxOutputItems, cancellationToken)));
+        return CliDto.Snapshot(
+            application.ExpandChange(
+                CliDto.Reference(request.Reference),
+                CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
+                    request.MaxOutputItems, cancellationToken)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeAffected(JsonElement payload)
@@ -336,18 +370,24 @@ internal sealed class NdjsonHost(
         var request = CliJson.Payload<ReviewRequest>(payload);
         ArgumentNullException.ThrowIfNull(request.Dispositions);
         ArgumentNullException.ThrowIfNull(request.PresentedContextNodeIds);
-        return CliDto.Snapshot(application.ReviewChange(
-            CliDto.Reference(request.Reference),
-            new ChangeReviewUpdate(
-                request.Dispositions.Select(disposition => new ReviewDisposition(
-                    new EntityId(disposition.NodeId), disposition.Kind, disposition.Rationale)),
-                request.PresentedContextNodeIds.Select(id => new EntityId(id)))));
+        return CliDto.Snapshot(
+            application.ReviewChange(
+                CliDto.Reference(request.Reference),
+                new ChangeReviewUpdate(
+                    request.Dispositions.Select(disposition => new ReviewDisposition(
+                        new EntityId(disposition.NodeId), disposition.Kind, disposition.Rationale)),
+                    request.PresentedContextNodeIds.Select(id => new EntityId(id)))),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeValidate(JsonElement payload)
     {
-        var request = CliJson.Payload<SessionReferenceRequest>(payload);
-        return CliDto.Snapshot(application.ValidateChange(CliDto.Reference(request.Reference)));
+        var request = CliJson.Payload<SessionValidateRequest>(payload);
+        return CliDto.Snapshot(
+            application.ValidateChange(CliDto.Reference(request.Reference)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private async Task<object> ChangeWrite(JsonElement payload)

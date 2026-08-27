@@ -48,25 +48,33 @@ public sealed record AiReviewConfiguration(
         TimeoutSeconds,
         LiveTests);
 
-    public ISemanticReviewProvider? CreateProvider(HttpClient httpClient, string requestLogPath)
+    public ISemanticReviewProvider? CreateProvider(
+        HttpClient httpClient,
+        string requestLogPath,
+        string responseLogPath)
     {
         if (!IsEffectivelyEnabled) return null;
-        Action<string>? logger = null;
+        Action<string>? requestLogger = null;
+        Action<string>? responseLogger = null;
         if (LiveTests)
         {
-            logger = serialized =>
-            {
-                var fullPath = Path.GetFullPath(requestLogPath);
-                Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-                File.WriteAllText(fullPath, serialized, new System.Text.UTF8Encoding(false));
-            };
+            requestLogger = serialized => WriteLog(requestLogPath, serialized);
+            responseLogger = serialized => WriteLog(responseLogPath, serialized);
         }
         return new OpenAiResponsesSemanticReviewProvider(
             httpClient,
             ApiKey!,
             Model,
             TimeSpan.FromSeconds(TimeoutSeconds),
-            serializedRequestLogger: logger);
+            serializedRequestLogger: requestLogger,
+            serializedResponseLogger: responseLogger);
+    }
+
+    private static void WriteLog(string path, string value)
+    {
+        var fullPath = Path.GetFullPath(path);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllText(fullPath, value, new System.Text.UTF8Encoding(false));
     }
 
     private static string Text(string? value, string fallback) =>
