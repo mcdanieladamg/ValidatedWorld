@@ -20,8 +20,9 @@ internal sealed class NdjsonHost(
         "sample.list", "sample.create",
         "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.tag", "read.scope",
         "read.neighbors", "read.dependencies", "read.path", "read.context",
-        "change.begin", "change.show", "change.focus", "change.apply", "change.expand",
+        "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand",
         "change.affected", "change.review", "change.validate", "change.write", "change.discard",
+        "ai.status",
     ];
 
     public async Task<int> RunAsync()
@@ -44,7 +45,7 @@ internal sealed class NdjsonHost(
                 if (request.Payload.ValueKind != JsonValueKind.Object)
                     throw new JsonException("The command payload must be a JSON object.");
 
-                var (payload, shouldExit) = Dispatch(command, request.Payload);
+                var (payload, shouldExit) = await DispatchAsync(command, request.Payload);
                 await WriteResult(command, "ok", payload);
                 if (shouldExit)
                 {
@@ -62,6 +63,12 @@ internal sealed class NdjsonHost(
                 await WriteResult(command, "error", new ErrorDto(code, message));
             }
         }
+    }
+
+    private async Task<(object Payload, bool ShouldExit)> DispatchAsync(string command, JsonElement payload)
+    {
+        if (command == "change.write") return (await ChangeWrite(payload), false);
+        return Dispatch(command, payload);
     }
 
     private (object Payload, bool ShouldExit) Dispatch(string command, JsonElement payload) => command switch
@@ -91,12 +98,13 @@ internal sealed class NdjsonHost(
         "change.show" => (ChangeShow(payload), false),
         "change.focus" => (ChangeFocus(payload), false),
         "change.apply" => (ChangeApply(payload), false),
+        "change.patch" => (ChangePatch(payload), false),
         "change.expand" => (ChangeExpand(payload), false),
         "change.affected" => (ChangeAffected(payload), false),
         "change.review" => (ChangeReview(payload), false),
         "change.validate" => (ChangeValidate(payload), false),
-        "change.write" => (ChangeWrite(payload), false),
         "change.discard" => (ChangeDiscard(payload), false),
+        "ai.status" => (AiStatus(payload), false),
         _ => throw new ArgumentException($"Unknown NDJSON command '{command}'.", nameof(command)),
     };
 
@@ -124,11 +132,20 @@ internal sealed class NdjsonHost(
                     "maxVisitedNodes?,expectedProjectId?}; neighbors|dependencies {path,entityId,limit?,cursor?," +
                     "expectedProjectId?}; path {path,sourceNodeId,targetNodeId,maxDepth?,maxVisitedNodes?," +
                     "expectedProjectId?}; context {path,nodeIds,maxDepth?,maxVisitedNodes?,expectedProjectId?}",
-                change = "begin {path,projectId,author,intent}; show|affected {session:{projectId,sessionId}}; " +
-                    "focus {reference,operations,scopeParents}; apply {reference,operations,limits?}; " +
-                    "expand {reference,limits?}; review {reference,dispositions,presentedContextNodeIds}; " +
-                    "validate|write|discard {reference}",
-                operations = "{operations:[{kind:add|replace|remove,entityKind:node|edge,entityId,node?,edge?}]}",
+                change = "begin {path,projectId,author,intent,includeOperations?,includeProposedGraph?}; " +
+                    "show {session:{projectId,sessionId},includeOperations?,includeProposedGraph?}; affected {session}; " +
+                    "focus {reference,operations,scopeParents}; " +
+                    "apply|patch {reference,operations,limits?,includeOperations?,includeProposedGraph?}; " +
+                    "expand {reference,limits?,includeOperations?,includeProposedGraph?}; " +
+                    "review {reference,dispositions,presentedContextNodeIds,includeOperations?," +
+                    "includeProposedGraph?}; validate {reference,includeOperations?,includeProposedGraph?}; " +
+                    "discard {reference}; " +
+                    "write {reference,bypassAiReview?}",
+                changeSemantics = "apply replaces the complete pending batch; patch merges only the supplied entity " +
+                    "operations into it. includeOperations and includeProposedGraph default true for compatibility; " +
+                    "set them false during bounded iterative work.",
+                ai = "status {}; semantic review automatically gates change.write when enabled and configured",
+                operations = "{operations:[{kind:add|replace|remove,entityKind:node|edge,entityId,node|null,edge|null}]}",
                 review = "dispositions use {nodeId,kind:updated|reviewedNoChange|notApplicable|pending,rationale?}",
             },
         }, false);
@@ -275,14 +292,20 @@ internal sealed class NdjsonHost(
     private object ChangeBegin(JsonElement payload)
     {
         var request = CliJson.Payload<SessionBeginRequest>(payload);
-        return CliDto.Snapshot(application.BeginChange(
-            request.Path, new ProjectId(request.ProjectId), request.Author, request.Intent));
+        return CliDto.Snapshot(
+            application.BeginChange(
+                request.Path, new ProjectId(request.ProjectId), request.Author, request.Intent),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeShow(JsonElement payload)
     {
-        var request = CliJson.Payload<SessionLocatorRequest>(payload);
-        return CliDto.Snapshot(application.ShowChange(CliDto.Locator(request.Session)));
+        var request = CliJson.Payload<SessionShowRequest>(payload);
+        return CliDto.Snapshot(
+            application.ShowChange(CliDto.Locator(request.Session)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeFocus(JsonElement payload)
@@ -300,21 +323,40 @@ internal sealed class NdjsonHost(
 
     private object ChangeApply(JsonElement payload)
     {
-        var request = CliJson.Payload<ApplyRequest>(payload);
-        return CliDto.Snapshot(application.ApplyChange(
-            CliDto.Reference(request.Reference),
-            GraphProtocol.FromDto(request.Operations),
-            CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
-                request.MaxOutputItems, cancellationToken)));
+        var request = CliJson.Payload<ChangeOperationsRequest>(payload);
+        return CliDto.Snapshot(
+            application.ApplyChange(
+                CliDto.Reference(request.Reference),
+                GraphProtocol.FromDto(request.Operations),
+                CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
+                    request.MaxOutputItems, cancellationToken)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
+    }
+
+    private object ChangePatch(JsonElement payload)
+    {
+        var request = CliJson.Payload<ChangeOperationsRequest>(payload);
+        return CliDto.Snapshot(
+            application.PatchChange(
+                CliDto.Reference(request.Reference),
+                GraphProtocol.FromDto(request.Operations),
+                CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
+                    request.MaxOutputItems, cancellationToken)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeExpand(JsonElement payload)
     {
         var request = CliJson.Payload<ExpandRequest>(payload);
-        return CliDto.Snapshot(application.ExpandChange(
-            CliDto.Reference(request.Reference),
-            CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
-                request.MaxOutputItems, cancellationToken)));
+        return CliDto.Snapshot(
+            application.ExpandChange(
+                CliDto.Reference(request.Reference),
+                CliDto.AffectedOptions(request.MaxTraversalDepth, request.MaxAffectedNodes,
+                    request.MaxOutputItems, cancellationToken)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeAffected(JsonElement payload)
@@ -328,24 +370,33 @@ internal sealed class NdjsonHost(
         var request = CliJson.Payload<ReviewRequest>(payload);
         ArgumentNullException.ThrowIfNull(request.Dispositions);
         ArgumentNullException.ThrowIfNull(request.PresentedContextNodeIds);
-        return CliDto.Snapshot(application.ReviewChange(
-            CliDto.Reference(request.Reference),
-            new ChangeReviewUpdate(
-                request.Dispositions.Select(disposition => new ReviewDisposition(
-                    new EntityId(disposition.NodeId), disposition.Kind, disposition.Rationale)),
-                request.PresentedContextNodeIds.Select(id => new EntityId(id)))));
+        return CliDto.Snapshot(
+            application.ReviewChange(
+                CliDto.Reference(request.Reference),
+                new ChangeReviewUpdate(
+                    request.Dispositions.Select(disposition => new ReviewDisposition(
+                        new EntityId(disposition.NodeId), disposition.Kind, disposition.Rationale)),
+                    request.PresentedContextNodeIds.Select(id => new EntityId(id)))),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
     private object ChangeValidate(JsonElement payload)
     {
-        var request = CliJson.Payload<SessionReferenceRequest>(payload);
-        return CliDto.Snapshot(application.ValidateChange(CliDto.Reference(request.Reference)));
+        var request = CliJson.Payload<SessionValidateRequest>(payload);
+        return CliDto.Snapshot(
+            application.ValidateChange(CliDto.Reference(request.Reference)),
+            request.IncludeOperations,
+            request.IncludeProposedGraph);
     }
 
-    private object ChangeWrite(JsonElement payload)
+    private async Task<object> ChangeWrite(JsonElement payload)
     {
-        var request = CliJson.Payload<SessionReferenceRequest>(payload);
-        return CliDto.Write(application.WriteChange(CliDto.Reference(request.Reference)));
+        var request = CliJson.Payload<ChangeWriteRequest>(payload);
+        return CliDto.Write(await application.WriteChangeAsync(
+            CliDto.Reference(request.Reference),
+            new ChangeWriteOptions(request.BypassAiReview),
+            cancellationToken));
     }
 
     private object ChangeDiscard(JsonElement payload)
@@ -357,6 +408,12 @@ internal sealed class NdjsonHost(
             result.SessionId,
             result.DiscardedUtc.ToUniversalTime().ToString(
                 "O", System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private object AiStatus(JsonElement payload)
+    {
+        _ = CliJson.Payload<EmptyRequest>(payload);
+        return CliDto.Availability(application.SemanticReviewAvailability);
     }
 
     private ProjectQueries Queries(string path, string? expectedProjectId) => application.Queries(

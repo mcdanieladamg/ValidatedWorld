@@ -75,7 +75,13 @@ internal sealed record ContextRequest(
     int MaxVisitedNodes = 100_000,
     string? ExpectedProjectId = null);
 
-internal sealed record SessionBeginRequest(string Path, string ProjectId, string Author, string Intent);
+internal sealed record SessionBeginRequest(
+    string Path,
+    string ProjectId,
+    string Author,
+    string Intent,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 internal sealed record SessionLocatorDto(string ProjectId, string SessionId);
 internal sealed record SessionReferenceDto(
     string ProjectId,
@@ -86,28 +92,43 @@ internal sealed record SessionReferenceDto(
     string AffectedFingerprint,
     string ReviewFingerprint);
 internal sealed record SessionLocatorRequest(SessionLocatorDto Session);
+internal sealed record SessionShowRequest(
+    SessionLocatorDto Session,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 internal sealed record SessionReferenceRequest(SessionReferenceDto Reference);
+internal sealed record SessionValidateRequest(
+    SessionReferenceDto Reference,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
+internal sealed record ChangeWriteRequest(SessionReferenceDto Reference, bool BypassAiReview = false);
 internal sealed record ScopeParentDto(string ChildId, string ParentId, string EdgeId);
 internal sealed record FocusRequest(
     SessionReferenceDto Reference,
     OperationBatchDto Operations,
     IReadOnlyList<ScopeParentDto> ScopeParents);
-internal sealed record ApplyRequest(
+internal sealed record ChangeOperationsRequest(
     SessionReferenceDto Reference,
     OperationBatchDto Operations,
     int MaxTraversalDepth = 100_000,
     int MaxAffectedNodes = 1_000_000,
-    int MaxOutputItems = 1_000_000);
+    int MaxOutputItems = 1_000_000,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 internal sealed record ExpandRequest(
     SessionReferenceDto Reference,
     int MaxTraversalDepth = 100_000,
     int MaxAffectedNodes = 1_000_000,
-    int MaxOutputItems = 1_000_000);
+    int MaxOutputItems = 1_000_000,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 internal sealed record ReviewDispositionDto(string NodeId, ReviewDispositionKind Kind, string? Rationale = null);
 internal sealed record ReviewRequest(
     SessionReferenceDto Reference,
     IReadOnlyList<ReviewDispositionDto> Dispositions,
-    IReadOnlyList<string> PresentedContextNodeIds);
+    IReadOnlyList<string> PresentedContextNodeIds,
+    bool IncludeOperations = true,
+    bool IncludeProposedGraph = true);
 
 internal sealed record ErrorDto(string Code, string Message);
 internal sealed record StoredProjectDto(
@@ -222,13 +243,17 @@ internal sealed record SessionSnapshotDto(
     string CreatedUtc,
     string UpdatedUtc,
     SessionReferenceDto Reference,
-    OperationBatchDto Operations,
-    GraphDto ProposedGraph,
+    int OperationCount,
+    int ProposedNodeCount,
+    int ProposedEdgeCount,
+    OperationBatchDto? Operations,
+    GraphDto? ProposedGraph,
     AffectedDto Affected,
     IReadOnlyList<DispositionDto> Dispositions,
     IReadOnlyList<string> PresentedContextNodeIds,
     ReadinessDto Readiness,
-    RefreshDto? Refresh);
+    RefreshDto? Refresh,
+    SemanticReviewResultDto? SemanticReview);
 internal sealed record FocusResultDto(
     OperationBatchDto ExpandedOperations,
     string OperationFingerprint,
@@ -239,7 +264,9 @@ internal sealed record WriteResultDto(
     string SessionId,
     StoredProjectDto? Project,
     ProjectStorageErrorCode? StorageErrorCode,
-    string Message);
+    string Message,
+    SemanticReviewResultDto? SemanticReview,
+    bool AiReviewBypassed);
 internal sealed record DiscardResultDto(string ProjectId, string SessionId, string DiscardedUtc);
 internal sealed record ExitWarningDto(
     string ProjectId,
@@ -248,6 +275,34 @@ internal sealed record ExitWarningDto(
     int OperationCount,
     int PendingReviewCount,
     string Message);
+internal sealed record AiReviewAvailabilityDto(
+    bool Enabled,
+    bool Configured,
+    string Provider,
+    string Model,
+    int TimeoutSeconds,
+    bool LiveTests,
+    string Message);
+internal sealed record SemanticReviewUsageDto(int InputTokens, int OutputTokens, int TotalTokens);
+internal sealed record SemanticReviewConcernResultDto(
+    string Code,
+    string Message,
+    IReadOnlyList<string> Citations);
+internal sealed record SemanticReviewResultDto(
+    SemanticReviewStatus Status,
+    SemanticReviewDecision? Decision,
+    string Provider,
+    string Model,
+    string RequestFingerprint,
+    SemanticReviewBindingDto Binding,
+    string Summary,
+    IReadOnlyList<SemanticReviewConcernResultDto> Concerns,
+    SemanticReviewUsageDto? Usage,
+    string? ResponseId,
+    double DurationMilliseconds,
+    string CompletedUtc,
+    bool IsCurrent,
+    string? FailureCode);
 
 internal static class CliDto
 {
@@ -315,17 +370,24 @@ internal static class CliDto
         value.ProjectId.Value, value.SessionId, value.BaseFingerprint, value.OperationFingerprint,
         value.ProposedFingerprint, value.AffectedFingerprint, value.ReviewFingerprint);
 
-    public static SessionSnapshotDto Snapshot(ChangeSessionSnapshot value) => new(
+    public static SessionSnapshotDto Snapshot(
+        ChangeSessionSnapshot value,
+        bool includeOperations = true,
+        bool includeProposedGraph = true) => new(
         value.Path, value.Author, value.Intent, Utc(value.CreatedUtc), Utc(value.UpdatedUtc),
-        Reference(value.Reference), GraphProtocol.ToDto(value.Operations),
-        GraphProtocol.ToDto(value.ProposedGraph), Affected(value.Affected),
+        Reference(value.Reference), value.Operations.Operations.Count,
+        value.ProposedGraph.Nodes.Count, value.ProposedGraph.Edges.Count,
+        includeOperations ? GraphProtocol.ToDto(value.Operations) : null,
+        includeProposedGraph ? GraphProtocol.ToDto(value.ProposedGraph) : null,
+        Affected(value.Affected),
         value.Dispositions.Select(disposition => new DispositionDto(
             disposition.NodeId.Value, disposition.Kind, disposition.Rationale)).ToArray(),
         value.PresentedContextNodeIds.Select(id => id.Value).ToArray(),
         Readiness(value.Readiness),
         value.Refresh is null ? null : new RefreshDto(
             value.Refresh.InvalidatedDispositionNodeIds.Select(id => id.Value).ToArray(),
-            value.Refresh.InvalidatedContextNodeIds.Select(id => id.Value).ToArray()));
+            value.Refresh.InvalidatedContextNodeIds.Select(id => id.Value).ToArray()),
+        value.SemanticReview is null ? null : SemanticReview(value.SemanticReview));
 
     public static AffectedDto Affected(AffectedAnalysis value) => new(
         value.Status,
@@ -368,11 +430,37 @@ internal static class CliDto
     public static WriteResultDto Write(ChangeWriteResult value) => new(
         value.Status, value.ProjectId.Value, value.SessionId,
         value.Project is null ? null : Stored(value.Project),
-        value.StorageErrorCode, value.Message);
+        value.StorageErrorCode, value.Message,
+        value.SemanticReview is null ? null : SemanticReview(value.SemanticReview),
+        value.AiReviewBypassed);
 
     public static ExitWarningDto Warning(ChangeExitWarning value) => new(
         value.ProjectId.Value, value.SessionId, value.Path,
         value.OperationCount, value.PendingReviewCount, value.Message);
+
+    public static AiReviewAvailabilityDto Availability(SemanticReviewAvailability value) => new(
+        value.Enabled, value.Configured, value.Provider, value.Model,
+        value.TimeoutSeconds, value.LiveTests, value.Message);
+
+    public static SemanticReviewResultDto SemanticReview(SemanticReviewResult value) => new(
+        value.Status,
+        value.Decision,
+        value.Provider,
+        value.Model,
+        value.RequestFingerprint,
+        value.Binding,
+        value.Summary,
+        value.Concerns.Select(concern => new SemanticReviewConcernResultDto(
+            concern.Code,
+            concern.Message,
+            concern.Citations.Select(id => id.Value).ToArray())).ToArray(),
+        value.Usage is null ? null : new SemanticReviewUsageDto(
+            value.Usage.InputTokens, value.Usage.OutputTokens, value.Usage.TotalTokens),
+        value.ResponseId,
+        value.Duration.TotalMilliseconds,
+        Utc(value.CompletedUtc),
+        value.IsCurrent,
+        value.FailureCode);
 
     public static ChangeSessionLocator Locator(SessionLocatorDto value) =>
         new(new ProjectId(value.ProjectId), Required(value.SessionId, nameof(value.SessionId)));

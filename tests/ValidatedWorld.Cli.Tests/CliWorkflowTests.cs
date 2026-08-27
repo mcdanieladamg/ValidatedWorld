@@ -19,6 +19,21 @@ public sealed class CliWorkflowTests
     };
 
     [Fact]
+    public void Ai_review_default_requires_a_key_and_the_kill_switch_still_disables_it()
+    {
+        Assert.True(AiReviewConfiguration.DefaultEnabled);
+        var withoutKey = new AiReviewConfiguration(
+            true, "openai", "test-model", 30, false, null);
+        var disabled = new AiReviewConfiguration(
+            false, "openai", "test-model", 30, false, "offline-test-key");
+
+        Assert.False(withoutKey.IsConfigured);
+        Assert.False(withoutKey.RuntimeOptions().Enabled);
+        Assert.True(disabled.IsConfigured);
+        Assert.False(disabled.RuntimeOptions().Enabled);
+    }
+
+    [Fact]
     public async Task Help_drives_one_shot_reads_backup_and_deterministic_safe_sql_export()
     {
         using var temporary = new TemporaryDirectory();
@@ -30,7 +45,10 @@ public sealed class CliWorkflowTests
         var help = await Run(["--help"]);
         Assert.Equal(CliRunner.SuccessExitCode, help.ExitCode);
         Assert.Contains("read      Run bounded graph queries", help.Output, StringComparison.Ordinal);
+        Assert.Contains("shell     Run the stateful flag-based interface", help.Output, StringComparison.Ordinal);
         Assert.Contains("ndjson", help.Output, StringComparison.Ordinal);
+        var shellHelp = await Run(["shell", "--help"]);
+        Assert.Contains("commit --bypass-ai-review", shellHelp.Output, StringComparison.Ordinal);
 
         var created = await Run(["sample", "create", "technical-project", project]);
         Assert.Equal(CliRunner.SuccessExitCode, created.ExitCode);
@@ -111,6 +129,125 @@ public sealed class CliWorkflowTests
     }
 
     [Fact]
+    public async Task Human_shell_accumulates_small_flag_based_edits_and_commits_with_one_line()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "human shell.vw.db");
+        Assert.Equal(0, (await Run(["sample", "create", "technical-project", project])).ExitCode);
+        var commands = string.Join(Environment.NewLine,
+            "help",
+            "begin --author \"Human tester\" --intent \"Update two related nodes\"",
+            "cd missing-node",
+            "node select --id battery-assumption",
+            "node set --text \"The battery lasts for the shell target duty cycle\"",
+            "node select --id runtime-test",
+            "node set --text \"The runtime test verifies the shell target duty cycle\"",
+            "changes",
+            "affected",
+            "review --id battery-assumption --as updated",
+            "review --id runtime-test --as updated",
+            "review --id power-design-anchor --as reviewed-no-change",
+            "context mark --id purpose",
+            "context mark --id scope-power",
+            "validate",
+            "commit --bypass-ai-review",
+            "status",
+            "exit") + Environment.NewLine;
+
+        var result = await RunProcess(["shell", project], commands, enableAiReview: true);
+
+        Assert.Equal(CliRunner.SuccessExitCode, result.ExitCode);
+        Assert.Contains("Pending operations: 2", result.Output, StringComparison.Ordinal);
+        Assert.Contains("replace node battery-assumption", result.Output, StringComparison.Ordinal);
+        Assert.Contains("replace node runtime-test", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Ready to commit.", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Commit written", result.Output, StringComparison.Ordinal);
+        Assert.Contains("No active change.", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Node 'missing-node' does not exist", result.Error, StringComparison.Ordinal);
+        Assert.Equal("The battery lasts for the shell target duty cycle",
+            JsonNode.Parse((await Run(["read", "node", project, "battery-assumption"])).Output)!["text"]!
+                .GetValue<string>());
+        Assert.Equal("The runtime test verifies the shell target duty cycle",
+            JsonNode.Parse((await Run(["read", "node", project, "runtime-test"])).Output)!["text"]!
+                .GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Human_shell_starts_at_root_and_navigates_scope_and_semantic_connections()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "human shell navigation.vw.db");
+        Assert.Equal(0, (await Run(["sample", "create", "technical-project", project])).ExitCode);
+        var commands = string.Join(Environment.NewLine,
+            "pwd",
+            "dir --limit 2",
+            "cd scope-power",
+            "pwd",
+            "cd battery-assumption",
+            "dir --limit 20 --upstream 2 --depth 1",
+            "cd ..",
+            "pwd",
+            "cd /",
+            "ls --scope-only --limit 20",
+            "exit") + Environment.NewLine;
+
+        var result = await Run(["shell", project], commands);
+
+        Assert.Equal(CliRunner.SuccessExitCode, result.ExitCode);
+        Assert.Contains("Selected root purpose", result.Output, StringComparison.Ordinal);
+        Assert.Contains("/purpose", result.Output, StringComparison.Ordinal);
+        Assert.Contains("... 2 more connections omitted; raise --limit.", result.Output, StringComparison.Ordinal);
+        Assert.Contains("/purpose/scope-power", result.Output, StringComparison.Ordinal);
+        Assert.Contains("[..1] scope-power", result.Output, StringComparison.Ordinal);
+        Assert.Contains("[..2] purpose", result.Output, StringComparison.Ordinal);
+        Assert.Contains("[out] runtime-test to battery-requires-runtime [requires/source-to-target]", result.Output,
+            StringComparison.Ordinal);
+        Assert.Contains("[out] power-design-anchor to battery-informs-power-anchor [informs/source-to-target]", result.Output,
+            StringComparison.Ordinal);
+        Assert.Contains("[scope +1] scope-accessibility", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("error[", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Human_shell_updates_single_metadata_values_moves_a_node_and_can_discard()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "human shell metadata.vw.db");
+        Assert.Equal(0, (await Run(["sample", "create", "technical-project", project])).ExitCode);
+        var commands = string.Join(Environment.NewLine,
+            "begin --author tester --intent \"Exercise scalar commands\"",
+            "node select --id runtime-test",
+            "node tag-add --tag shell:test",
+            "node attribute-set --name shell-mode --type symbol --value compact",
+            "node move --parent scope-privacy",
+            "cd scope-privacy",
+            "dir --limit 20",
+            "cd runtime-test",
+            "node add --id shell-note --text \"Temporary shell note\" --parent scope-power",
+            "node set --text \"Revised temporary shell note\"",
+            "node remove",
+            "edge select --id battery-requires-runtime",
+            "edge set --rationale \"Checked through the human shell\"",
+            "changes",
+            "discard",
+            "exit") + Environment.NewLine;
+
+        var result = await Run(["shell", project], commands);
+
+        Assert.Equal(CliRunner.SuccessExitCode, result.ExitCode);
+        Assert.Contains("replace node runtime-test", result.Output, StringComparison.Ordinal);
+        Assert.Contains("replace edge runtime-scope-parent", result.Output, StringComparison.Ordinal);
+        Assert.Contains("[scope +1] runtime-test", result.Output, StringComparison.Ordinal);
+        Assert.Contains("replace edge battery-requires-runtime", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("add node shell-note", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Discarded session", result.Output, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, result.Error);
+        Assert.DoesNotContain("shell:test",
+            JsonNode.Parse((await Run(["read", "node", project, "runtime-test"])).Output)!["tags"]!
+                .AsArray().Select(item => item!.GetValue<string>()));
+    }
+
+    [Fact]
     public async Task Long_lived_ndjson_host_completes_reviewed_change_and_then_exits_cleanly()
     {
         using var temporary = new TemporaryDirectory();
@@ -118,13 +255,20 @@ public sealed class CliWorkflowTests
         var backup = Path.Combine(temporary.Path, "black box backup.vw.db");
         Assert.Equal(0, (await RunProcess(["sample", "create", "technical-project", project])).ExitCode);
 
-        await using var host = await NdjsonProcess.Start();
+        await using var host = await NdjsonProcess.Start(enableAiReview: true);
         var help = await host.Send("host.help", new { });
         Assert.Equal("ok", help["status"]!.GetValue<string>());
         Assert.Contains("change.write", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
+        Assert.Contains("change.patch", help["payload"]!["commands"]!.AsArray()
+            .Select(value => value!.GetValue<string>()));
         Assert.Contains("read.tag", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
+        Assert.DoesNotContain("ai.review", help["payload"]!["commands"]!.AsArray()
+            .Select(value => value!.GetValue<string>()));
+        var aiStatus = await host.Send("ai.status", new { });
+        Assert.True(aiStatus["payload"]!["enabled"]!.GetValue<bool>());
+        Assert.True(aiStatus["payload"]!["configured"]!.GetValue<bool>());
 
         var tagged = await host.Send("read.tag", new { path = project, tag = "artifact" });
         Assert.Equal(2, tagged["payload"]!["totalCount"]!.GetValue<int>());
@@ -192,8 +336,10 @@ public sealed class CliWorkflowTests
         var write = await host.SendNode("change.write", new JsonObject
         {
             ["reference"] = review["payload"]!["reference"]!.DeepClone(),
+            ["bypassAiReview"] = true,
         });
         Assert.Equal("written", write["payload"]!["status"]!.GetValue<string>());
+        Assert.True(write["payload"]!["aiReviewBypassed"]!.GetValue<bool>());
         var exit = await host.Send("host.exit", new { });
         Assert.Empty(exit["payload"]!["warnings"]!.AsArray());
         Assert.Equal(0, await host.WaitForExit());
@@ -205,6 +351,126 @@ public sealed class CliWorkflowTests
             JsonNode.Parse(nodeResult.Output)!["text"]!.GetValue<string>());
         Assert.Equal(0, (await RunProcess(["project", "backup", project, backup])).ExitCode);
         Assert.Equal(0, (await RunProcess(["project", "verify", backup])).ExitCode);
+    }
+
+    [Fact]
+    public async Task Ndjson_patch_accumulates_small_edits_and_supports_compact_responses()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "incremental NDJSON project.vw.db");
+        Assert.Equal(0, (await Run(["sample", "create", "technical-project", project])).ExitCode);
+
+        await using var host = await NdjsonProcess.Start();
+        var battery = (JsonObject)(await host.Send("read.node", new
+        {
+            path = project,
+            entityId = "battery-assumption",
+        }))["payload"]!.DeepClone();
+        var runtime = (JsonObject)(await host.Send("read.node", new
+        {
+            path = project,
+            entityId = "runtime-test",
+        }))["payload"]!.DeepClone();
+
+        var begin = await host.Send("change.begin", new
+        {
+            path = project,
+            projectId = "technical-project",
+            author = "incremental protocol tester",
+            intent = "Accumulate two small patches",
+            includeOperations = false,
+            includeProposedGraph = false,
+        });
+        Assert.Equal(0, begin["payload"]!["operationCount"]!.GetValue<int>());
+        Assert.Null(begin["payload"]!["operations"]);
+        Assert.Null(begin["payload"]!["proposedGraph"]);
+
+        var first = await host.SendNode("change.patch", new JsonObject
+        {
+            ["reference"] = begin["payload"]!["reference"]!.DeepClone(),
+            ["operations"] = Batch(ReplaceNode(
+                battery,
+                "The battery lasts for the incremental NDJSON target duty cycle")),
+            ["includeOperations"] = false,
+            ["includeProposedGraph"] = false,
+        });
+        Assert.Equal(1, first["payload"]!["operationCount"]!.GetValue<int>());
+        Assert.Null(first["payload"]!["operations"]);
+        Assert.Null(first["payload"]!["proposedGraph"]);
+
+        var second = await host.SendNode("change.patch", new JsonObject
+        {
+            ["reference"] = first["payload"]!["reference"]!.DeepClone(),
+            ["operations"] = Batch(ReplaceNode(
+                runtime,
+                "The runtime test covers the incremental NDJSON target")),
+            ["includeOperations"] = false,
+            ["includeProposedGraph"] = false,
+        });
+        Assert.Equal(2, second["payload"]!["operationCount"]!.GetValue<int>());
+
+        var normalized = await host.SendNode("change.patch", new JsonObject
+        {
+            ["reference"] = second["payload"]!["reference"]!.DeepClone(),
+            ["operations"] = Batch(ReplaceNode(battery, battery["text"]!.GetValue<string>())),
+            ["includeOperations"] = false,
+            ["includeProposedGraph"] = false,
+        });
+        Assert.Equal(1, normalized["payload"]!["operationCount"]!.GetValue<int>());
+
+        var locator = new JsonObject
+        {
+            ["projectId"] = "technical-project",
+            ["sessionId"] = normalized["payload"]!["reference"]!["sessionId"]!.GetValue<string>(),
+        };
+        var finalOperations = await host.SendNode("change.show", new JsonObject
+        {
+            ["session"] = locator,
+            ["includeOperations"] = true,
+            ["includeProposedGraph"] = false,
+        });
+        var operations = finalOperations["payload"]!["operations"]!["operations"]!.AsArray();
+        Assert.Single(operations);
+        Assert.Equal("runtime-test", operations[0]!["entityId"]!.GetValue<string>());
+        Assert.Null(finalOperations["payload"]!["proposedGraph"]);
+
+        var stale = await host.SendNode("change.patch", new JsonObject
+        {
+            ["reference"] = first["payload"]!["reference"]!.DeepClone(),
+            ["operations"] = Batch(ReplaceNode(runtime, "A stale patch must be rejected")),
+            ["includeOperations"] = false,
+            ["includeProposedGraph"] = false,
+        });
+        Assert.Equal("error", stale["status"]!.GetValue<string>());
+        Assert.Equal("change-stale-operation-fingerprint", stale["payload"]!["code"]!.GetValue<string>());
+
+        var discarded = await host.SendNode("change.discard", new JsonObject
+        {
+            ["reference"] = normalized["payload"]!["reference"]!.DeepClone(),
+        });
+        Assert.Equal("ok", discarded["status"]!.GetValue<string>());
+        _ = await host.Send("host.exit", new { });
+        Assert.Equal(0, await host.WaitForExit());
+        Assert.Equal(string.Empty, await host.ErrorText());
+
+        static JsonObject Batch(JsonObject operation) => new()
+        {
+            ["operations"] = new JsonArray(operation),
+        };
+
+        static JsonObject ReplaceNode(JsonObject original, string text)
+        {
+            var node = (JsonObject)original.DeepClone();
+            node["text"] = text;
+            return new JsonObject
+            {
+                ["kind"] = "replace",
+                ["entityKind"] = "node",
+                ["entityId"] = node["id"]!.GetValue<string>(),
+                ["node"] = node,
+                ["edge"] = null,
+            };
+        }
     }
 
     [Fact]
@@ -374,12 +640,25 @@ public sealed class CliWorkflowTests
         return new CliResult(exitCode, output.ToString(), error.ToString());
     }
 
-    private static async Task<CliResult> RunProcess(string[] arguments)
+    private static async Task<CliResult> RunProcess(
+        string[] arguments,
+        string? input = null,
+        bool enableAiReview = false)
     {
         using var process = CreateProcess(arguments);
+        if (enableAiReview)
+        {
+            process.StartInfo.Environment["VW_AIREVIEW__ENABLED"] = "true";
+            process.StartInfo.Environment["OPENAI_API_KEY"] = "offline-test-key";
+        }
         process.Start();
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
+        if (input is not null)
+        {
+            await process.StandardInput.WriteAsync(input);
+            await process.StandardInput.DisposeAsync();
+        }
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await process.WaitForExitAsync(timeout.Token);
         return new CliResult(process.ExitCode, await output, await error);
@@ -395,6 +674,7 @@ public sealed class CliWorkflowTests
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        start.Environment["VW_AIREVIEW__ENABLED"] = "false";
         start.ArgumentList.Add(typeof(CliRunner).Assembly.Location);
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         return new Process { StartInfo = start };
@@ -444,9 +724,12 @@ public sealed class CliWorkflowTests
             _error = process.StandardError.ReadToEndAsync();
         }
 
-        public static Task<NdjsonProcess> Start()
+        public static Task<NdjsonProcess> Start(bool enableAiReview = false)
         {
             var process = CreateProcess(["ndjson"]);
+            process.StartInfo.Environment["VW_AIREVIEW__ENABLED"] = enableAiReview ? "true" : "false";
+            if (enableAiReview)
+                process.StartInfo.Environment["OPENAI_API_KEY"] = "offline-test-key";
             process.Start();
             return Task.FromResult(new NdjsonProcess(process));
         }

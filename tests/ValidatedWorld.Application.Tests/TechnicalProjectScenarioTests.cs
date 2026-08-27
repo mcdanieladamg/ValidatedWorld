@@ -37,7 +37,7 @@ public sealed class TechnicalProjectScenarioTests
 
     [Theory]
     [MemberData(nameof(ScenarioNames))]
-    public void Reviewed_operation_golden_drives_complete_public_application_write(string scenarioName)
+    public async Task Reviewed_operation_golden_drives_complete_public_application_write(string scenarioName)
     {
         using var workspace = new ScenarioWorkspace();
         var application = CreateApplication(workspace, scenarioName, out var path);
@@ -47,7 +47,7 @@ public sealed class TechnicalProjectScenarioTests
         AssertGolden(scenario, applied);
 
         var reviewed = ReviewEverything(application, applied);
-        var written = application.WriteChange(reviewed.Reference);
+        var written = await application.WriteChangeAsync(reviewed.Reference, new ChangeWriteOptions(true));
 
         Assert.Equal(ChangeWriteStatus.Written, written.Status);
         Assert.NotNull(written.Project);
@@ -57,7 +57,7 @@ public sealed class TechnicalProjectScenarioTests
     }
 
     [Fact]
-    public void Incomplete_review_is_a_bounded_clear_blocker_and_preserves_the_database()
+    public async Task Incomplete_review_is_a_bounded_clear_blocker_and_preserves_the_database()
     {
         using var workspace = new ScenarioWorkspace();
         var application = CreateApplication(workspace, "incomplete", out var path);
@@ -75,12 +75,13 @@ public sealed class TechnicalProjectScenarioTests
         Assert.Equal(new[] { "power-design-anchor", "runtime-test" },
             incomplete.Readiness.PendingNodeIds.Select(id => id.Value));
         Assert.Contains("pending", string.Join(" ", incomplete.Readiness.Blockers), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(ChangeWriteStatus.ReviewNotReady, application.WriteChange(incomplete.Reference).Status);
+        Assert.Equal(ChangeWriteStatus.ReviewNotReady,
+            (await application.WriteChangeAsync(incomplete.Reference, new ChangeWriteOptions(true))).Status);
         Assert.Equal(before, File.ReadAllBytes(path));
     }
 
     [Fact]
-    public void Stale_and_injected_rollback_scenarios_leave_the_prior_state_unchanged()
+    public async Task Stale_and_injected_rollback_scenarios_leave_the_prior_state_unchanged()
     {
         using var workspace = new ScenarioWorkspace();
         var first = CreateApplication(workspace, "stale-first", out var path);
@@ -90,10 +91,12 @@ public sealed class TechnicalProjectScenarioTests
             utcNow: () => FixedUtc,
             sessionIdFactory: () => "stale-second");
         var secondReviewed = ReviewEverything(second, BeginAndApply(second, path, LoadScenario("privacy-change").Operations));
-        Assert.Equal(ChangeWriteStatus.Written, second.WriteChange(secondReviewed.Reference).Status);
+        Assert.Equal(ChangeWriteStatus.Written,
+            (await second.WriteChangeAsync(secondReviewed.Reference, new ChangeWriteOptions(true))).Status);
         var afterSecondWrite = File.ReadAllBytes(path);
 
-        Assert.Equal(ChangeWriteStatus.Stale, first.WriteChange(firstReviewed.Reference).Status);
+        Assert.Equal(ChangeWriteStatus.Stale,
+            (await first.WriteChangeAsync(firstReviewed.Reference, new ChangeWriteOptions(true))).Status);
         Assert.Equal(afterSecondWrite, File.ReadAllBytes(path));
 
         var rollbackStore = new SqliteProjectStore(
@@ -108,7 +111,7 @@ public sealed class TechnicalProjectScenarioTests
         var rollbackReviewed = ReviewEverything(rollback, BeginAndApply(rollback, path, LoadScenario("edge-redirect").Operations));
         var beforeRollback = File.ReadAllBytes(path);
 
-        var failed = rollback.WriteChange(rollbackReviewed.Reference);
+        var failed = await rollback.WriteChangeAsync(rollbackReviewed.Reference, new ChangeWriteOptions(true));
 
         Assert.Equal(ChangeWriteStatus.Failed, failed.Status);
         Assert.Equal(ProjectStorageErrorCode.MappingFailure, failed.StorageErrorCode);
@@ -117,7 +120,7 @@ public sealed class TechnicalProjectScenarioTests
     }
 
     [Fact]
-    public void Backup_and_bounded_diagnostic_scenarios_are_verified_without_tracking_a_database()
+    public async Task Backup_and_bounded_diagnostic_scenarios_are_verified_without_tracking_a_database()
     {
         using var workspace = new ScenarioWorkspace();
         var application = CreateApplication(workspace, "backup", out var path);
@@ -138,7 +141,8 @@ public sealed class TechnicalProjectScenarioTests
             new AffectedAnalysisOptions { MaxOutputItems = 1 });
         Assert.True(bounded.Affected.IsInconclusive);
         Assert.NotEmpty(bounded.Affected.Omissions);
-        Assert.Equal(ChangeWriteStatus.ReviewNotReady, application.WriteChange(bounded.Reference).Status);
+        Assert.Equal(ChangeWriteStatus.ReviewNotReady,
+            (await application.WriteChangeAsync(bounded.Reference, new ChangeWriteOptions(true))).Status);
         application.DiscardChange(bounded.Reference);
     }
 

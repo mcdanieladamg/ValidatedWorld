@@ -30,12 +30,11 @@ governing statement. Every other node belongs to the scope tree through exactly
 one `scope-parent`. Following those parent edges from any node back to the root
 defines that node's unique **scope-upstream path**. In this precise sense, the
 root is a transitive scope dependency of every non-root node and therefore of
-every change made beneath it. However, as an addendum to that, nodes are allowed
-to declare other nodes as downstream from them, arbitrarily, so the unique
-upstream path of those other notes will also be part of the relevant dependency
-graphs for such changes, and that is an iterative process that could produce
-several apparent upstream paths for a single node change, alongside the expected
-downstream paths which will be pulled for the change as well.
+every change made beneath it. Nodes may also have arbitrary explicit semantic
+relationships. Following those relationships selects additional affected nodes;
+each newly affected node contributes its own unique scope-upstream path. The
+result can therefore contain several scope lineages alongside downstream,
+upstream, or lateral semantic paths selected by the labeled edges.
 
 For every proposed change, ValidatedWorld walks that path upward from every
 changed or affected node and includes every node on it—including the project
@@ -64,7 +63,9 @@ explicitly affected dependency and dependent selected by those relationships.
 That set may extend downward, upward, laterally, or in both directions. Editing
 or deleting another affected node may expand the set again. Commit is enabled
 only after the complete current affected set has been examined and every
-structural check passes; SQLite then applies the batch atomically.
+structural check passes. When semantic AI review is configured and enabled, the
+write attempt also requires its `allow` decision for that exact proposal;
+SQLite then applies the batch atomically.
 
 ValidatedWorld is intended to offer an **AI-first, headless** experience, but AI
 is always optional rather than a requirement for using the application. The
@@ -170,9 +171,8 @@ them but does not execute them as conditions.
 A `scope-parent` change is itself meaningful topology. Adding, removing, or
 redirecting one selects the old and new child subtrees and makes the old and new
 immediate parents review obligations; both ancestry lineages are included
-without pulling unrelated siblings. The [CLI usage guide](docs/cli_usage.md) and
-[lore modeling study](docs/lore_modeling_study.md) give concrete patterns and
-measured examples for humans and authoring agents.
+without pulling unrelated siblings. The [CLI usage guide](docs/cli_usage.md)
+gives concrete patterns for humans and authoring agents.
 
 ## Product boundary
 
@@ -183,8 +183,9 @@ ValidatedWorld owns:
 - structural validation and optional profile validation;
 - explained affected-subgraph expansion and complete review obligations;
 - atomic in-memory-to-SQLite change transactions;
-- bounded text-oriented queries and structured command results for humans, AIs,
-  and integrations.
+- a stateful flag-based shell that selects the purpose root and navigates the
+  scope tree with `pwd`, `dir`/`ls`, `cd`, and `root`; and
+- bounded structured commands for AIs, scripts, and integrations.
 
 ValidatedWorld does **not** own the finished novel, paper, patent application,
 manual, source tree, game project, or media. External artifact/anchor nodes may
@@ -197,8 +198,10 @@ separate semantic-diff format and no retained commit-history subsystem.
 The planned AI support has two separate roles. The optional authoring agent
 searches the project and operates the same change tools available to a human.
 The optional semantic reviewer independently examines one complete proposed
-transaction and its affected context. The reviewer never edits the graph; the
-author never approves its own review; and neither turns model judgment into
+transaction and its affected context when a database write is attempted. The
+reviewer never edits the graph, but its strict `allow` or `block` decision is an
+authorization gate for that exact write. The author never supplies or overrides
+its own independent-review decision, and model judgment is not represented as
 deterministic proof. Each role can be disabled. If no API key is configured,
 both are skipped automatically and the complete manual workflow remains
 available. In that mode, the human authors the change and personally reviews the
@@ -213,11 +216,11 @@ user describes a new project or desired alteration
 → authoring agent searches/reads the graph or interprets supplied text
 → agent asks focused questions and creates explicit in-memory node/edge changes
 → structural checks and affected-subgraph expansion run
-→ independent semantic AI review runs when enabled and available
-→ agent repairs the proposal or discusses concerns with the user
 → app shows the exact final operation/affected-set/state-fingerprint preview
 → user approves that exact proposal in the conversation
 → authoring agent calls the guarded commit tool
+→ enabled independent semantic AI review automatically allows or blocks that write
+→ a block returns cited feedback for repair/discussion and requires a new proposal
 → one atomic SQLite transaction succeeds or rolls back safely
 ```
 
@@ -259,6 +262,82 @@ unless the user later chooses to preserve a separately designed profile.
 Despite the name, a “world” is any universe of connected nodes. Fiction is one
 possible use, not the common engine's only purpose.
 
-The [CLI usage guide](docs/cli_usage.md) documents the current manual workflow.
+The [CLI usage guide](docs/cli_usage.md) documents both the stateful shell and
+the alternative NDJSON interface protocol.
 Technical requirements and the one-task-at-a-time implementation checklist are
 in the [development plan](docs/development_plan.md).
+
+## Optional OpenAI configuration
+
+The manual workflow needs no API key. Semantic review defaults on but is
+effective only when its key is configured. Without a key—or when explicitly
+disabled—`change.write` uses the complete manual workflow without contacting
+OpenAI. Live development-test request/response logging remains disabled by
+default.
+
+For a source checkout, store the key once in the existing .NET User Secrets
+store. It stays outside the repository and persists across terminals:
+
+```powershell
+dotnet user-secrets set "AiReview:OpenAI:ApiKey" "<key>" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
+```
+
+Enable credential-free request/response capture only while intentionally
+running a paid T12 development check:
+
+```powershell
+dotnet user-secrets set "AiReview:LiveTests" "true" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
+```
+
+Run the small, explicitly categorized live T12 check separately from the
+ordinary offline suite:
+
+```powershell
+dotnet test tests/ValidatedWorld.Cli.Tests/ValidatedWorld.Cli.Tests.csproj `
+    --filter Category=LiveOpenAI
+```
+
+When enabled, the check writes credential-free
+`artifacts/ai-review-live-request.json` and
+`artifacts/ai-review-live-response.json` files relative to its working
+directory. These ignored development artifacts can contain project text and
+model feedback. Sandbox network permission is handled as documented in
+`AGENTS.md`.
+
+Configuration uses ordinary .NET keys. Environment variables replace `:` with
+`__` and use the `VW_` prefix, for example `VW_AIREVIEW__MODEL`; the standard
+`OPENAI_API_KEY` variable is also accepted. Reviewer defaults are `Enabled=true`,
+`Provider=openai`, `Model=gpt-5.6-terra`, `TimeoutSeconds=1200`, and
+`LiveTests=false`. T13 uses the equivalent `AiAuthoring`/`VW_AIAUTHORING__`
+names. Never commit, log, or paste an API key into project data.
+
+When both the key and `AiReview:Enabled=true` are present, attempting
+`change.write` authorizes one review of the exact current proposal. The call
+sends its operations, affected evidence, and required scope context to OpenAI.
+Only a strict `allow` permits SQLite to open the write transaction. A `block`,
+refusal, timeout, malformed response, or provider failure returns structured
+feedback and leaves the database unchanged. Retrying an unchanged proposal
+reuses a current fingerprint-bound `allow` or `block` decision without another
+paid call; changing the proposal invalidates it. Provider trouble produces no
+decision, so a deliberate retry can try the provider again. The response runs
+in background/store mode so the application can poll that same response, with
+no automatic paid retry or fallback model.
+
+One write may explicitly set `bypassAiReview=true`. That bypass permits the
+manual-only path for that command even when review is configured; it does not
+bypass structural validation, affected-node dispositions, context coverage,
+fingerprint checks, or atomic-write safeguards. The result records that the
+bypass was used.
+
+In the shell-based interface the equivalent one-write flag is simply:
+
+```text
+commit --bypass-ai-review
+```
+
+To keep a configured key while using manual-only writes, set the kill switch
+once:
+
+```powershell
+dotnet user-secrets set "AiReview:Enabled" "false" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
+```

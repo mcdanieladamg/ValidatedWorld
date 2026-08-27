@@ -26,12 +26,12 @@ ordered backlog. A human prompt starts each development run.
   material product, schema, provider, dependency, or scope change.
 - Add meaningful automated tests for changed behavior and perform the current
   task's informal user-style smoke check.
-- On success, record exact evidence, mark the task complete, point Current task
-  to the next prewritten task, and set the **Current task estimate** directly
-  below it to `small`, `medium`, `large`, or `gigantic`. Report to the human and
-  stop. The human reviews and merges before starting another run.
-- On failure, leave Current task unchanged, record only useful evidence, report
-  the command/output/cause/repairs, and stop.
+- On success, mark the task complete, point Current task to the next prewritten
+  task, and set the **Current task estimate** directly below it to `small`,
+  `medium`, `large`, or `gigantic`. Report exact checks and smoke findings to
+  the human and stop. The human reviews and merges before starting another run.
+- On failure, leave Current task unchanged, report the command/output/cause/
+  repairs to the human, and stop.
 - If Current task is `None`, make no changes. Report the recorded state and ask
   the human for direction.
 
@@ -56,6 +56,15 @@ read its configuration to restore dependencies. This is a sandbox permission
 workaround, not a product dependency or a reason to weaken restore. Keep the
 build and test commands sandboxed with `--no-restore` after the elevated
 restore succeeds.
+
+If an explicitly opted-in live OpenAI call fails with a transport or network
+access error inside the sandbox before receiving a provider response, rerun the
+exact filtered live-call command with the command tool's elevated,
+outside-sandbox permission and a narrowly scoped explanation that the call must
+reach the OpenAI API. This is a sandbox network workaround, not a provider or
+product failure. Do not elevate ordinary offline app permission, broaden the
+live-test filter, print or inspect the API key, or change the request merely to
+obtain permission.
 
 For the same failure, make at most two materially different repair attempts.
 Never rerun an unchanged failing command merely hoping it will pass. Give an
@@ -88,8 +97,11 @@ in-scope, small, and straightforward, then add an appropriate regression test.
 If the finding implies a material product, schema, dependency, provider, or
 scope decision; reveals an inherent contradiction; or has no clear low-risk
 repair, stop and escalate it to the human instead of improvising a redesign.
-Record both the repeatable walkthrough and the exploratory probes, including
-confusing behavior and confidence.
+Report both the repeatable walkthrough and the exploratory probes to the human,
+including confusing behavior and confidence. Do not append dated implementation
+history, test transcripts, or corrective-addendum prose to product/design docs;
+Git history is the change record. Rewrite obsolete requirements in place so the
+documents describe only the current design.
 
 The Current task estimate is set only after implementation, testing, and smoke
 QA are complete, while advancing the development-plan header. It describes
@@ -130,6 +142,8 @@ not a Git operation.
 - Keep unfinished changes and review data in process memory. Write the complete
   reviewed graph atomically or change nothing.
 - Treat semantic judgment as human/optional-AI review, not deterministic proof.
+  When the optional reviewer is configured and enabled, its allow/block decision
+  is a required preflight gate for the exact database write attempt.
 - Keep Core independent of SQLite, JSON, files, providers, and UI.
 - Use the fixed four-table SQLite v1 and pinned embedded provider described in
   the technical design. No ORM or external SQLite/Docker requirement.
@@ -154,6 +168,16 @@ and inspect the complete serialized request at least once during that task's
 development, validate the standalone prompt and coverage, and exercise meaningful
 known and control cases. There are zero automatic paid retries, parallel paid
 calls, or fallback providers/models.
+
+In normal product use, `AiReview:Enabled` defaults true but is effective only
+when a key is configured. An enabled reviewer runs automatically when
+`change.write` is attempted, before SQLite opens a transaction. Only an `allow`
+decision bound to the exact current fingerprints permits the write. A `block`,
+refusal, timeout, malformed response, or provider failure leaves SQLite
+unchanged and returns feedback. An unchanged retry reuses a current bound
+`allow` or `block` decision; provider trouble can be retried deliberately.
+Changing the proposal invalidates any decision. Disabled or unconfigured review
+uses the complete manual workflow without a provider call.
 
 ## Repository layout
 

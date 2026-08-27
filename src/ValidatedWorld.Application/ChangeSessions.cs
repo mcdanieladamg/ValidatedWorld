@@ -67,10 +67,13 @@ public enum ChangeWriteStatus
 {
     Written,
     ReviewNotReady,
+    SemanticReviewBlocked,
     Stale,
     Busy,
     Failed,
 }
+
+public sealed record ChangeWriteOptions(bool BypassAiReview = false);
 
 /// <summary>The result of attempting to persist a reviewed in-memory proposal.</summary>
 public sealed record ChangeWriteResult(
@@ -79,7 +82,9 @@ public sealed record ChangeWriteResult(
     string SessionId,
     StoredProject? Project,
     ProjectStorageErrorCode? StorageErrorCode,
-    string Message);
+    string Message,
+    SemanticReviewResult? SemanticReview,
+    bool AiReviewBypassed);
 
 public sealed record ChangeFocusResult(
     GraphOperationBatch ExpandedOperations,
@@ -101,7 +106,8 @@ public sealed class ChangeSessionSnapshot
         IReadOnlyList<ReviewDisposition> dispositions,
         IReadOnlyList<EntityId> presentedContextNodeIds,
         ReviewReadinessResult readiness,
-        ReviewRefreshResult? refresh)
+        ReviewRefreshResult? refresh,
+        SemanticReviewResult? semanticReview)
     {
         Path = path;
         Author = author;
@@ -116,6 +122,7 @@ public sealed class ChangeSessionSnapshot
         PresentedContextNodeIds = new ReadOnlyCollection<EntityId>(presentedContextNodeIds.ToArray());
         Readiness = readiness;
         Refresh = refresh;
+        SemanticReview = semanticReview;
     }
 
     public string Path { get; }
@@ -143,6 +150,8 @@ public sealed class ChangeSessionSnapshot
     public ReviewReadinessResult Readiness { get; }
 
     public ReviewRefreshResult? Refresh { get; }
+
+    public SemanticReviewResult? SemanticReview { get; }
 }
 
 public sealed partial class ProjectApplication
@@ -253,13 +262,26 @@ public sealed partial class ProjectApplication
         {
             var state = FindAndVerify(reference);
             VerifyBaseUnchanged(state);
-            var projection = new GraphProjector().Project(state.BaseProject.Graph, operations);
-            var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, projection, options);
-            var refresh = state.Review.Refresh(affected);
-            state.Projection = projection;
-            state.Affected = affected;
-            state.UpdatedUtc = UtcNow();
-            return Snapshot(state, refresh);
+            return ApplyBatch(state, operations, options);
+        }
+    }
+
+    public ChangeSessionSnapshot PatchChange(
+        ChangeSessionReference reference,
+        GraphOperationBatch operations,
+        AffectedAnalysisOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        ArgumentNullException.ThrowIfNull(operations);
+        lock (_sessionLock)
+        {
+            var state = FindAndVerify(reference);
+            VerifyBaseUnchanged(state);
+            var merged = MergeOperations(
+                state.BaseProject.Graph,
+                state.Projection.Operations,
+                operations);
+            return ApplyBatch(state, merged, options);
         }
     }
 
@@ -324,9 +346,15 @@ public sealed partial class ProjectApplication
         }
     }
 
-    public ChangeWriteResult WriteChange(ChangeSessionReference reference)
+    public async Task<ChangeWriteResult> WriteChangeAsync(
+        ChangeSessionReference reference,
+        ChangeWriteOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reference);
+        options ??= new ChangeWriteOptions();
+        var reviewEnabled = SemanticReviewAvailability.Enabled;
+        var bypassUsed = reviewEnabled && options.BypassAiReview;
         lock (_sessionLock)
         {
             var state = FindAndVerify(reference);
@@ -339,7 +367,99 @@ public sealed partial class ProjectApplication
                     state.SessionId,
                     null,
                     null,
-                    string.Join(" ", readiness.Blockers));
+                    string.Join(" ", readiness.Blockers),
+                    CurrentSemanticReview(state),
+                    false);
+            }
+
+            if (reviewEnabled && !bypassUsed)
+            {
+                try
+                {
+                    VerifyBaseUnchanged(state);
+                }
+                catch (ChangeSessionException exception) when (
+                    exception.Code is ChangeSessionErrorCode.StaleBaseFingerprint or
+                        ChangeSessionErrorCode.ProjectMismatch)
+                {
+                    return new ChangeWriteResult(
+                        ChangeWriteStatus.Stale,
+                        state.BaseProject.Graph.ProjectId,
+                        state.SessionId,
+                        null,
+                        null,
+                        exception.Message,
+                        CurrentSemanticReview(state),
+                        false);
+                }
+                catch (ProjectStorageException exception)
+                {
+                    return new ChangeWriteResult(
+                        ChangeWriteStatus.Failed,
+                        state.BaseProject.Graph.ProjectId,
+                        state.SessionId,
+                        null,
+                        exception.Code,
+                        exception.Message,
+                        CurrentSemanticReview(state),
+                        false);
+                }
+            }
+        }
+
+        SemanticReviewResult? semanticReview;
+        if (reviewEnabled && !bypassUsed)
+        {
+            semanticReview = await ReviewSemanticsForWriteAsync(reference, cancellationToken);
+            if (!semanticReview.IsCurrent)
+            {
+                return new ChangeWriteResult(
+                    ChangeWriteStatus.Stale,
+                    reference.ProjectId,
+                    reference.SessionId,
+                    null,
+                    null,
+                    "The proposal changed while semantic review was running.",
+                    semanticReview,
+                    false);
+            }
+
+            if (!semanticReview.AllowsWrite)
+            {
+                return new ChangeWriteResult(
+                    ChangeWriteStatus.SemanticReviewBlocked,
+                    reference.ProjectId,
+                    reference.SessionId,
+                    null,
+                    null,
+                    semanticReview.Summary,
+                    semanticReview,
+                    false);
+            }
+        }
+        else
+        {
+            lock (_sessionLock)
+            {
+                semanticReview = CurrentSemanticReview(FindAndVerify(reference));
+            }
+        }
+
+        lock (_sessionLock)
+        {
+            var state = FindAndVerify(reference);
+            var readiness = state.Review.EvaluateReadiness();
+            if (!readiness.IsReady)
+            {
+                return new ChangeWriteResult(
+                    ChangeWriteStatus.ReviewNotReady,
+                    state.BaseProject.Graph.ProjectId,
+                    state.SessionId,
+                    null,
+                    null,
+                    string.Join(" ", readiness.Blockers),
+                    semanticReview,
+                    false);
             }
 
             var write = _store.Write(new ProjectWriteRequest(
@@ -360,7 +480,9 @@ public sealed partial class ProjectApplication
                 state.SessionId,
                 write.Project,
                 write.ErrorCode,
-                write.Message);
+                write.Message,
+                semanticReview,
+                bypassUsed);
             if (result.Status == ChangeWriteStatus.Written)
             {
                 _activeSessions.Remove(state.BaseProject.Graph.ProjectId);
@@ -545,7 +667,17 @@ public sealed partial class ProjectApplication
             state.Review.Dispositions,
             state.Review.PresentedContextNodeIds,
             state.Review.EvaluateReadiness(),
-            refresh);
+            refresh,
+            CurrentSemanticReview(state));
+    }
+
+    private static SemanticReviewResult? CurrentSemanticReview(ActiveChangeSession state)
+    {
+        if (state.SemanticReview is null) return null;
+        return state.SemanticReview with
+        {
+            IsCurrent = SameBinding(state.SemanticReview.Binding, BuildReference(state)),
+        };
     }
 
     private static ChangeSessionReference BuildReference(ActiveChangeSession state)
@@ -579,6 +711,119 @@ public sealed partial class ProjectApplication
     }
 
     private DateTimeOffset UtcNow() => _utcNow().ToUniversalTime();
+
+    private ChangeSessionSnapshot ApplyBatch(
+        ActiveChangeSession state,
+        GraphOperationBatch operations,
+        AffectedAnalysisOptions? options)
+    {
+        var projection = new GraphProjector().Project(state.BaseProject.Graph, operations);
+        var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, projection, options);
+        var refresh = state.Review.Refresh(affected);
+        state.Projection = projection;
+        state.Affected = affected;
+        state.UpdatedUtc = UtcNow();
+        return Snapshot(state, refresh);
+    }
+
+    private static GraphOperationBatch MergeOperations(
+        ProjectGraph baseGraph,
+        GraphOperationBatch current,
+        GraphOperationBatch patch)
+    {
+        var merged = current.Operations.ToDictionary(operation => operation.EntityId);
+        foreach (var operation in patch.Operations)
+        {
+            var baseNode = baseGraph.Nodes.FirstOrDefault(node => node.Id == operation.EntityId);
+            var baseEdge = baseGraph.Edges.FirstOrDefault(edge => edge.Id == operation.EntityId);
+            var baseKind = baseNode is not null
+                ? GraphEntityKind.Node
+                : baseEdge is not null
+                    ? GraphEntityKind.Edge
+                    : (GraphEntityKind?)null;
+            merged.TryGetValue(operation.EntityId, out var existing);
+
+            if (baseKind is { } existingBaseKind && existingBaseKind != operation.EntityKind)
+                throw new ArgumentException(
+                    $"Entity '{operation.EntityId.Value}' already exists as a different entity kind.",
+                    nameof(patch));
+
+            switch (operation.Kind)
+            {
+                case GraphOperationKind.Add:
+                    if (baseKind is not null)
+                        throw new ArgumentException(
+                            $"Entity '{operation.EntityId.Value}' already exists in the base graph.",
+                            nameof(patch));
+                    if (existing is not null &&
+                        (existing.Kind != GraphOperationKind.Add || existing.EntityKind != operation.EntityKind))
+                        throw new ArgumentException(
+                            $"Entity '{operation.EntityId.Value}' has an incompatible pending operation.",
+                            nameof(patch));
+                    merged[operation.EntityId] = operation;
+                    break;
+
+                case GraphOperationKind.Replace:
+                    if (baseKind is null)
+                    {
+                        if (existing is null || existing.Kind != GraphOperationKind.Add ||
+                            existing.EntityKind != operation.EntityKind)
+                            throw new ArgumentException(
+                                $"Entity '{operation.EntityId.Value}' does not exist in the base graph or pending additions.",
+                                nameof(patch));
+                        merged[operation.EntityId] = AsAdd(operation);
+                    }
+                    else if (MatchesBase(operation, baseNode, baseEdge))
+                    {
+                        merged.Remove(operation.EntityId);
+                    }
+                    else
+                    {
+                        merged[operation.EntityId] = operation;
+                    }
+                    break;
+
+                case GraphOperationKind.Remove:
+                    if (existing is { Kind: GraphOperationKind.Add })
+                    {
+                        merged.Remove(operation.EntityId);
+                    }
+                    else if (baseKind is null)
+                    {
+                        throw new ArgumentException(
+                            $"Entity '{operation.EntityId.Value}' does not exist.",
+                            nameof(patch));
+                    }
+                    else
+                    {
+                        merged[operation.EntityId] = operation;
+                    }
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(patch));
+            }
+        }
+
+        return new GraphOperationBatch(merged.Values);
+    }
+
+    private static bool MatchesBase(
+        GraphOperation operation,
+        GraphNode? baseNode,
+        GraphEdge? baseEdge) => operation.EntityKind switch
+        {
+            GraphEntityKind.Node => Equals(operation.Node, baseNode),
+            GraphEntityKind.Edge => Equals(operation.Edge, baseEdge),
+            _ => false,
+        };
+
+    private static GraphOperation AsAdd(GraphOperation operation) => operation.EntityKind switch
+    {
+        GraphEntityKind.Node => GraphOperation.AddNode(operation.Node!),
+        GraphEntityKind.Edge => GraphOperation.AddEdge(operation.Edge!),
+        _ => throw new ArgumentOutOfRangeException(nameof(operation)),
+    };
 
     private static string ValidateSessionId(string? value)
     {
@@ -656,5 +901,7 @@ public sealed partial class ProjectApplication
         public AffectedAnalysis Affected { get; set; }
 
         public AffectedReviewSession Review { get; }
+
+        public SemanticReviewResult? SemanticReview { get; set; }
     }
 }
