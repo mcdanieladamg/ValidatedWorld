@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** None — MVP evidence complete; human direction required
+**Current task:** T12 — Realistic MVP scenarios and usability hardening
 
-**Current task estimate:** None
+**Current task estimate:** large
 
 **Last updated:** 2026-08-26
 
@@ -152,8 +152,9 @@ It does not authorize a Git commit.
 | T9 | complete | Complete CLI/NDJSON manual workflow |
 | T10 | complete | Realistic MVP scenarios and usability hardening |
 | T11 | complete | MVP release evidence and stop decision |
-| T12 | optional | OpenAI semantic reviewer, only after human authorization |
-| T13 | optional | OpenAI authoring agent, only after human authorization |
+| T12 | pending | OpenAI semantic reviewer |
+| T13 | pending | OpenAI authoring agent |
+| T14 | optional | Evaluate feasibility of OpenAI plugin format, in a discussion with human. If feasible and desired, human will ask to implement this as a phase |
 
 ## 5. Completed evidence
 
@@ -584,8 +585,7 @@ smoke walkthrough, concerns, and decision are in
   maximum-scale opens are not interactive; and only Windows x64 was run.
 - Recommendation: continue, but narrow the result to an experimental Windows
   x64 developer preview of the manual engine. Do not claim semantic correctness
-  or broad platform readiness. T12/T13 remain optional and unauthorized until a
-  human explicitly selects a new Current task.
+  or broad platform readiness. T12/T13 remain pending.
 
 ## 6. Current and remaining tasks
 
