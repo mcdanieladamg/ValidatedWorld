@@ -18,7 +18,7 @@ internal sealed class NdjsonHost(
         "host.help", "host.exit",
         "project.init", "project.open", "project.status", "project.verify", "project.backup", "project.export-sql",
         "sample.list", "sample.create",
-        "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.scope",
+        "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.tag", "read.scope",
         "read.neighbors", "read.dependencies", "read.path", "read.context",
         "change.begin", "change.show", "change.focus", "change.apply", "change.expand",
         "change.affected", "change.review", "change.validate", "change.write", "change.discard",
@@ -81,6 +81,7 @@ internal sealed class NdjsonHost(
         "read.nodes" => (ReadNodes(payload), false),
         "read.edges" => (ReadEdges(payload), false),
         "read.search" => (ReadSearch(payload), false),
+        "read.tag" => (ReadTag(payload), false),
         "read.scope" => (ReadScope(payload), false),
         "read.neighbors" => (ReadNeighbors(payload), false),
         "read.dependencies" => (ReadDependencies(payload), false),
@@ -118,6 +119,7 @@ internal sealed class NdjsonHost(
                 read = "node|edge {path,entityId,expectedProjectId?}; " +
                     "nodes|edges {path,limit?,cursor?,expectedProjectId?}; " +
                     "search {path,text,limit?,cursor?,expectedProjectId?}; " +
+                    "tag {path,tag,limit?,cursor?,expectedProjectId?}; " +
                     "scope {path,nodeId,limit?,cursor?,maxDepth?," +
                     "maxVisitedNodes?,expectedProjectId?}; neighbors|dependencies {path,entityId,limit?,cursor?," +
                     "expectedProjectId?}; path {path,sourceNodeId,targetNodeId,maxDepth?,maxVisitedNodes?," +
@@ -221,6 +223,13 @@ internal sealed class NdjsonHost(
         var request = CliJson.Payload<SearchRequest>(payload);
         return CliDto.Search(Queries(request.Path, request.ExpectedProjectId)
             .Search(request.Text, CliDto.Page(request.Limit, request.Cursor)));
+    }
+
+    private object ReadTag(JsonElement payload)
+    {
+        var request = CliJson.Payload<TagRequest>(payload);
+        return CliDto.Search(Queries(request.Path, request.ExpectedProjectId)
+            .SearchByTag(request.Tag, CliDto.Page(request.Limit, request.Cursor)));
     }
 
     private object ReadScope(JsonElement payload)

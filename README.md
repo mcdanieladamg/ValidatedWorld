@@ -131,6 +131,49 @@ graph unchanged so the operation can be reviewed or retried.
 Technical claims, fictional events, character knowledge, and game transitions
 are example optional profiles over the same node/edge model.
 
+## Modeling graphs that age well
+
+Use the scope tree for stable containment: broad world, subsystem, chapter, or
+artifact boundaries whose meaning should legitimately reach their descendants.
+Keep volatile names, exact counts, complete lists, dates, and conclusions in
+smaller claim nodes. Stable IDs should identify the enduring concept rather than
+repeat mutable display text.
+
+Direct semantic edges from a source of truth toward material that may become
+stale. `sourceToTarget` is the usual direction; reserve `both` for genuine mutual
+reconsideration. For a closed collection, point each member toward one roster or
+aggregate claim, then point that claim toward summaries, dialogue, tests, or
+artifact anchors that repeat it. This fan-in/fan-out pattern avoids a clique
+between every member while still exposing changes to counts and enumerations.
+
+Search for aliases and closed-world wording such as exact numbers, “all”,
+“only”, and “every” when authoring changes. The common engine does not infer
+those meanings from prose. Treat search hits as candidate dependencies, link at
+a useful review unit rather than every word occurrence, and inspect every
+affected preview: a surprisingly small set often signals a missing edge, while
+a surprisingly large set may signal an unstable claim stored too high in scope
+or an over-broad review direction.
+
+Use tags for an additional, explicitly non-semantic organization layer. A tag
+is an exact, case-sensitive label on a node or edge; bounded exact-tag lookup is
+separate from broad text search. Namespaced labels such as `quest:golden-claw`,
+`runtime:content`, or `enable:lucan-dead` can let an external tool assemble a
+view or prevalidated content bundle without putting control syntax in prose.
+Tags are returned with graph entities and affected previews, and changing tags
+is a direct change to that entity. Shared tags never create review dependencies,
+alter scope, or narrow required review context. If one fact can make another
+stale, model that relationship with an explicit directed edge; if a scalar value
+has a defined name, prefer an attribute. The external system owns any runtime
+meaning assigned to tags—ValidatedWorld stores, searches, reviews, and exports
+them but does not execute them as conditions.
+
+A `scope-parent` change is itself meaningful topology. Adding, removing, or
+redirecting one selects the old and new child subtrees and makes the old and new
+immediate parents review obligations; both ancestry lineages are included
+without pulling unrelated siblings. The [CLI usage guide](docs/cli_usage.md) and
+[lore modeling study](docs/lore_modeling_study.md) give concrete patterns and
+measured examples for humans and authoring agents.
+
 ## Product boundary
 
 ValidatedWorld owns:
@@ -216,5 +259,6 @@ unless the user later chooses to preserve a separately designed profile.
 Despite the name, a “world” is any universe of connected nodes. Fiction is one
 possible use, not the common engine's only purpose.
 
-The technical requirements and one-task-at-a-time implementation checklist are
+The [CLI usage guide](docs/cli_usage.md) documents the current manual workflow.
+Technical requirements and the one-task-at-a-time implementation checklist are
 in the [development plan](docs/development_plan.md).

@@ -53,6 +53,45 @@ public sealed class ApplicationQueryAndSessionTests
     }
 
     [Fact]
+    public void Exact_tag_search_is_case_sensitive_entity_complete_and_cursor_bound()
+    {
+        var graph = SampleProjectCatalog.Create(SampleProjectCatalog.TechnicalProject);
+        var edge = graph.Edges.Single(candidate => candidate.Id.Value == "battery-requires-runtime");
+        var taggedEdge = new GraphEdge(
+            edge.Id,
+            edge.Source,
+            edge.Target,
+            edge.Relationship,
+            edge.ReviewDirection,
+            edge.Rationale,
+            ["artifact"]);
+        var taggedGraph = new ProjectGraph(
+            graph.ProjectId,
+            graph.Title,
+            graph.PurposeNodeId,
+            graph.Nodes,
+            graph.Edges.Where(candidate => candidate.Id != edge.Id).Append(taggedEdge));
+        var application = new ProjectApplication(new MutableStore(taggedGraph));
+        var queries = application.Queries("memory.vw.db");
+
+        var first = queries.SearchByTag("artifact", new QueryPageRequest(2));
+        var second = queries.SearchByTag("artifact", new QueryPageRequest(2, first.NextCursor));
+
+        Assert.Equal(3, first.TotalCount);
+        Assert.Equal(new[] { "battery-requires-runtime", "power-design-anchor" },
+            first.Items.Select(hit => hit.EntityId.Value));
+        Assert.Equal(new[] { GraphEntityKind.Edge, GraphEntityKind.Node },
+            first.Items.Select(hit => hit.EntityKind));
+        Assert.Equal(new[] { "privacy-documentation" }, second.Items.Select(hit => hit.EntityId.Value));
+        Assert.Empty(queries.SearchByTag("Artifact").Items);
+        Assert.Equal(
+            ProjectQueryErrorCode.InvalidCursor,
+            Assert.Throws<ProjectQueryException>(() =>
+                queries.Search("artifact", new QueryPageRequest(2, first.NextCursor))).Code);
+        Assert.Throws<ArgumentException>(() => queries.SearchByTag("  "));
+    }
+
+    [Fact]
     public void Scope_neighbor_dependency_path_and_context_queries_exclude_unrelated_siblings()
     {
         using var workspace = new TestWorkspace();
@@ -203,6 +242,8 @@ public sealed class ApplicationQueryAndSessionTests
         Assert.False(bounded.Readiness.IsReady);
         var complete = application.ExpandChange(bounded.Reference);
         Assert.True(complete.Affected.IsComplete);
+        Assert.Contains(complete.Affected.AffectedNodes, node =>
+            node.NodeId == new EntityId("scope-power") && !node.IsDirectChange);
 
         var staleProposal = complete.Reference with { ProposedFingerprint = new string('0', 64) };
         Assert.Equal(
@@ -212,6 +253,52 @@ public sealed class ApplicationQueryAndSessionTests
             ChangeSessionErrorCode.SessionNotFound,
             Assert.Throws<ChangeSessionException>(() => application.GetAffected(
                 new ChangeSessionLocator(projectId, "missing"))).Code);
+    }
+
+    [Fact]
+    public void Scope_parent_only_redirect_requires_review_before_write()
+    {
+        using var workspace = new TestWorkspace();
+        var application = CreateApplication(workspace, out var path);
+        var projectId = new ProjectId(SampleProjectCatalog.TechnicalProject);
+        var begun = application.BeginChange(path, projectId, "human", "Move runtime verification to privacy scope");
+        var current = application.Queries(path).GetEdge(new EntityId("runtime-scope-parent"));
+        var replacement = new GraphEdge(
+            current.Id,
+            current.Source,
+            new EntityId("scope-privacy"),
+            current.Relationship,
+            current.ReviewDirection);
+
+        var applied = application.ApplyChange(
+            begun.Reference,
+            new GraphOperationBatch([GraphOperation.ReplaceEdge(replacement)]));
+
+        Assert.False(applied.Readiness.IsReady);
+        Assert.Equal(
+            new[] { "runtime-test", "scope-power", "scope-privacy" },
+            applied.Affected.AffectedNodes.Select(node => node.NodeId.Value));
+        Assert.Equal(
+            new[] { "runtime-test", "scope-power", "scope-privacy" },
+            applied.Readiness.PendingNodeIds.Select(id => id.Value));
+        Assert.Equal(new[] { "purpose" }, applied.Affected.ScopeContext.Select(entry => entry.NodeId.Value));
+        Assert.Contains("Affected nodes still have pending review dispositions.", applied.Readiness.Blockers);
+
+        var reviewed = application.ReviewChange(
+            applied.Reference,
+            new ChangeReviewUpdate(
+                applied.Affected.AffectedNodes.Select(node => new ReviewDisposition(
+                    node.NodeId,
+                    ReviewDispositionKind.ReviewedNoChange,
+                    null)).ToArray(),
+                [new EntityId("purpose")]));
+        Assert.True(reviewed.Readiness.IsReady);
+
+        var written = application.WriteChange(reviewed.Reference);
+        Assert.Equal(ChangeWriteStatus.Written, written.Status);
+        Assert.Equal(
+            new EntityId("scope-privacy"),
+            application.Queries(path).GetEdge(new EntityId("runtime-scope-parent")).Target);
     }
 
     [Fact]

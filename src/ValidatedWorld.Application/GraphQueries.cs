@@ -229,6 +229,28 @@ public sealed class ProjectQueries
         return Page(hits, Signature("search", Project.StateFingerprint + text), request);
     }
 
+    public QueryPage<GraphSearchHit> SearchByTag(string tag, QueryPageRequest? request = null)
+    {
+        if (string.IsNullOrWhiteSpace(tag) || tag.Length > GraphLimits.MetadataNameMaxLength ||
+            tag.Any(char.IsControl))
+        {
+            throw new ArgumentException(
+                "A tag query must be non-empty, bounded, and free of control characters.",
+                nameof(tag));
+        }
+
+        var hits = Project.Graph.Nodes
+            .Where(node => node.Tags.Contains(tag, StringComparer.Ordinal))
+            .Select(node => new GraphSearchHit(GraphEntityKind.Node, node.Id, node, null))
+            .Concat(Project.Graph.Edges
+                .Where(edge => edge.Tags.Contains(tag, StringComparer.Ordinal))
+                .Select(edge => new GraphSearchHit(GraphEntityKind.Edge, edge.Id, null, edge)))
+            .OrderBy(hit => hit.EntityId)
+            .ThenBy(hit => hit.EntityKind)
+            .ToArray();
+        return Page(hits, Signature("tag", Project.StateFingerprint + tag), request);
+    }
+
     public ScopeQueryResult GetScope(
         EntityId nodeId,
         QueryPageRequest? descendantsPage = null,

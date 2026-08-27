@@ -114,6 +114,57 @@ public sealed class AffectedAnalysisTests
     }
 
     [Fact]
+    public void Scope_parent_redirect_selects_child_subtree_and_both_parents_without_sibling_fan_out()
+    {
+        var baseline = ValidationGraphBuilder.CreateTechnicalProject();
+        var detail = Node("battery-detail", "Battery chemistry detail", "fact");
+        var graph = new ProjectGraph(
+            baseline.ProjectId,
+            baseline.Title,
+            baseline.PurposeNodeId,
+            baseline.Nodes.Concat([detail]),
+            baseline.Edges.Concat([
+                new GraphEdge(
+                    new EntityId("battery-detail-parent"),
+                    detail.Id,
+                    new EntityId("battery-assumption"),
+                    "scope-parent",
+                    ReviewDirection.None),
+            ]));
+        var replacement = new GraphEdge(
+            new EntityId("battery-scope-parent"),
+            new EntityId("battery-assumption"),
+            new EntityId("scope-privacy"),
+            "scope-parent",
+            ReviewDirection.None);
+
+        var analysis = new AffectedAnalyzer().Analyze(
+            graph,
+            new GraphProjector().Project(graph, [GraphOperation.ReplaceEdge(replacement)]));
+
+        Assert.True(analysis.IsComplete);
+        Assert.Equal(
+            new[] { "battery-assumption", "battery-detail", "runtime-test", "scope-power", "scope-privacy" },
+            analysis.AffectedNodes.Select(node => node.NodeId.Value));
+        Assert.All(analysis.AffectedNodes, node => Assert.False(node.IsDirectChange));
+        Assert.Equal(new[] { "purpose" }, analysis.ScopeContext.Select(entry => entry.NodeId.Value));
+        Assert.DoesNotContain(analysis.AffectedNodes, node => node.NodeId == new EntityId("retention-policy"));
+        Assert.DoesNotContain(analysis.AffectedNodes, node => node.NodeId == new EntityId("design-anchor"));
+
+        var oldParent = analysis.AffectedNodes.Single(node => node.NodeId == new EntityId("scope-power"));
+        Assert.Equal(
+            new[] { "battery-assumption", "scope-power" },
+            oldParent.Explanation.Nodes.Select(id => id.Value));
+        Assert.Equal(new[] { "battery-scope-parent" }, oldParent.Explanation.Edges.Select(id => id.Value));
+
+        var newParent = analysis.AffectedNodes.Single(node => node.NodeId == new EntityId("scope-privacy"));
+        Assert.Equal(
+            new[] { "battery-assumption", "scope-privacy" },
+            newParent.Explanation.Nodes.Select(id => id.Value));
+        Assert.Equal(new[] { "battery-scope-parent" }, newParent.Explanation.Edges.Select(id => id.Value));
+    }
+
+    [Fact]
     public void Multiple_change_chains_keep_each_lineage_and_cycles_remain_bounded()
     {
         var graph = ValidationGraphBuilder.CreateTechnicalProject();

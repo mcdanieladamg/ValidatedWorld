@@ -297,11 +297,34 @@ public sealed class AffectedAnalyzer
             }
         }
 
-        var scopeExpansionNodes = directNodeIds.ToHashSet();
-        foreach (var nodeId in directNodeIds)
+        var scopeTopologyChildIds = new HashSet<EntityId>();
+        foreach (var change in edgeChanges)
+        {
+            AddScopeTopologySeeds(change.CurrentEdge);
+            AddScopeTopologySeeds(change.ProposedEdge);
+        }
+
+        var scopeExpansionRoots = directNodeIds.Concat(scopeTopologyChildIds).ToHashSet();
+        var scopeExpansionNodes = scopeExpansionRoots.ToHashSet();
+        foreach (var nodeId in scopeExpansionRoots)
         {
             scopeExpansionNodes.UnionWith(currentIndex.GetScopeDescendants(nodeId));
             scopeExpansionNodes.UnionWith(proposedIndex.GetScopeDescendants(nodeId));
+        }
+
+        void AddScopeTopologySeeds(GraphEdge? edge)
+        {
+            if (edge is null || !GraphIndex.IsScopeParent(edge)) return;
+
+            scopeTopologyChildIds.Add(edge.Source);
+            seedCandidates.Add(new SeedCandidate(
+                edge.Source,
+                false,
+                new AffectedPath([edge.Source], [])));
+            seedCandidates.Add(new SeedCandidate(
+                edge.Target,
+                false,
+                new AffectedPath([edge.Source, edge.Target], [edge.Id])));
         }
 
         var scopeArcs = currentIndex.Graph.Edges
