@@ -256,6 +256,43 @@ public sealed class ApplicationQueryAndSessionTests
     }
 
     [Fact]
+    public void Incremental_patch_accumulates_normalizes_and_can_return_an_entity_to_base()
+    {
+        using var workspace = new TestWorkspace();
+        var application = CreateApplication(workspace, out var path);
+        var projectId = new ProjectId(SampleProjectCatalog.TechnicalProject);
+        var begun = application.BeginChange(path, projectId, "human", "Accumulate two focused edits");
+        var battery = application.Queries(path).GetNode(new EntityId("battery-assumption"));
+        var runtime = application.Queries(path).GetNode(new EntityId("runtime-test"));
+
+        var first = application.PatchChange(
+            begun.Reference,
+            new GraphOperationBatch([GraphOperation.ReplaceNode(new GraphNode(
+                battery.Id, "The battery lasts for the incremental target duty cycle", battery.Kind,
+                battery.Tags, battery.Attributes.Select(attribute =>
+                    new KeyValuePair<string, GraphValue>(attribute.Name, attribute.Value))))]));
+        var second = application.PatchChange(
+            first.Reference,
+            new GraphOperationBatch([GraphOperation.ReplaceNode(new GraphNode(
+                runtime.Id, "The runtime test covers the incremental target", runtime.Kind,
+                runtime.Tags, runtime.Attributes.Select(attribute =>
+                    new KeyValuePair<string, GraphValue>(attribute.Name, attribute.Value))))]));
+
+        Assert.Equal(2, second.Operations.Operations.Count);
+        Assert.Contains(second.ProposedGraph.Nodes, node =>
+            node.Id == battery.Id && node.Text.Contains("incremental", StringComparison.Ordinal));
+        Assert.Contains(second.ProposedGraph.Nodes, node =>
+            node.Id == runtime.Id && node.Text.Contains("incremental", StringComparison.Ordinal));
+
+        var normalized = application.PatchChange(
+            second.Reference,
+            new GraphOperationBatch([GraphOperation.ReplaceNode(battery)]));
+        Assert.Single(normalized.Operations.Operations);
+        Assert.Equal(runtime.Id, normalized.Operations.Operations[0].EntityId);
+        Assert.Equal(battery, normalized.ProposedGraph.Nodes.Single(node => node.Id == battery.Id));
+    }
+
+    [Fact]
     public async Task Scope_parent_only_redirect_requires_review_before_write()
     {
         using var workspace = new TestWorkspace();
@@ -294,7 +331,7 @@ public sealed class ApplicationQueryAndSessionTests
                 [new EntityId("purpose")]));
         Assert.True(reviewed.Readiness.IsReady);
 
-        var written = await application.WriteChangeAsync(reviewed.Reference);
+        var written = await application.WriteChangeAsync(reviewed.Reference, new ChangeWriteOptions(true));
         Assert.Equal(ChangeWriteStatus.Written, written.Status);
         Assert.Equal(
             new EntityId("scope-privacy"),

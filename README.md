@@ -183,8 +183,9 @@ ValidatedWorld owns:
 - structural validation and optional profile validation;
 - explained affected-subgraph expansion and complete review obligations;
 - atomic in-memory-to-SQLite change transactions;
-- bounded text-oriented queries and structured command results for humans, AIs,
-  and integrations.
+- a stateful flag-based shell that selects the purpose root and navigates the
+  scope tree with `pwd`, `dir`/`ls`, `cd`, and `root`; and
+- bounded structured commands for AIs, scripts, and integrations.
 
 ValidatedWorld does **not** own the finished novel, paper, patent application,
 manual, source tree, game project, or media. External artifact/anchor nodes may
@@ -261,7 +262,8 @@ unless the user later chooses to preserve a separately designed profile.
 Despite the name, a “world” is any universe of connected nodes. Fiction is one
 possible use, not the common engine's only purpose.
 
-The [CLI usage guide](docs/cli_usage.md) documents the current manual workflow.
+The [CLI usage guide](docs/cli_usage.md) documents both the stateful shell and
+the alternative NDJSON interface protocol.
 Technical requirements and the one-task-at-a-time implementation checklist are
 in the [development plan](docs/development_plan.md).
 
@@ -310,6 +312,12 @@ manual-only path for that command even when review is configured; it does not
 bypass structural validation, affected-node dispositions, context coverage,
 fingerprint checks, or atomic-write safeguards. The result records that the
 bypass was used.
+
+In the shell-based interface the equivalent one-write flag is simply:
+
+```text
+commit --bypass-ai-review
+```
 
 To keep a configured key while using manual-only writes, set the kill switch
 once:

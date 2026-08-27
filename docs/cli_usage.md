@@ -1,9 +1,14 @@
 # ValidatedWorld CLI usage
 
 ValidatedWorld is currently a local, headless .NET 10 command-line application.
-One-shot commands cover project storage and bounded reads. A long-lived NDJSON
-process is required for change sessions because unfinished operations and review
-state exist only in memory.
+One-shot commands cover project storage and bounded reads. Long-lived change
+sessions have two interfaces over the same Application behavior:
+
+- `shell <database>` is the flag-based human interface. It remembers the
+  selected entity, pending operation batch, review state, and fingerprints.
+- `ndjson` is the strict structured interface for AIs, scripts, and integrations.
+
+Both retain unfinished changes only in the running process.
 
 ## Run or publish
 
@@ -27,8 +32,9 @@ and text containing spaces. Existing database and backup destinations are never
 overwritten. The remaining examples assume the published executable is in the
 current directory.
 
-Structured command results go to stdout. Errors and unresolved-session warnings
-go to stderr. The process exit codes are:
+One-shot and NDJSON structured results go to stdout; the shell writes readable
+status text there. Errors and unresolved-session warnings go to stderr. The
+process exit codes are:
 
 | Code | Meaning |
 |---:|---|
@@ -46,6 +52,7 @@ go to stderr. The process exit codes are:
 ./ValidatedWorld.Cli.exe project --help
 ./ValidatedWorld.Cli.exe read --help
 ./ValidatedWorld.Cli.exe sample --help
+./ValidatedWorld.Cli.exe shell --help
 ./ValidatedWorld.Cli.exe ndjson --help
 ```
 
@@ -118,6 +125,131 @@ fan-out.
 and edge IDs/labels/rationales/tags. `tag` is an exact case-sensitive lookup
 across node and edge tags. Both return the same bounded search-hit shape,
 including the complete matching node or edge.
+
+## Stateful shell as an Alternative Interface
+
+Open one project and keep the process running:
+
+```powershell
+./ValidatedWorld.Cli.exe shell world.vw.db
+```
+
+The shell uses ordinary flag-based commands, not JSON. It automatically selects
+the purpose root when it opens, so `pwd` and `dir` are immediately useful. Type
+`help`, `help navigation`, `help node`, `help edge`, or `help review` inside it.
+It remembers the current project, selected node and edge, active change, latest
+fingerprints, accumulated operations, affected analysis, and review state. A
+command failure is printed to stderr and the shell remains usable.
+
+Navigate without starting a change:
+
+```text
+status
+pwd
+dir --limit 20
+cd geography
+dir --depth 2 --upstream 2 --limit 40
+cd ..
+cd /
+root
+search --text "sixth continent" --limit 20
+cd continent-count
+node show
+edge select --id roster-informs-atlas
+edge show
+```
+
+The selected node acts like the shell's working directory. `cd ID` (or
+`cd --id ID`) selects any stable node ID, `cd ..` selects its immediate scope
+parent, and `cd /` or `root` returns to the purpose root. `pwd` prints the full
+scope path as stable IDs, for example `/purpose/geography/continent-count`.
+Paths are descriptive; because node IDs are globally unique, `cd` takes one ID
+rather than requiring a repeated absolute path.
+
+`dir` and its `ls` alias print the selected node (`[.]`), then nearby
+connections. Scope parents are labeled `[..1]`, `[..2]`, and so on; scope
+children and deeper descendants are labeled `[scope +1]`, `[scope +2]`, and so
+on. Direct non-scope edges are shown in both stored endpoint directions as
+`[out]` or `[in]`, with the stable edge ID, relationship, and review direction.
+Thus a `both` review edge remains visibly different from merely displaying both
+incoming and outgoing neighbors. `--depth N` bounds scope descendants,
+`--upstream N` bounds ancestors, `--limit N` bounds all entries other than
+`[.]`, and `--scope-only` omits semantic neighbors. Defaults are depth 1,
+upstream 1, and limit 20; depth or upstream may be zero. An omission count says
+when the limit hid additional connections.
+
+Navigation always reads the current proposed graph. An uncommitted `node move`
+therefore appears under its new parent immediately. `node list` and
+`node select --id ID` remain available as flat discovery and explicit-selection
+forms.
+
+Begin one in-memory transaction, then make small incremental edits:
+
+```text
+begin --author "Morgan" --intent "Add Atmora and reconcile the continent roster"
+cd continent-count
+node set --text "The world has six recognized continents."
+node add --id atmora --text "Atmora is the sixth recognized continent." --kind continent --parent geography
+edge add --id atmora-member-of-roster --source atmora --target continent-roster --relationship member-of --direction source-to-target
+```
+
+Each mutating shell command patches the current proposal. It does not replace or
+require resending the accumulated batch. Repeated edits to one entity collapse
+to its final operation; returning an entity exactly to its base value removes
+that pending operation. `node move --parent ID` replaces the selected node's
+existing `scope-parent` target. `node remove` also includes all current incident
+edges, reports how many it included, and selects the removed node's former scope
+parent so navigation remains usable.
+
+Single-value commands cover ordinary fields and metadata:
+
+```text
+node set --text "Replacement text"
+node set --kind claim
+node set --clear-kind
+node tag-add --tag roster:continent
+node tag-remove --tag roster:continent
+node attribute-set --name count --type integer --value 6
+node attribute-remove --name count
+
+edge set --relationship informs
+edge set --direction source-to-target
+edge set --rationale "The atlas repeats the roster."
+edge set --clear-rationale
+edge tag-add --tag artifact:atlas
+edge attribute-set --name confidence --type decimal --value 0.9
+```
+
+Attribute types are `text`, `integer`, `decimal`, `boolean`, `symbol`, and
+`instant`; instants use the round-trip UTC `O` format. Supply `--id ID` to edit
+an entity without selecting it first.
+
+Inspect and review the growing transaction in small steps:
+
+```text
+changes
+affected
+review --id continent-count --as updated
+review --id atlas-summary --as reviewed-no-change
+review --id obsolete-note --as not-applicable --rationale "No longer describes this roster"
+context mark --id purpose
+context mark --id geography
+validate
+```
+
+Finish with a one-line commit or discard:
+
+```text
+commit
+commit --bypass-ai-review
+discard
+exit
+```
+
+The bypass applies only to that `commit`. It does not change configuration and
+does not bypass structural validation, affected-node review, context coverage,
+fingerprints, stale detection, or SQLite atomicity. A block from the semantic
+reviewer is formatted as readable text with its cited concerns.
 
 ## Graph rules needed by CLI authors
 
@@ -251,6 +383,14 @@ One process may hold one active session per project. EOF, cancellation, or
 `host.exit` ends the process. Any unresolved session is lost and produces a
 stderr warning. No operation or review state is written to SQLite until
 `change.write` succeeds.
+
+NDJSON intentionally remains an explicit request/result protocol. Mutating
+commands require the complete latest `reference` so asynchronous or external
+clients cannot accidentally act on stale state. `change.apply` treats its
+`operations` value as the complete replacement batch; clients that want several
+incremental edits must combine them before that call. The human shell instead
+uses the incremental Application patch operation and retains the latest
+reference internally.
 
 ## Create a complete graph through NDJSON
 

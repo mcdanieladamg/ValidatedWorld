@@ -262,13 +262,26 @@ public sealed partial class ProjectApplication
         {
             var state = FindAndVerify(reference);
             VerifyBaseUnchanged(state);
-            var projection = new GraphProjector().Project(state.BaseProject.Graph, operations);
-            var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, projection, options);
-            var refresh = state.Review.Refresh(affected);
-            state.Projection = projection;
-            state.Affected = affected;
-            state.UpdatedUtc = UtcNow();
-            return Snapshot(state, refresh);
+            return ApplyBatch(state, operations, options);
+        }
+    }
+
+    public ChangeSessionSnapshot PatchChange(
+        ChangeSessionReference reference,
+        GraphOperationBatch operations,
+        AffectedAnalysisOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        ArgumentNullException.ThrowIfNull(operations);
+        lock (_sessionLock)
+        {
+            var state = FindAndVerify(reference);
+            VerifyBaseUnchanged(state);
+            var merged = MergeOperations(
+                state.BaseProject.Graph,
+                state.Projection.Operations,
+                operations);
+            return ApplyBatch(state, merged, options);
         }
     }
 
@@ -698,6 +711,119 @@ public sealed partial class ProjectApplication
     }
 
     private DateTimeOffset UtcNow() => _utcNow().ToUniversalTime();
+
+    private ChangeSessionSnapshot ApplyBatch(
+        ActiveChangeSession state,
+        GraphOperationBatch operations,
+        AffectedAnalysisOptions? options)
+    {
+        var projection = new GraphProjector().Project(state.BaseProject.Graph, operations);
+        var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, projection, options);
+        var refresh = state.Review.Refresh(affected);
+        state.Projection = projection;
+        state.Affected = affected;
+        state.UpdatedUtc = UtcNow();
+        return Snapshot(state, refresh);
+    }
+
+    private static GraphOperationBatch MergeOperations(
+        ProjectGraph baseGraph,
+        GraphOperationBatch current,
+        GraphOperationBatch patch)
+    {
+        var merged = current.Operations.ToDictionary(operation => operation.EntityId);
+        foreach (var operation in patch.Operations)
+        {
+            var baseNode = baseGraph.Nodes.FirstOrDefault(node => node.Id == operation.EntityId);
+            var baseEdge = baseGraph.Edges.FirstOrDefault(edge => edge.Id == operation.EntityId);
+            var baseKind = baseNode is not null
+                ? GraphEntityKind.Node
+                : baseEdge is not null
+                    ? GraphEntityKind.Edge
+                    : (GraphEntityKind?)null;
+            merged.TryGetValue(operation.EntityId, out var existing);
+
+            if (baseKind is { } existingBaseKind && existingBaseKind != operation.EntityKind)
+                throw new ArgumentException(
+                    $"Entity '{operation.EntityId.Value}' already exists as a different entity kind.",
+                    nameof(patch));
+
+            switch (operation.Kind)
+            {
+                case GraphOperationKind.Add:
+                    if (baseKind is not null)
+                        throw new ArgumentException(
+                            $"Entity '{operation.EntityId.Value}' already exists in the base graph.",
+                            nameof(patch));
+                    if (existing is not null &&
+                        (existing.Kind != GraphOperationKind.Add || existing.EntityKind != operation.EntityKind))
+                        throw new ArgumentException(
+                            $"Entity '{operation.EntityId.Value}' has an incompatible pending operation.",
+                            nameof(patch));
+                    merged[operation.EntityId] = operation;
+                    break;
+
+                case GraphOperationKind.Replace:
+                    if (baseKind is null)
+                    {
+                        if (existing is null || existing.Kind != GraphOperationKind.Add ||
+                            existing.EntityKind != operation.EntityKind)
+                            throw new ArgumentException(
+                                $"Entity '{operation.EntityId.Value}' does not exist in the base graph or pending additions.",
+                                nameof(patch));
+                        merged[operation.EntityId] = AsAdd(operation);
+                    }
+                    else if (MatchesBase(operation, baseNode, baseEdge))
+                    {
+                        merged.Remove(operation.EntityId);
+                    }
+                    else
+                    {
+                        merged[operation.EntityId] = operation;
+                    }
+                    break;
+
+                case GraphOperationKind.Remove:
+                    if (existing is { Kind: GraphOperationKind.Add })
+                    {
+                        merged.Remove(operation.EntityId);
+                    }
+                    else if (baseKind is null)
+                    {
+                        throw new ArgumentException(
+                            $"Entity '{operation.EntityId.Value}' does not exist.",
+                            nameof(patch));
+                    }
+                    else
+                    {
+                        merged[operation.EntityId] = operation;
+                    }
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(patch));
+            }
+        }
+
+        return new GraphOperationBatch(merged.Values);
+    }
+
+    private static bool MatchesBase(
+        GraphOperation operation,
+        GraphNode? baseNode,
+        GraphEdge? baseEdge) => operation.EntityKind switch
+        {
+            GraphEntityKind.Node => Equals(operation.Node, baseNode),
+            GraphEntityKind.Edge => Equals(operation.Edge, baseEdge),
+            _ => false,
+        };
+
+    private static GraphOperation AsAdd(GraphOperation operation) => operation.EntityKind switch
+    {
+        GraphEntityKind.Node => GraphOperation.AddNode(operation.Node!),
+        GraphEntityKind.Edge => GraphOperation.AddEdge(operation.Edge!),
+        _ => throw new ArgumentOutOfRangeException(nameof(operation)),
+    };
 
     private static string ValidateSessionId(string? value)
     {

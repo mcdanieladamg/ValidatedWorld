@@ -47,7 +47,7 @@ public sealed class TechnicalProjectScenarioTests
         AssertGolden(scenario, applied);
 
         var reviewed = ReviewEverything(application, applied);
-        var written = await application.WriteChangeAsync(reviewed.Reference);
+        var written = await application.WriteChangeAsync(reviewed.Reference, new ChangeWriteOptions(true));
 
         Assert.Equal(ChangeWriteStatus.Written, written.Status);
         Assert.NotNull(written.Project);
@@ -75,7 +75,8 @@ public sealed class TechnicalProjectScenarioTests
         Assert.Equal(new[] { "power-design-anchor", "runtime-test" },
             incomplete.Readiness.PendingNodeIds.Select(id => id.Value));
         Assert.Contains("pending", string.Join(" ", incomplete.Readiness.Blockers), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(ChangeWriteStatus.ReviewNotReady, (await application.WriteChangeAsync(incomplete.Reference)).Status);
+        Assert.Equal(ChangeWriteStatus.ReviewNotReady,
+            (await application.WriteChangeAsync(incomplete.Reference, new ChangeWriteOptions(true))).Status);
         Assert.Equal(before, File.ReadAllBytes(path));
     }
 
@@ -90,10 +91,12 @@ public sealed class TechnicalProjectScenarioTests
             utcNow: () => FixedUtc,
             sessionIdFactory: () => "stale-second");
         var secondReviewed = ReviewEverything(second, BeginAndApply(second, path, LoadScenario("privacy-change").Operations));
-        Assert.Equal(ChangeWriteStatus.Written, (await second.WriteChangeAsync(secondReviewed.Reference)).Status);
+        Assert.Equal(ChangeWriteStatus.Written,
+            (await second.WriteChangeAsync(secondReviewed.Reference, new ChangeWriteOptions(true))).Status);
         var afterSecondWrite = File.ReadAllBytes(path);
 
-        Assert.Equal(ChangeWriteStatus.Stale, (await first.WriteChangeAsync(firstReviewed.Reference)).Status);
+        Assert.Equal(ChangeWriteStatus.Stale,
+            (await first.WriteChangeAsync(firstReviewed.Reference, new ChangeWriteOptions(true))).Status);
         Assert.Equal(afterSecondWrite, File.ReadAllBytes(path));
 
         var rollbackStore = new SqliteProjectStore(
@@ -108,7 +111,7 @@ public sealed class TechnicalProjectScenarioTests
         var rollbackReviewed = ReviewEverything(rollback, BeginAndApply(rollback, path, LoadScenario("edge-redirect").Operations));
         var beforeRollback = File.ReadAllBytes(path);
 
-        var failed = await rollback.WriteChangeAsync(rollbackReviewed.Reference);
+        var failed = await rollback.WriteChangeAsync(rollbackReviewed.Reference, new ChangeWriteOptions(true));
 
         Assert.Equal(ChangeWriteStatus.Failed, failed.Status);
         Assert.Equal(ProjectStorageErrorCode.MappingFailure, failed.StorageErrorCode);
@@ -138,7 +141,8 @@ public sealed class TechnicalProjectScenarioTests
             new AffectedAnalysisOptions { MaxOutputItems = 1 });
         Assert.True(bounded.Affected.IsInconclusive);
         Assert.NotEmpty(bounded.Affected.Omissions);
-        Assert.Equal(ChangeWriteStatus.ReviewNotReady, (await application.WriteChangeAsync(bounded.Reference)).Status);
+        Assert.Equal(ChangeWriteStatus.ReviewNotReady,
+            (await application.WriteChangeAsync(bounded.Reference, new ChangeWriteOptions(true))).Status);
         application.DiscardChange(bounded.Reference);
     }
 

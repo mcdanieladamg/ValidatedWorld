@@ -93,7 +93,7 @@ human for feedback.
 | T6 | complete | SQLite current-state persistence and first public read slice |
 | T7 | complete | Application queries and in-memory session lifecycle |
 | T8 | complete | Atomic write and rollback behavior |
-| T9 | complete | Complete CLI/NDJSON manual workflow |
+| T9 | complete | Filesystem-like stateful shell and structured CLI/NDJSON workflows |
 | T10 | complete | Realistic MVP scenarios and usability hardening |
 | T11 | complete | MVP release decision |
 | T12 | complete | Automatic OpenAI semantic write gate |
@@ -116,7 +116,8 @@ independent semantic write gate, and complete manual use.
 **Implement:**
 
 - Strict read/change tools with bounded context, tool-call, search, traversal,
-  and operation limits; no raw SQL or direct canonical writes.
+  and operation limits; no raw SQL or direct canonical writes. Prefer compact
+  incremental entity operations over complete-batch retransmission.
 - Search-before-create behavior, material clarification questions, one
   process-local change session, affected/review iteration, and new/existing
   project previews.

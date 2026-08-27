@@ -290,7 +290,7 @@ ValidatedWorld.Validation           indexes, validation, affected traversal
 ValidatedWorld.Serialization        command/result DTOs and fingerprint encoding
 ValidatedWorld.Application          queries, sessions, review, and commit use cases
 ValidatedWorld.Persistence.Sqlite   schema, mapping, transactions, views, backup
-ValidatedWorld.Cli                  CLI/NDJSON host and composition root
+ValidatedWorld.Cli                  CLI shell, NDJSON host, and composition root
 ```
 
 Core has no SQLite, JSON, provider, file, or UI dependency. Application defines
@@ -302,16 +302,33 @@ The public text/structured surface eventually supports:
 project: init, open, verify, status, backup, export-sql
 read:    node/edge get and list, text search, exact-tag lookup, scope traversal,
          graph navigation/path
-change:  begin, show, focus, expand, apply, affected, review, validate, write,
-         discard
+change:  begin, show, focus, expand, apply/patch, affected, review, validate,
+         write, discard
 ai:      status
 sample:  list and create
 ```
 
-Because a session spans multiple commands, the CLI provides a long-lived
-newline-delimited JSON host over stdin/stdout. Structured results go to stdout;
-diagnostic logs go to stderr. Search and navigation are deterministic, bounded
-graph queries rather than provider calls.
+Because a session spans multiple commands, the CLI provides two long-lived
+local surfaces over the same Application state. The shell interface retains the
+active project, selected entities, exact reference, operation batch, and review
+state internally. On entry it selects the purpose root. Its filesystem-like
+navigation treats the selected node as the working location: `pwd` renders the
+stable-ID scope path, `cd` selects a node or its scope parent, and bounded
+`dir`/`ls` output distinguishes scope ancestors, scope descendants, incoming
+semantic edges, and outgoing semantic edges. Navigation observes the current
+proposal, so uncommitted topology changes are immediately visible, but semantic
+edges are never presented as scope children. Its flag-based edit commands
+incrementally patch one or a few entity values and
+`commit [--bypass-ai-review]` needs no JSON. The NDJSON host retains its strict
+explicit-reference request/result contract for AIs, scripts, and integrations.
+Structured results go to stdout and diagnostics to stderr. Search and
+navigation are deterministic bounded graph queries rather than provider calls.
+
+Application exposes both complete-batch replacement and incremental patching.
+Incremental patches compose against the current proposal, normalize repeated
+edits to one final operation per stable ID, and remove an operation that returns
+an entity exactly to its base value. Every resulting proposal still recalculates
+validation, affected analysis, fingerprints, and review invalidation.
 
 ## 8. Optional OpenAI features
 

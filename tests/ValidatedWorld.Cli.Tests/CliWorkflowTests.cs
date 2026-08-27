@@ -45,7 +45,10 @@ public sealed class CliWorkflowTests
         var help = await Run(["--help"]);
         Assert.Equal(CliRunner.SuccessExitCode, help.ExitCode);
         Assert.Contains("read      Run bounded graph queries", help.Output, StringComparison.Ordinal);
+        Assert.Contains("shell     Run the stateful flag-based interface", help.Output, StringComparison.Ordinal);
         Assert.Contains("ndjson", help.Output, StringComparison.Ordinal);
+        var shellHelp = await Run(["shell", "--help"]);
+        Assert.Contains("commit --bypass-ai-review", shellHelp.Output, StringComparison.Ordinal);
 
         var created = await Run(["sample", "create", "technical-project", project]);
         Assert.Equal(CliRunner.SuccessExitCode, created.ExitCode);
@@ -123,6 +126,125 @@ public sealed class CliWorkflowTests
         var restoredStatus = await Run(["project", "status", restored]);
         Assert.Equal(CliRunner.SuccessExitCode, restoredStatus.ExitCode);
         Assert.Equal("quoted-project", JsonNode.Parse(restoredStatus.Output)!["projectId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Human_shell_accumulates_small_flag_based_edits_and_commits_with_one_line()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "human shell.vw.db");
+        Assert.Equal(0, (await Run(["sample", "create", "technical-project", project])).ExitCode);
+        var commands = string.Join(Environment.NewLine,
+            "help",
+            "begin --author \"Human tester\" --intent \"Update two related nodes\"",
+            "cd missing-node",
+            "node select --id battery-assumption",
+            "node set --text \"The battery lasts for the shell target duty cycle\"",
+            "node select --id runtime-test",
+            "node set --text \"The runtime test verifies the shell target duty cycle\"",
+            "changes",
+            "affected",
+            "review --id battery-assumption --as updated",
+            "review --id runtime-test --as updated",
+            "review --id power-design-anchor --as reviewed-no-change",
+            "context mark --id purpose",
+            "context mark --id scope-power",
+            "validate",
+            "commit --bypass-ai-review",
+            "status",
+            "exit") + Environment.NewLine;
+
+        var result = await RunProcess(["shell", project], commands, enableAiReview: true);
+
+        Assert.Equal(CliRunner.SuccessExitCode, result.ExitCode);
+        Assert.Contains("Pending operations: 2", result.Output, StringComparison.Ordinal);
+        Assert.Contains("replace node battery-assumption", result.Output, StringComparison.Ordinal);
+        Assert.Contains("replace node runtime-test", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Ready to commit.", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Commit written", result.Output, StringComparison.Ordinal);
+        Assert.Contains("No active change.", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Node 'missing-node' does not exist", result.Error, StringComparison.Ordinal);
+        Assert.Equal("The battery lasts for the shell target duty cycle",
+            JsonNode.Parse((await Run(["read", "node", project, "battery-assumption"])).Output)!["text"]!
+                .GetValue<string>());
+        Assert.Equal("The runtime test verifies the shell target duty cycle",
+            JsonNode.Parse((await Run(["read", "node", project, "runtime-test"])).Output)!["text"]!
+                .GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Human_shell_starts_at_root_and_navigates_scope_and_semantic_connections()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "human shell navigation.vw.db");
+        Assert.Equal(0, (await Run(["sample", "create", "technical-project", project])).ExitCode);
+        var commands = string.Join(Environment.NewLine,
+            "pwd",
+            "dir --limit 2",
+            "cd scope-power",
+            "pwd",
+            "cd battery-assumption",
+            "dir --limit 20 --upstream 2 --depth 1",
+            "cd ..",
+            "pwd",
+            "cd /",
+            "ls --scope-only --limit 20",
+            "exit") + Environment.NewLine;
+
+        var result = await Run(["shell", project], commands);
+
+        Assert.Equal(CliRunner.SuccessExitCode, result.ExitCode);
+        Assert.Contains("Selected root purpose", result.Output, StringComparison.Ordinal);
+        Assert.Contains("/purpose", result.Output, StringComparison.Ordinal);
+        Assert.Contains("... 2 more connections omitted; raise --limit.", result.Output, StringComparison.Ordinal);
+        Assert.Contains("/purpose/scope-power", result.Output, StringComparison.Ordinal);
+        Assert.Contains("[..1] scope-power", result.Output, StringComparison.Ordinal);
+        Assert.Contains("[..2] purpose", result.Output, StringComparison.Ordinal);
+        Assert.Contains("[out] runtime-test to battery-requires-runtime [requires/source-to-target]", result.Output,
+            StringComparison.Ordinal);
+        Assert.Contains("[out] power-design-anchor to battery-informs-power-anchor [informs/source-to-target]", result.Output,
+            StringComparison.Ordinal);
+        Assert.Contains("[scope +1] scope-accessibility", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("error[", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Human_shell_updates_single_metadata_values_moves_a_node_and_can_discard()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "human shell metadata.vw.db");
+        Assert.Equal(0, (await Run(["sample", "create", "technical-project", project])).ExitCode);
+        var commands = string.Join(Environment.NewLine,
+            "begin --author tester --intent \"Exercise scalar commands\"",
+            "node select --id runtime-test",
+            "node tag-add --tag shell:test",
+            "node attribute-set --name shell-mode --type symbol --value compact",
+            "node move --parent scope-privacy",
+            "cd scope-privacy",
+            "dir --limit 20",
+            "cd runtime-test",
+            "node add --id shell-note --text \"Temporary shell note\" --parent scope-power",
+            "node set --text \"Revised temporary shell note\"",
+            "node remove",
+            "edge select --id battery-requires-runtime",
+            "edge set --rationale \"Checked through the human shell\"",
+            "changes",
+            "discard",
+            "exit") + Environment.NewLine;
+
+        var result = await Run(["shell", project], commands);
+
+        Assert.Equal(CliRunner.SuccessExitCode, result.ExitCode);
+        Assert.Contains("replace node runtime-test", result.Output, StringComparison.Ordinal);
+        Assert.Contains("replace edge runtime-scope-parent", result.Output, StringComparison.Ordinal);
+        Assert.Contains("[scope +1] runtime-test", result.Output, StringComparison.Ordinal);
+        Assert.Contains("replace edge battery-requires-runtime", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("add node shell-note", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Discarded session", result.Output, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, result.Error);
+        Assert.DoesNotContain("shell:test",
+            JsonNode.Parse((await Run(["read", "node", project, "runtime-test"])).Output)!["tags"]!
+                .AsArray().Select(item => item!.GetValue<string>()));
     }
 
     [Fact]
@@ -396,12 +518,25 @@ public sealed class CliWorkflowTests
         return new CliResult(exitCode, output.ToString(), error.ToString());
     }
 
-    private static async Task<CliResult> RunProcess(string[] arguments)
+    private static async Task<CliResult> RunProcess(
+        string[] arguments,
+        string? input = null,
+        bool enableAiReview = false)
     {
         using var process = CreateProcess(arguments);
+        if (enableAiReview)
+        {
+            process.StartInfo.Environment["VW_AIREVIEW__ENABLED"] = "true";
+            process.StartInfo.Environment["OPENAI_API_KEY"] = "offline-test-key";
+        }
         process.Start();
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
+        if (input is not null)
+        {
+            await process.StandardInput.WriteAsync(input);
+            await process.StandardInput.DisposeAsync();
+        }
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await process.WaitForExitAsync(timeout.Token);
         return new CliResult(process.ExitCode, await output, await error);

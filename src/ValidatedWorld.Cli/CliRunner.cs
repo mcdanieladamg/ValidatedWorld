@@ -50,6 +50,16 @@ public static class CliRunner
                 "project" => await RunProject(application, arguments, output),
                 "read" => await RunRead(application, arguments, output, cancellationToken),
                 "sample" => await RunSample(application, arguments, output),
+                "shell" when arguments.Length == 2 && IsHelp(arguments[1]) => await PrintShellHelp(output),
+                "shell" when arguments.Length == 2 => await new HumanShell(
+                    application,
+                    arguments[1],
+                    input,
+                    output,
+                    error,
+                    cancellationToken,
+                    ReferenceEquals(input, Console.In) && ReferenceEquals(output, Console.Out)).RunAsync(),
+                "shell" => await UsageError(error, "Use 'shell <database>' or 'shell --help'."),
                 "ndjson" when arguments.Length == 2 && IsHelp(arguments[1]) => await PrintNdjsonHelp(output),
                 "ndjson" when arguments.Length == 1 => await new NdjsonHost(
                     application, input, output, error, cancellationToken).RunAsync(),
@@ -267,11 +277,12 @@ public static class CliRunner
         await output.WriteLineAsync("  project   Initialize, inspect, verify, back up, or export a project");
         await output.WriteLineAsync("  read      Run bounded graph queries");
         await output.WriteLineAsync("  sample    List or create built-in disposable samples");
-        await output.WriteLineAsync("  ndjson    Run the long-lived structured host for reads and change sessions");
+        await output.WriteLineAsync("  shell     Run the stateful flag-based interface");
+        await output.WriteLineAsync("  ndjson    Run the structured automation and AI host");
         await output.WriteLineAsync();
         await output.WriteLineAsync("One-shot command results use JSON on stdout; errors and warnings use stderr.");
         await output.WriteLineAsync(
-            "Run '<group> --help' for exact commands and 'ndjson' for the manual change workflow.");
+            "Run '<group> --help' for exact commands, 'shell --help' for stateful shell changes, or 'ndjson --help' for automation.");
     }
 
     private static async Task PrintProjectHelp(TextWriter output)
@@ -330,6 +341,20 @@ public static class CliRunner
         await output.WriteLineAsync("Pass that complete reference to the next mutating change command.");
         await output.WriteLineAsync(
             "EOF, cancellation, or host.exit ends the process; unresolved sessions are lost with a stderr warning.");
+        return SuccessExitCode;
+    }
+
+    private static async Task<int> PrintShellHelp(TextWriter output)
+    {
+        await output.WriteLineAsync("Stateful shell:");
+        await output.WriteLineAsync("  shell <database>");
+        await output.WriteLineAsync();
+        await output.WriteLineAsync("The shell selects the purpose root on entry and keeps the opened project, selected entity,");
+        await output.WriteLineAsync("pending operations, review state,");
+        await output.WriteLineAsync("and exact fingerprints in memory. Commands use flags instead of JSON.");
+        await output.WriteLineAsync("Navigate with 'pwd', 'dir'/'ls', 'cd ID', 'cd ..', and 'root'.");
+        await output.WriteLineAsync("Inside the shell, type 'help', 'help navigation', 'help node', 'help edge', or 'help review'.");
+        await output.WriteLineAsync("A normal write is 'commit'; one write can use 'commit --bypass-ai-review'.");
         return SuccessExitCode;
     }
 
