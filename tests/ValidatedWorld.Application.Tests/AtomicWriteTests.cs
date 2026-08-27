@@ -13,7 +13,7 @@ public sealed class AtomicWriteTests
         new(2026, 8, 26, 14, 15, 16, TimeSpan.Zero);
 
     [Fact]
-    public void Fully_reviewed_proposal_writes_the_expected_graph_and_resolves_the_session()
+    public async Task Fully_reviewed_proposal_writes_the_expected_graph_and_resolves_the_session()
     {
         using var workspace = new TestWorkspace();
         var application = CreateApplication(workspace, "writer-1", out var path);
@@ -24,7 +24,7 @@ public sealed class AtomicWriteTests
             battery.Kind);
 
         var reviewed = ApplyAndReview(application, path, GraphOperation.ReplaceNode(replacement));
-        var written = application.WriteChange(reviewed.Reference);
+        var written = await application.WriteChangeAsync(reviewed.Reference);
 
         Assert.Equal(ChangeWriteStatus.Written, written.Status);
         Assert.NotNull(written.Project);
@@ -35,7 +35,7 @@ public sealed class AtomicWriteTests
     }
 
     [Fact]
-    public void Explicit_edge_then_node_removals_are_written_in_foreign_key_safe_order()
+    public async Task Explicit_edge_then_node_removals_are_written_in_foreign_key_safe_order()
     {
         using var workspace = new TestWorkspace();
         var application = CreateApplication(workspace, "writer-remove", out var path);
@@ -62,7 +62,7 @@ public sealed class AtomicWriteTests
                     null)),
                 applied.Affected.ScopeContext.Select(context => context.NodeId)));
 
-        var written = application.WriteChange(reviewed.Reference);
+        var written = await application.WriteChangeAsync(reviewed.Reference);
 
         Assert.Equal(ChangeWriteStatus.Written, written.Status);
         Assert.Equal(12, written.Project!.Graph.Nodes.Count);
@@ -74,7 +74,7 @@ public sealed class AtomicWriteTests
     }
 
     [Fact]
-    public void Pending_invalid_and_inconclusive_proposals_do_not_write()
+    public async Task Pending_invalid_and_inconclusive_proposals_do_not_write()
     {
         using var workspace = new TestWorkspace();
         var application = CreateApplication(workspace, "writer-2", out var path);
@@ -88,7 +88,7 @@ public sealed class AtomicWriteTests
                 new EntityId("battery-assumption"),
                 "The battery has unreviewed pending work",
                 "assumption"))]));
-        Assert.Equal(ChangeWriteStatus.ReviewNotReady, application.WriteChange(pendingApplied.Reference).Status);
+        Assert.Equal(ChangeWriteStatus.ReviewNotReady, (await application.WriteChangeAsync(pendingApplied.Reference)).Status);
         Assert.Equal(bytes, File.ReadAllBytes(path));
         application.DiscardChange(pendingApplied.Reference);
 
@@ -97,7 +97,7 @@ public sealed class AtomicWriteTests
             invalid.Reference,
             new GraphOperationBatch([GraphOperation.RemoveNode(new EntityId("battery-assumption"))]));
         Assert.DoesNotContain(invalidApplied.ProposedGraph.Nodes, node => node.Id.Value == "battery-assumption");
-        Assert.Equal(ChangeWriteStatus.ReviewNotReady, application.WriteChange(invalidApplied.Reference).Status);
+        Assert.Equal(ChangeWriteStatus.ReviewNotReady, (await application.WriteChangeAsync(invalidApplied.Reference)).Status);
         Assert.Equal(bytes, File.ReadAllBytes(path));
         application.DiscardChange(invalidApplied.Reference);
 
@@ -110,12 +110,12 @@ public sealed class AtomicWriteTests
                 "assumption"))]),
             new AffectedAnalysisOptions { MaxOutputItems = 1 });
         Assert.True(bounded.Affected.IsInconclusive);
-        Assert.Equal(ChangeWriteStatus.ReviewNotReady, application.WriteChange(bounded.Reference).Status);
+        Assert.Equal(ChangeWriteStatus.ReviewNotReady, (await application.WriteChangeAsync(bounded.Reference)).Status);
         Assert.Equal(bytes, File.ReadAllBytes(path));
     }
 
     [Fact]
-    public void Stale_and_busy_writes_are_structured_and_leave_the_session_available()
+    public async Task Stale_and_busy_writes_are_structured_and_leave_the_session_available()
     {
         using var workspace = new TestWorkspace();
         var first = CreateApplication(workspace, "writer-3a", out var path);
@@ -139,10 +139,10 @@ public sealed class AtomicWriteTests
                 new EntityId("battery-assumption"),
                 "The battery has a current proposal",
                 "assumption")));
-        Assert.Equal(ChangeWriteStatus.Written, second.WriteChange(current.Reference).Status);
+        Assert.Equal(ChangeWriteStatus.Written, (await second.WriteChangeAsync(current.Reference)).Status);
         var afterCurrentWrite = File.ReadAllBytes(path);
 
-        Assert.Equal(ChangeWriteStatus.Stale, first.WriteChange(staleCandidate.Reference).Status);
+        Assert.Equal(ChangeWriteStatus.Stale, (await first.WriteChangeAsync(staleCandidate.Reference)).Status);
         Assert.Equal(afterCurrentWrite, File.ReadAllBytes(path));
         Assert.Single(first.GetExitWarnings());
         Assert.False(originalBytes.SequenceEqual(afterCurrentWrite));
@@ -164,7 +164,7 @@ public sealed class AtomicWriteTests
             command.CommandText = "BEGIN EXCLUSIVE";
             command.ExecuteNonQuery();
             var stopwatch = Stopwatch.StartNew();
-            busyResult = busy.WriteChange(busyCandidate.Reference);
+            busyResult = await busy.WriteChangeAsync(busyCandidate.Reference);
             stopwatch.Stop();
             elapsed = stopwatch.Elapsed;
             using var rollback = connection.CreateCommand();
@@ -179,7 +179,7 @@ public sealed class AtomicWriteTests
     }
 
     [Fact]
-    public void Every_injected_write_boundary_rolls_back_all_rows_and_preserves_the_session()
+    public async Task Every_injected_write_boundary_rolls_back_all_rows_and_preserves_the_session()
     {
         foreach (var boundary in Enum.GetValues<SqliteWriteBoundary>())
         {
@@ -197,7 +197,7 @@ public sealed class AtomicWriteTests
                     $"The battery fault probe is {boundary}",
                     "assumption")));
 
-            var failed = application.WriteChange(reviewed.Reference);
+            var failed = await application.WriteChangeAsync(reviewed.Reference);
 
             Assert.Equal(ChangeWriteStatus.Failed, failed.Status);
             Assert.Equal(ProjectStorageErrorCode.MappingFailure, failed.StorageErrorCode);
@@ -207,7 +207,7 @@ public sealed class AtomicWriteTests
     }
 
     [Fact]
-    public void A_retry_after_an_injected_failure_revalidates_and_writes_the_same_reviewed_proposal()
+    public async Task A_retry_after_an_injected_failure_revalidates_and_writes_the_same_reviewed_proposal()
     {
         using var workspace = new TestWorkspace();
         var failOnce = true;
@@ -225,9 +225,9 @@ public sealed class AtomicWriteTests
                 "The battery survives a retry after validation",
                 "assumption")));
 
-        var failed = application.WriteChange(reviewed.Reference);
+        var failed = await application.WriteChangeAsync(reviewed.Reference);
         failOnce = false;
-        var retried = application.WriteChange(reviewed.Reference);
+        var retried = await application.WriteChangeAsync(reviewed.Reference);
 
         Assert.Equal(ChangeWriteStatus.Failed, failed.Status);
         Assert.Equal(ChangeWriteStatus.Written, retried.Status);

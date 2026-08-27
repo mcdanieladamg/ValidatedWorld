@@ -22,7 +22,7 @@ internal sealed class NdjsonHost(
         "read.neighbors", "read.dependencies", "read.path", "read.context",
         "change.begin", "change.show", "change.focus", "change.apply", "change.expand",
         "change.affected", "change.review", "change.validate", "change.write", "change.discard",
-        "ai.status", "ai.review",
+        "ai.status",
     ];
 
     public async Task<int> RunAsync()
@@ -67,7 +67,7 @@ internal sealed class NdjsonHost(
 
     private async Task<(object Payload, bool ShouldExit)> DispatchAsync(string command, JsonElement payload)
     {
-        if (command == "ai.review") return (await AiReview(payload), false);
+        if (command == "change.write") return (await ChangeWrite(payload), false);
         return Dispatch(command, payload);
     }
 
@@ -102,7 +102,6 @@ internal sealed class NdjsonHost(
         "change.affected" => (ChangeAffected(payload), false),
         "change.review" => (ChangeReview(payload), false),
         "change.validate" => (ChangeValidate(payload), false),
-        "change.write" => (ChangeWrite(payload), false),
         "change.discard" => (ChangeDiscard(payload), false),
         "ai.status" => (AiStatus(payload), false),
         _ => throw new ArgumentException($"Unknown NDJSON command '{command}'.", nameof(command)),
@@ -135,8 +134,8 @@ internal sealed class NdjsonHost(
                 change = "begin {path,projectId,author,intent}; show|affected {session:{projectId,sessionId}}; " +
                     "focus {reference,operations,scopeParents}; apply {reference,operations,limits?}; " +
                     "expand {reference,limits?}; review {reference,dispositions,presentedContextNodeIds}; " +
-                    "validate|write|discard {reference}",
-                ai = "status {}; review {reference,authorizeProviderCall}; provider calls require explicit true",
+                    "validate|discard {reference}; write {reference,bypassAiReview?}",
+                ai = "status {}; semantic review automatically gates change.write when enabled and configured",
                 operations = "{operations:[{kind:add|replace|remove,entityKind:node|edge,entityId,node|null,edge|null}]}",
                 review = "dispositions use {nodeId,kind:updated|reviewedNoChange|notApplicable|pending,rationale?}",
             },
@@ -351,10 +350,13 @@ internal sealed class NdjsonHost(
         return CliDto.Snapshot(application.ValidateChange(CliDto.Reference(request.Reference)));
     }
 
-    private object ChangeWrite(JsonElement payload)
+    private async Task<object> ChangeWrite(JsonElement payload)
     {
-        var request = CliJson.Payload<SessionReferenceRequest>(payload);
-        return CliDto.Write(application.WriteChange(CliDto.Reference(request.Reference)));
+        var request = CliJson.Payload<ChangeWriteRequest>(payload);
+        return CliDto.Write(await application.WriteChangeAsync(
+            CliDto.Reference(request.Reference),
+            new ChangeWriteOptions(request.BypassAiReview),
+            cancellationToken));
     }
 
     private object ChangeDiscard(JsonElement payload)
@@ -372,19 +374,6 @@ internal sealed class NdjsonHost(
     {
         _ = CliJson.Payload<EmptyRequest>(payload);
         return CliDto.Availability(application.SemanticReviewAvailability);
-    }
-
-    private async Task<object> AiReview(JsonElement payload)
-    {
-        var request = CliJson.Payload<AiReviewRequest>(payload);
-        var reference = CliDto.Reference(request.Reference);
-        var result = await application.ReviewSemanticsAsync(
-            reference,
-            new SemanticReviewCallAuthorization(
-                request.AuthorizeProviderCall,
-                reference.AffectedFingerprint),
-            cancellationToken);
-        return CliDto.SemanticReview(result);
     }
 
     private ProjectQueries Queries(string path, string? expectedProjectId) => application.Queries(

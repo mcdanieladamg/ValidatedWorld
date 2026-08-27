@@ -67,10 +67,13 @@ public enum ChangeWriteStatus
 {
     Written,
     ReviewNotReady,
+    SemanticReviewBlocked,
     Stale,
     Busy,
     Failed,
 }
+
+public sealed record ChangeWriteOptions(bool BypassAiReview = false);
 
 /// <summary>The result of attempting to persist a reviewed in-memory proposal.</summary>
 public sealed record ChangeWriteResult(
@@ -79,7 +82,9 @@ public sealed record ChangeWriteResult(
     string SessionId,
     StoredProject? Project,
     ProjectStorageErrorCode? StorageErrorCode,
-    string Message);
+    string Message,
+    SemanticReviewResult? SemanticReview,
+    bool AiReviewBypassed);
 
 public sealed record ChangeFocusResult(
     GraphOperationBatch ExpandedOperations,
@@ -328,9 +333,15 @@ public sealed partial class ProjectApplication
         }
     }
 
-    public ChangeWriteResult WriteChange(ChangeSessionReference reference)
+    public async Task<ChangeWriteResult> WriteChangeAsync(
+        ChangeSessionReference reference,
+        ChangeWriteOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reference);
+        options ??= new ChangeWriteOptions();
+        var reviewEnabled = SemanticReviewAvailability.Enabled;
+        var bypassUsed = reviewEnabled && options.BypassAiReview;
         lock (_sessionLock)
         {
             var state = FindAndVerify(reference);
@@ -343,7 +354,99 @@ public sealed partial class ProjectApplication
                     state.SessionId,
                     null,
                     null,
-                    string.Join(" ", readiness.Blockers));
+                    string.Join(" ", readiness.Blockers),
+                    CurrentSemanticReview(state),
+                    false);
+            }
+
+            if (reviewEnabled && !bypassUsed)
+            {
+                try
+                {
+                    VerifyBaseUnchanged(state);
+                }
+                catch (ChangeSessionException exception) when (
+                    exception.Code is ChangeSessionErrorCode.StaleBaseFingerprint or
+                        ChangeSessionErrorCode.ProjectMismatch)
+                {
+                    return new ChangeWriteResult(
+                        ChangeWriteStatus.Stale,
+                        state.BaseProject.Graph.ProjectId,
+                        state.SessionId,
+                        null,
+                        null,
+                        exception.Message,
+                        CurrentSemanticReview(state),
+                        false);
+                }
+                catch (ProjectStorageException exception)
+                {
+                    return new ChangeWriteResult(
+                        ChangeWriteStatus.Failed,
+                        state.BaseProject.Graph.ProjectId,
+                        state.SessionId,
+                        null,
+                        exception.Code,
+                        exception.Message,
+                        CurrentSemanticReview(state),
+                        false);
+                }
+            }
+        }
+
+        SemanticReviewResult? semanticReview;
+        if (reviewEnabled && !bypassUsed)
+        {
+            semanticReview = await ReviewSemanticsForWriteAsync(reference, cancellationToken);
+            if (!semanticReview.IsCurrent)
+            {
+                return new ChangeWriteResult(
+                    ChangeWriteStatus.Stale,
+                    reference.ProjectId,
+                    reference.SessionId,
+                    null,
+                    null,
+                    "The proposal changed while semantic review was running.",
+                    semanticReview,
+                    false);
+            }
+
+            if (!semanticReview.AllowsWrite)
+            {
+                return new ChangeWriteResult(
+                    ChangeWriteStatus.SemanticReviewBlocked,
+                    reference.ProjectId,
+                    reference.SessionId,
+                    null,
+                    null,
+                    semanticReview.Summary,
+                    semanticReview,
+                    false);
+            }
+        }
+        else
+        {
+            lock (_sessionLock)
+            {
+                semanticReview = CurrentSemanticReview(FindAndVerify(reference));
+            }
+        }
+
+        lock (_sessionLock)
+        {
+            var state = FindAndVerify(reference);
+            var readiness = state.Review.EvaluateReadiness();
+            if (!readiness.IsReady)
+            {
+                return new ChangeWriteResult(
+                    ChangeWriteStatus.ReviewNotReady,
+                    state.BaseProject.Graph.ProjectId,
+                    state.SessionId,
+                    null,
+                    null,
+                    string.Join(" ", readiness.Blockers),
+                    semanticReview,
+                    false);
             }
 
             var write = _store.Write(new ProjectWriteRequest(
@@ -364,7 +467,9 @@ public sealed partial class ProjectApplication
                 state.SessionId,
                 write.Project,
                 write.ErrorCode,
-                write.Message);
+                write.Message,
+                semanticReview,
+                bypassUsed);
             if (result.Status == ChangeWriteStatus.Written)
             {
                 _activeSessions.Remove(state.BaseProject.Graph.ProjectId);

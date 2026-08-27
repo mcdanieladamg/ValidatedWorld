@@ -2,8 +2,6 @@
 
 **Status:** Technical requirements subordinate to `README.md`
 
-**Last reviewed:** 2026-08-13
-
 The README is the authority for product meaning and terminology. This document
 turns that vision into implementation constraints. If the two disagree, stop,
 follow the README, and reconcile this document before writing dependent code.
@@ -16,8 +14,10 @@ ValidatedWorld is a headless .NET 10 application for reviewing changes to one
 human-readable dependency graph stored in an embedded SQLite `.vw.db` file.
 The application deterministically checks graph structure, selects the complete
 affected set described by explicit relationships, presents the relevant scope
-context, and writes an approved change atomically. A human or optional AI makes
-the semantic judgment about whether the text remains consistent.
+context, and writes an approved change atomically. A human performs the manual
+review obligations. When the optional semantic reviewer is configured and
+enabled, its decision additionally gates the exact write attempt unless that
+single command explicitly bypasses AI review.
 
 The initial MVP is local and text-oriented. Its application language, command
 text, diagnostics, and AI prompts are hardcoded in English. Localization
@@ -265,15 +265,19 @@ SQLite's online backup API to a new destination. An application-controlled
 inspection and external tools. Treat supplied databases as untrusted. Project
 text is data and is never executed as SQL.
 
-The final write is short:
+The final write has a provider preflight followed by a short transaction:
 
 1. Rebuild and validate the proposal and review evidence.
-2. Open a SQLite `BEGIN IMMEDIATE` transaction.
-3. Reload current rows and verify the base fingerprint.
-4. Apply explicit operations in foreign-key-safe order.
-5. Recheck foreign keys, map/validate the complete result, and calculate the new
+2. Unless AI review is disabled, unconfigured, or explicitly bypassed for this
+   one command, obtain or reuse an `allow`/`block` decision bound to the exact
+   current fingerprints. Return without opening SQLite unless it is `allow`.
+3. Recheck that the in-memory proposal still has the reviewed fingerprints.
+4. Open a SQLite `BEGIN IMMEDIATE` transaction.
+5. Reload current rows and verify the base fingerprint.
+6. Apply explicit operations in foreign-key-safe order.
+7. Recheck foreign keys, map/validate the complete result, and calculate the new
    fingerprint.
-6. Update the project row and commit once.
+8. Update the project row and commit once.
 
 No human or AI interaction occurs while the write transaction is open. Busy,
 stale, mapping, constraint, I/O, or injected failures roll back all writes.
@@ -300,6 +304,7 @@ read:    node/edge get and list, text search, exact-tag lookup, scope traversal,
          graph navigation/path
 change:  begin, show, focus, expand, apply, affected, review, validate, write,
          discard
+ai:      status
 sample:  list and create
 ```
 
@@ -319,9 +324,11 @@ The planned provider path uses OpenAI Responses background mode and polls the
 same response within the configured 1,200-second end-to-end deadline. Returning
 tool results or polling the same response is continuation, not a new paid retry.
 
-Both features are optional at runtime. If disabled or unconfigured in normal
-use, the application reports them unavailable and keeps the complete manual
-workflow usable.
+Both features are optional at runtime. Semantic review defaults enabled but is
+effective only when its API key is configured. If disabled or unconfigured,
+the application reports it inactive and keeps the complete manual workflow
+usable. A `change.write` request may also explicitly bypass semantic review for
+that one write attempt; all deterministic and manual-review gates still apply.
 
 ### 8.1 Development gate for any live-AI task
 
@@ -365,11 +372,13 @@ but mocks do not replace the required development-phase live evidence.
 
 ### 8.2 Semantic reviewer
 
-The optional reviewer receives one immutable request for the complete current
-proposal after deterministic affected analysis. All disjoint change chains stay
-together. The request includes project purpose, operations, affected nodes,
-current/proposed path evidence, complete required scope lineages, relevant
-validation findings, and an inclusion/omission manifest.
+When `change.write` is attempted and semantic review is configured, enabled,
+and not bypassed for that command, the optional reviewer receives one immutable
+request for the complete current proposal after deterministic affected analysis
+and manual review readiness. All disjoint change chains stay together. The
+request includes project purpose, operations, affected nodes, current/proposed
+path evidence, complete required scope lineages, relevant validation findings,
+and an inclusion/omission manifest.
 
 The standalone English prompt asks for cited concerns about contradictions,
 stale consequences, terminology drift, missing relationship candidates,
@@ -382,12 +391,19 @@ such as “all”, “only”, and “every” receive explicit attention withou
 the open-world graph proves missing facts false.
 
 The model has no tools and cannot mutate, disposition, or write the graph. Its
-strict result is `complete`, `inconclusive`, or `refused`, with structured
-concerns and cited supplied IDs. Unknown citations, malformed/truncated output,
-timeout, refusal, or transport failure is inconclusive and returns control to
-manual review. Proposal changes invalidate the result. The authoring model may
-repair a concern, but it cannot approve or dismiss its own independent review;
-that judgment remains with the user.
+strict result contains an `allow` or `block` decision, a summary, and structured
+concerns citing supplied IDs. `allow` requires no concerns; `block` requires at
+least one. Unknown citations, malformed/truncated output, timeout, refusal, or
+transport failure fails closed for that write attempt and returns structured
+feedback without opening a SQLite transaction. A caller may then revise the
+proposal, retry provider trouble, or deliberately issue a new `change.write`
+with `bypassAiReview=true`; bypass never waives deterministic/manual readiness.
+
+The decision is held only in the process-local session and bound to the base,
+operation, proposed, affected, and review fingerprints. An unchanged write retry
+reuses the current decision without another provider POST. Any proposal or
+review change invalidates it. The authoring model may repair a block's concerns,
+but it cannot manufacture or overwrite the independent reviewer decision.
 
 ### 8.3 Authoring agent
 
@@ -410,7 +426,8 @@ parents, and lineages.
 It has strict application tools for project status, search/navigation, session
 operations, affected analysis, validation, review handoff, exact confirmation,
 write, and discard. It has no raw SQL, direct canonical write, automatic review
-disposition, or unguarded write tool.
+disposition, or unguarded write tool. Its normal write tool does not set the
+single-attempt AI bypass; bypass remains an explicit caller choice.
 
 Before writing, the application presents the exact proposal and obtains explicit
 user approval. The short-lived authorization is bound to database/project
@@ -450,7 +467,6 @@ The common engine is not expected to calculate battery arithmetic or understand
 a contradiction. It must select the correct review surface and require a
 thinking participant to resolve it.
 
-Performance evidence should eventually cover representative, expected, and
-stress graphs up to roughly 100,000 nodes and 1,000,000 review arcs. Record the
-hardware and measured operation; do not turn one measurement into a universal
-claim.
+Offline performance validation may use synthetic graphs up to roughly 100,000
+nodes and 1,000,000 review arcs. It must not invoke an AI provider. Report the
+hardware and measured operation without treating one measurement as universal.

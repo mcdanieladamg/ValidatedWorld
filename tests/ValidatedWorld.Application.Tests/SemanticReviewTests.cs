@@ -4,6 +4,7 @@ using System.Text.Json;
 using ValidatedWorld.Application;
 using ValidatedWorld.Core;
 using ValidatedWorld.Serialization;
+using ValidatedWorld.Validation;
 
 namespace ValidatedWorld.Application.Tests;
 
@@ -55,40 +56,87 @@ public sealed class SemanticReviewTests
         Assert.Contains("aliases", first.Request.Instructions, StringComparison.Ordinal);
         Assert.Contains("Tags are metadata only", first.Request.Instructions, StringComparison.Ordinal);
         Assert.Contains(first.Request.ContextNodes, item => item.Role == SemanticReviewItemRole.ContextOnlyAncestor);
-        Assert.True(application.SemanticReviewAvailability.Enabled);
+        Assert.False(application.SemanticReviewAvailability.Enabled);
         Assert.False(application.SemanticReviewAvailability.Configured);
     }
 
     [Fact]
-    public async Task Provider_call_is_explicit_single_session_bound_and_never_writes()
+    public async Task Blocked_write_is_cached_and_one_write_can_explicitly_bypass_the_gate()
     {
-        var provider = new CountingProvider();
+        var provider = new CountingProvider(SemanticReviewDecision.Block);
         var (application, snapshot, store) = LoreSession(provider);
+        var reviewed = ReviewEverything(application, snapshot);
 
-        var notAuthorized = await application.ReviewSemanticsAsync(
-            snapshot.Reference,
-            new SemanticReviewCallAuthorization(false, snapshot.Reference.AffectedFingerprint));
-        Assert.Equal(SemanticReviewStatus.Unavailable, notAuthorized.Status);
-        Assert.Equal(0, provider.CallCount);
-
-        var reviewed = await application.ReviewSemanticsAsync(
-            snapshot.Reference,
-            new SemanticReviewCallAuthorization(true, snapshot.Reference.AffectedFingerprint));
-        Assert.Equal(SemanticReviewStatus.Complete, reviewed.Status);
-        Assert.True(reviewed.IsCurrent);
+        var blocked = await application.WriteChangeAsync(reviewed.Reference);
+        Assert.Equal(ChangeWriteStatus.SemanticReviewBlocked, blocked.Status);
+        Assert.Equal(SemanticReviewDecision.Block, blocked.SemanticReview!.Decision);
+        Assert.True(blocked.SemanticReview.IsCurrent);
         Assert.Equal(1, provider.CallCount);
         Assert.Equal(0, store.WriteCount);
-        Assert.True(application.ShowChange(new(snapshot.Reference.ProjectId, snapshot.Reference.SessionId))
+        Assert.True(application.ShowChange(new(reviewed.Reference.ProjectId, reviewed.Reference.SessionId))
             .SemanticReview!.IsCurrent);
 
-        var roster = snapshot.ProposedGraph.Nodes.Single(node => node.Id.Value == "roster");
-        var changed = new GraphNode(roster.Id, roster.Text + " Confirmed.", roster.Kind, roster.Tags);
-        var updatedOperations = new GraphOperationBatch(snapshot.Operations.Operations
-            .Where(operation => operation.EntityId != roster.Id)
-            .Append(GraphOperation.ReplaceNode(changed)));
-        var changedSnapshot = application.ApplyChange(snapshot.Reference, updatedOperations);
-        Assert.False(changedSnapshot.SemanticReview!.IsCurrent);
+        var cachedBlock = await application.WriteChangeAsync(reviewed.Reference);
+        Assert.Equal(ChangeWriteStatus.SemanticReviewBlocked, cachedBlock.Status);
+        Assert.Equal(1, provider.CallCount);
+
+        var bypassed = await application.WriteChangeAsync(
+            reviewed.Reference,
+            new ChangeWriteOptions(BypassAiReview: true));
+        Assert.Equal(ChangeWriteStatus.Failed, bypassed.Status);
+        Assert.True(bypassed.AiReviewBypassed);
+        Assert.Equal(1, store.WriteCount);
+        Assert.Equal(1, provider.CallCount);
+    }
+
+    [Fact]
+    public async Task Allow_decision_authorizes_the_exact_write_attempt()
+    {
+        var provider = new CountingProvider(SemanticReviewDecision.Allow);
+        var (application, snapshot, store) = LoreSession(provider);
+        var reviewed = ReviewEverything(application, snapshot);
+
+        var result = await application.WriteChangeAsync(reviewed.Reference);
+
+        Assert.Equal(ChangeWriteStatus.Failed, result.Status);
+        Assert.Equal(SemanticReviewDecision.Allow, result.SemanticReview!.Decision);
+        Assert.False(result.AiReviewBypassed);
+        Assert.Equal(1, provider.CallCount);
+        Assert.Equal(1, store.WriteCount);
+    }
+
+    [Fact]
+    public async Task Unconfigured_runtime_uses_the_manual_write_path_without_a_provider_call()
+    {
+        var (application, snapshot, store) = LoreSession(provider: null);
+        var reviewed = ReviewEverything(application, snapshot);
+
+        var result = await application.WriteChangeAsync(reviewed.Reference);
+
+        Assert.Equal(ChangeWriteStatus.Failed, result.Status);
+        Assert.Null(result.SemanticReview);
+        Assert.False(result.AiReviewBypassed);
+        Assert.Equal(1, store.WriteCount);
+    }
+
+    [Fact]
+    public async Task Provider_failure_blocks_without_writing_and_can_be_retried_explicitly()
+    {
+        var provider = new FailingProvider();
+        var (application, snapshot, store) = LoreSession(provider);
+        var reviewed = ReviewEverything(application, snapshot);
+
+        var first = await application.WriteChangeAsync(reviewed.Reference);
+        var second = await application.WriteChangeAsync(reviewed.Reference);
+
+        Assert.Equal(ChangeWriteStatus.SemanticReviewBlocked, first.Status);
+        Assert.Equal(SemanticReviewStatus.Inconclusive, first.SemanticReview!.Status);
+        Assert.Equal("provider-failure", first.SemanticReview.FailureCode);
+        Assert.Equal(ChangeWriteStatus.SemanticReviewBlocked, second.Status);
+        Assert.Equal(2, provider.CallCount);
         Assert.Equal(0, store.WriteCount);
+        Assert.Null(application.ShowChange(new(reviewed.Reference.ProjectId, reviewed.Reference.SessionId))
+            .SemanticReview);
     }
 
     [Fact]
@@ -97,7 +145,7 @@ public sealed class SemanticReviewTests
         var (_, snapshot, _) = LoreSession(provider: null);
         var plan = SemanticReviewPlanner.Plan(snapshot);
         var output = new SemanticReviewModelOutputDto(
-            "complete",
+            "block",
             "Review completed.",
             [new SemanticReviewConcernDto(
                 "unknown-citation",
@@ -109,12 +157,35 @@ public sealed class SemanticReviewTests
     }
 
     [Fact]
+    public void Strict_output_enforces_decision_concern_consistency()
+    {
+        var (_, snapshot, _) = LoreSession(provider: null);
+        var plan = SemanticReviewPlanner.Plan(snapshot);
+        var citation = plan.Request.Manifest.AllowedCitationIds[0];
+        var concern = new SemanticReviewConcernDto(
+            "known-concern",
+            "A cited concern remains.",
+            [new SemanticReviewCitationDto(citation)]);
+
+        Assert.Throws<JsonException>(() => SemanticReviewOutputValidator.Validate(
+            new SemanticReviewModelOutputDto("allow", "Allowed.", [concern]),
+            plan.Request.Manifest, null, "response", TimeSpan.Zero));
+        Assert.Throws<JsonException>(() => SemanticReviewOutputValidator.Validate(
+            new SemanticReviewModelOutputDto("block", "Blocked.", []),
+            plan.Request.Manifest, null, "response", TimeSpan.Zero));
+        var allowed = SemanticReviewOutputValidator.Validate(
+            new SemanticReviewModelOutputDto("allow", "No blocking concerns.", []),
+            plan.Request.Manifest, null, "response", TimeSpan.Zero);
+        Assert.Equal(SemanticReviewDecision.Allow, allowed.Decision);
+    }
+
+    [Fact]
     public async Task Responses_client_polls_once_parses_usage_and_never_logs_credentials()
     {
         var (_, snapshot, _) = LoreSession(provider: null);
         var plan = SemanticReviewPlanner.Plan(snapshot);
         var modelOutput = Protocol.Serialize(new SemanticReviewModelOutputDto(
-            "complete",
+            "block",
             "The roster wording conflicts with its consumer.",
             [new SemanticReviewConcernDto(
                 "closed-world-count",
@@ -132,6 +203,7 @@ public sealed class SemanticReviewTests
         var result = await provider.ReviewAsync(plan);
 
         Assert.Equal(SemanticReviewStatus.Complete, result.Status);
+        Assert.Equal(SemanticReviewDecision.Block, result.Decision);
         Assert.Equal(2, handler.Requests.Count);
         Assert.Equal(HttpMethod.Post, handler.Requests[0].Method);
         Assert.Equal(HttpMethod.Get, handler.Requests[1].Method);
@@ -194,7 +266,11 @@ public sealed class SemanticReviewTests
             utcNow: () => FixedUtc,
             sessionIdFactory: () => "lore-session",
             semanticReviewProvider: provider,
-            semanticReviewOptions: new SemanticReviewRuntimeOptions());
+            semanticReviewOptions: new SemanticReviewRuntimeOptions(
+                Enabled: provider is not null,
+                Configured: provider is not null,
+                Provider: provider?.Provider ?? "openai",
+                Model: provider?.Model ?? "gpt-5.6-terra"));
         var begun = application.BeginChange("lore.vw.db", graph.ProjectId, "tester", "Compact T12 lore cases");
         var memberSix = new GraphNode(new EntityId("member-six"), "Fara is the sixth council member", "character");
         var operations = new GraphOperationBatch(
@@ -218,6 +294,17 @@ public sealed class SemanticReviewTests
         ]);
         return (application, application.ApplyChange(begun.Reference, operations), store);
     }
+
+    private static ChangeSessionSnapshot ReviewEverything(
+        ProjectApplication application,
+        ChangeSessionSnapshot snapshot) => application.ReviewChange(
+            snapshot.Reference,
+            new ChangeReviewUpdate(
+                snapshot.Affected.AffectedNodes.Select(node => new ReviewDisposition(
+                    node.NodeId,
+                    node.IsDirectChange ? ReviewDispositionKind.Updated : ReviewDispositionKind.ReviewedNoChange,
+                    null)),
+                snapshot.Affected.ScopeContext.Select(entry => entry.NodeId)));
 
     private static ProjectGraph LoreGraph()
     {
@@ -289,7 +376,7 @@ public sealed class SemanticReviewTests
         usage = new { input_tokens = 11, output_tokens = 7, total_tokens = 18 },
     });
 
-    private sealed class CountingProvider : ISemanticReviewProvider
+    private sealed class CountingProvider(SemanticReviewDecision decision) : ISemanticReviewProvider
     {
         public int CallCount { get; private set; }
         public string Provider => "fake";
@@ -303,11 +390,37 @@ public sealed class SemanticReviewTests
             var citation = new EntityId(request.Request.Manifest.AffectedNodeIds[0]);
             return Task.FromResult(new SemanticReviewProviderResult(
                 SemanticReviewStatus.Complete,
+                decision,
                 "Offline fake review completed.",
-                [new SemanticReviewConcern("test", "Offline concern.", [citation])],
+                decision == SemanticReviewDecision.Block
+                    ? [new SemanticReviewConcern("test", "Offline concern.", [citation])]
+                    : [],
                 new SemanticReviewUsage(10, 5, 15),
                 "fake-response",
                 TimeSpan.FromMilliseconds(1)));
+        }
+    }
+
+    private sealed class FailingProvider : ISemanticReviewProvider
+    {
+        public int CallCount { get; private set; }
+        public string Provider => "fake";
+        public string Model => "fake-reviewer";
+
+        public Task<SemanticReviewProviderResult> ReviewAsync(
+            SemanticReviewPlannedRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(new SemanticReviewProviderResult(
+                SemanticReviewStatus.Inconclusive,
+                null,
+                "The provider failed before producing a decision.",
+                [],
+                null,
+                null,
+                TimeSpan.FromMilliseconds(1),
+                "provider-failure"));
         }
     }
 

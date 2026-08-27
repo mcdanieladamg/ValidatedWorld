@@ -256,7 +256,7 @@ public sealed class ApplicationQueryAndSessionTests
     }
 
     [Fact]
-    public void Scope_parent_only_redirect_requires_review_before_write()
+    public async Task Scope_parent_only_redirect_requires_review_before_write()
     {
         using var workspace = new TestWorkspace();
         var application = CreateApplication(workspace, out var path);
@@ -294,7 +294,7 @@ public sealed class ApplicationQueryAndSessionTests
                 [new EntityId("purpose")]));
         Assert.True(reviewed.Readiness.IsReady);
 
-        var written = application.WriteChange(reviewed.Reference);
+        var written = await application.WriteChangeAsync(reviewed.Reference);
         Assert.Equal(ChangeWriteStatus.Written, written.Status);
         Assert.Equal(
             new EntityId("scope-privacy"),

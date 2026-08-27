@@ -17,8 +17,10 @@ public sealed record AiReviewConfiguration(
     public const int DefaultTimeoutSeconds = 1200;
     public const bool DefaultLiveTests = false;
 
-    public bool IsConfigured => Enabled && !string.IsNullOrWhiteSpace(ApiKey) &&
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey) &&
         StringComparer.OrdinalIgnoreCase.Equals(Provider, DefaultProvider);
+
+    public bool IsEffectivelyEnabled => Enabled && IsConfigured;
 
     public static AiReviewConfiguration Load()
     {
@@ -39,7 +41,8 @@ public sealed record AiReviewConfiguration(
     }
 
     public SemanticReviewRuntimeOptions RuntimeOptions() => new(
-        Enabled,
+        IsEffectivelyEnabled,
+        IsConfigured,
         Provider,
         Model,
         TimeoutSeconds,
@@ -47,7 +50,7 @@ public sealed record AiReviewConfiguration(
 
     public ISemanticReviewProvider? CreateProvider(HttpClient httpClient, string requestLogPath)
     {
-        if (!IsConfigured) return null;
+        if (!IsEffectivelyEnabled) return null;
         Action<string>? logger = null;
         if (LiveTests)
         {

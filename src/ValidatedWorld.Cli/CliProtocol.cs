@@ -87,6 +87,7 @@ internal sealed record SessionReferenceDto(
     string ReviewFingerprint);
 internal sealed record SessionLocatorRequest(SessionLocatorDto Session);
 internal sealed record SessionReferenceRequest(SessionReferenceDto Reference);
+internal sealed record ChangeWriteRequest(SessionReferenceDto Reference, bool BypassAiReview = false);
 internal sealed record ScopeParentDto(string ChildId, string ParentId, string EdgeId);
 internal sealed record FocusRequest(
     SessionReferenceDto Reference,
@@ -108,7 +109,6 @@ internal sealed record ReviewRequest(
     SessionReferenceDto Reference,
     IReadOnlyList<ReviewDispositionDto> Dispositions,
     IReadOnlyList<string> PresentedContextNodeIds);
-internal sealed record AiReviewRequest(SessionReferenceDto Reference, bool AuthorizeProviderCall);
 
 internal sealed record ErrorDto(string Code, string Message);
 internal sealed record StoredProjectDto(
@@ -241,7 +241,9 @@ internal sealed record WriteResultDto(
     string SessionId,
     StoredProjectDto? Project,
     ProjectStorageErrorCode? StorageErrorCode,
-    string Message);
+    string Message,
+    SemanticReviewResultDto? SemanticReview,
+    bool AiReviewBypassed);
 internal sealed record DiscardResultDto(string ProjectId, string SessionId, string DiscardedUtc);
 internal sealed record ExitWarningDto(
     string ProjectId,
@@ -265,6 +267,7 @@ internal sealed record SemanticReviewConcernResultDto(
     IReadOnlyList<string> Citations);
 internal sealed record SemanticReviewResultDto(
     SemanticReviewStatus Status,
+    SemanticReviewDecision? Decision,
     string Provider,
     string Model,
     string RequestFingerprint,
@@ -398,7 +401,9 @@ internal static class CliDto
     public static WriteResultDto Write(ChangeWriteResult value) => new(
         value.Status, value.ProjectId.Value, value.SessionId,
         value.Project is null ? null : Stored(value.Project),
-        value.StorageErrorCode, value.Message);
+        value.StorageErrorCode, value.Message,
+        value.SemanticReview is null ? null : SemanticReview(value.SemanticReview),
+        value.AiReviewBypassed);
 
     public static ExitWarningDto Warning(ChangeExitWarning value) => new(
         value.ProjectId.Value, value.SessionId, value.Path,
@@ -410,6 +415,7 @@ internal static class CliDto
 
     public static SemanticReviewResultDto SemanticReview(SemanticReviewResult value) => new(
         value.Status,
+        value.Decision,
         value.Provider,
         value.Model,
         value.RequestFingerprint,

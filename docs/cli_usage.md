@@ -22,10 +22,10 @@ dotnet publish src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj `
 ./artifacts/validated-world/ValidatedWorld.Cli.exe --help
 ```
 
-The executable name differs on platforms that do not use `.exe`. The release
-evidence currently covers Windows x64 only. Quote paths and text containing
-spaces. Existing database and backup destinations are never overwritten. The
-remaining examples assume the published executable is in the current directory.
+The executable name differs on platforms that do not use `.exe`. Quote paths
+and text containing spaces. Existing database and backup destinations are never
+overwritten. The remaining examples assume the published executable is in the
+current directory.
 
 Structured command results go to stdout. Errors and unresolved-session warnings
 go to stderr. The process exit codes are:
@@ -228,9 +228,6 @@ Adding a member with its roster edge selects the new member, the roster, and
 the roster's consumers without selecting every existing member. A local fact
 under one continent remains local unless explicit semantic edges say otherwise.
 Changing the whole continent scope intentionally selects its descendants.
-
-The [lore modeling study](lore_modeling_study.md) records a public-CLI test of
-this pattern, alternatives, migration behavior, and the scope-topology rule.
 
 ## NDJSON framing and sessions
 
@@ -461,24 +458,23 @@ Use `change.show` or `change.affected` with
 inspection. Use the latest complete reference for `change.expand`,
 `change.validate`, `change.write`, or `change.discard`.
 
-## Optional semantic AI review
+## Optional semantic AI write gate
 
-The root README documents one-time OpenAI configuration. With or without a key,
-inspect runtime availability inside the NDJSON process without making a provider
-call:
+The root README documents one-time OpenAI configuration. `ai.status` inspects
+the effective policy without making a provider call:
 
 ```json
 {"version":1,"command":"ai.status","payload":{}}
 ```
 
-After `change.apply` or `change.expand`, copy the entire latest reference into
-`ai.review`. A false authorization is an offline fallback check and never calls
-the provider:
+There is no separate paid-review command. After the normal manual review is
+ready, `change.write` automatically invokes semantic review when the key is
+configured and `AiReview:Enabled=true`:
 
 ```json
 {
   "version": 1,
-  "command": "ai.review",
+  "command": "change.write",
   "payload": {
     "reference": {
       "projectId": "...",
@@ -489,20 +485,21 @@ the provider:
       "affectedFingerprint": "...",
       "reviewFingerprint": "..."
     },
-    "authorizeProviderCall": false
+    "bypassAiReview": false
   }
 }
 ```
 
-Set `authorizeProviderCall` to `true` only when intentionally authorizing one
-paid review of that exact affected fingerprint. The request sends the complete
-proposed operation/affected/context slice to OpenAI, uses no tools, and performs
-no automatic paid retry. Polling continues only the response created by that
-single call. The result includes status, cited concerns, usage, duration, a
-request fingerprint, and its exact session binding.
+The provider receives the exact proposed operation/affected/context slice and
+returns a strict `allow` or `block` decision with cited feedback. Only `allow`
+permits SQLite to open the write transaction. `block`, refusal, timeout,
+malformed output, or provider failure leaves the database unchanged. A current
+decision is cached against all proposal/review fingerprints, so retrying the
+unchanged write does not make another paid call; changing the session invalidates
+it.
 
-AI concerns are advisory and exist only in the in-memory session. They never
-change dispositions, make an invalid proposal writable, write SQLite, or replace
-the manual `change.review` workflow. If the proposal changes, the prior result
-is reported as stale. A disabled, unconfigured, refused, timed-out, or malformed
-provider result leaves the complete manual workflow available.
+To use the manual-only path for one write, set `bypassAiReview` to `true`. The
+result records the bypass. It skips only the provider gate: structural
+validation, affected-node dispositions, context coverage, stale-reference
+checks, and atomic-write safeguards still apply. Omitting the field is equivalent
+to `false`.

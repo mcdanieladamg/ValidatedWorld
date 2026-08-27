@@ -111,6 +111,6 @@ public sealed record SemanticReviewConcernDto(
     IReadOnlyList<SemanticReviewCitationDto> Citations);
 
 public sealed record SemanticReviewModelOutputDto(
-    string Status,
+    string Decision,
     string Summary,
     IReadOnlyList<SemanticReviewConcernDto> Concerns);

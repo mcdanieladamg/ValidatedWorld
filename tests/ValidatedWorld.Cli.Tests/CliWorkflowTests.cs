@@ -19,6 +19,21 @@ public sealed class CliWorkflowTests
     };
 
     [Fact]
+    public void Ai_review_default_requires_a_key_and_the_kill_switch_still_disables_it()
+    {
+        Assert.True(AiReviewConfiguration.DefaultEnabled);
+        var withoutKey = new AiReviewConfiguration(
+            true, "openai", "test-model", 30, false, null);
+        var disabled = new AiReviewConfiguration(
+            false, "openai", "test-model", 30, false, "offline-test-key");
+
+        Assert.False(withoutKey.IsConfigured);
+        Assert.False(withoutKey.RuntimeOptions().Enabled);
+        Assert.True(disabled.IsConfigured);
+        Assert.False(disabled.RuntimeOptions().Enabled);
+    }
+
+    [Fact]
     public async Task Help_drives_one_shot_reads_backup_and_deterministic_safe_sql_export()
     {
         using var temporary = new TemporaryDirectory();
@@ -118,13 +133,18 @@ public sealed class CliWorkflowTests
         var backup = Path.Combine(temporary.Path, "black box backup.vw.db");
         Assert.Equal(0, (await RunProcess(["sample", "create", "technical-project", project])).ExitCode);
 
-        await using var host = await NdjsonProcess.Start();
+        await using var host = await NdjsonProcess.Start(enableAiReview: true);
         var help = await host.Send("host.help", new { });
         Assert.Equal("ok", help["status"]!.GetValue<string>());
         Assert.Contains("change.write", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
         Assert.Contains("read.tag", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
+        Assert.DoesNotContain("ai.review", help["payload"]!["commands"]!.AsArray()
+            .Select(value => value!.GetValue<string>()));
+        var aiStatus = await host.Send("ai.status", new { });
+        Assert.True(aiStatus["payload"]!["enabled"]!.GetValue<bool>());
+        Assert.True(aiStatus["payload"]!["configured"]!.GetValue<bool>());
 
         var tagged = await host.Send("read.tag", new { path = project, tag = "artifact" });
         Assert.Equal(2, tagged["payload"]!["totalCount"]!.GetValue<int>());
@@ -192,8 +212,10 @@ public sealed class CliWorkflowTests
         var write = await host.SendNode("change.write", new JsonObject
         {
             ["reference"] = review["payload"]!["reference"]!.DeepClone(),
+            ["bypassAiReview"] = true,
         });
         Assert.Equal("written", write["payload"]!["status"]!.GetValue<string>());
+        Assert.True(write["payload"]!["aiReviewBypassed"]!.GetValue<bool>());
         var exit = await host.Send("host.exit", new { });
         Assert.Empty(exit["payload"]!["warnings"]!.AsArray());
         Assert.Equal(0, await host.WaitForExit());
@@ -395,6 +417,7 @@ public sealed class CliWorkflowTests
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        start.Environment["VW_AIREVIEW__ENABLED"] = "false";
         start.ArgumentList.Add(typeof(CliRunner).Assembly.Location);
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         return new Process { StartInfo = start };
@@ -444,9 +467,12 @@ public sealed class CliWorkflowTests
             _error = process.StandardError.ReadToEndAsync();
         }
 
-        public static Task<NdjsonProcess> Start()
+        public static Task<NdjsonProcess> Start(bool enableAiReview = false)
         {
             var process = CreateProcess(["ndjson"]);
+            process.StartInfo.Environment["VW_AIREVIEW__ENABLED"] = enableAiReview ? "true" : "false";
+            if (enableAiReview)
+                process.StartInfo.Environment["OPENAI_API_KEY"] = "offline-test-key";
             process.Start();
             return Task.FromResult(new NdjsonProcess(process));
         }
