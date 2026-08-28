@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T13 — Optional OpenAI authoring agent
+**Current task:** None
 
-**Current task estimate:** gigantic
+**Current task estimate:** None
 
 This file is the current implementation checklist for humans and coding agents.
 It contains one current task and the complete ordered backlog. The README is the
@@ -58,16 +58,16 @@ natural mistake when useful, and tries a plausible alternate path. Report the
 walkthrough and findings to the human rather than adding a dated evidence
 section here.
 
-Ordinary tests are offline. Live OpenAI development checks require the local
-key, explicit `LiveTests` flag, and separately filtered `LiveOpenAI` test command
-described in the README and technical design section 8. Log and inspect the exact
-credential-free serialized request and provider response, use the smallest
-meaningful known/control cases, and make no automatic paid retries, parallel
-paid calls, or fallback-model calls. At any provider trouble—including quota,
-authentication, transport, timeout, refusal, malformed output, or exhausted
-credit—stop paid calls immediately, report the non-secret failure, and ask the
-human for feedback. Follow the sandbox network workaround in `AGENTS.md` when a
-filtered live test cannot reach the provider from inside the sandbox.
+The normal full-solution test command discovers offline and live tests together.
+A live test calls OpenAI only when its feature has an effective key, is enabled,
+and has its explicit `LiveTests` flag set; otherwise it completes without a
+provider call. Do not override those effective settings in the test command.
+For an enabled live check, log and inspect the exact credential-free serialized
+request and provider response, use the smallest meaningful known/control cases,
+and make no automatic paid retries, parallel paid calls, or fallback-model
+calls. At provider trouble, follow the human's current retry instructions and
+the sandbox network workaround in `AGENTS.md`; absent a human override, stop
+paid calls immediately and report the non-secret failure.
 
 ## Repository guardrails
 
@@ -99,15 +99,15 @@ filtered live test cannot reach the provider from inside the sandbox.
 | T10 | complete | Realistic MVP scenarios and usability hardening |
 | T11 | complete | MVP release decision |
 | T12 | complete | Automatic OpenAI semantic write gate |
-| T13 | pending | OpenAI authoring agent |
-| T14 | optional | Evaluate an OpenAI plugin format with the human |
+| T13 | complete | OpenAI authoring agent |
+| T14 | complete | Plugin format evaluated within T13; no MVP plugin retained |
 
 ## T13 — optional OpenAI authoring agent
 
-**Prerequisites:** T12 complete; T13 is current; a human-configured local
-`OPENAI_API_KEY`; and the explicit authoring live-test flag. If the key is
-absent, make no code changes and ask the human to configure it locally. Never
-set or display it.
+**Prerequisites:** T12 complete; T13 is current; a human-configured local key
+reported by the README's non-secret `ai.status` check; and the explicit
+authoring live-test flag. If effective key configuration is absent, make no code
+changes and ask the human to configure it locally. Never set or display it.
 
 **Read:** README AI-first flow and technical design section 8.
 
@@ -165,7 +165,12 @@ independent semantic write gate, and complete manual use.
 - Retain the authoring feature only if it meaningfully reduces burden without
   bypassing the README’s review/write guarantees.
 
-## T14 — optional plugin-format evaluation
+## T14 — plugin-format evaluation
 
-Discuss feasibility and value with the human. Implement only if the human makes
-T14 current with a concrete requested scope.
+Evaluate feasibility and value with the human. The authorized evaluation was
+absorbed into T13. The current plugin format can bundle a local stdio MCP
+server, but the MVP retains `ai-assistant-shell`: it keeps the portable database
+at the user-selected path, preserves one trusted process for the in-memory
+session and direct human approval, and avoids packaging a source-relative server
+before ValidatedWorld has a distributable local executable. Any future plugin
+must reuse the bounded tool contract without weakening those guarantees.

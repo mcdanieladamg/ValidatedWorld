@@ -32,6 +32,7 @@ public static class CliRunner
         try
         {
             var aiReview = AiReviewConfiguration.Load();
+            var aiAuthoring = AiAuthoringConfiguration.Load();
             var requestLogPath = Path.Combine(
                 Directory.GetCurrentDirectory(), "artifacts", "ai-review-live-request.json");
             var responseLogPath = Path.Combine(
@@ -40,6 +41,10 @@ public static class CliRunner
                 new SqliteProjectStore(),
                 semanticReviewProvider: aiReview.CreateProvider(httpClient, requestLogPath, responseLogPath),
                 semanticReviewOptions: aiReview.RuntimeOptions());
+            var authoringProvider = aiAuthoring.CreateProvider(
+                httpClient,
+                Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "ai-authoring-live-request.json"),
+                Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "ai-authoring-live-response.json"));
             cancellationToken.ThrowIfCancellationRequested();
             if (arguments.Length == 0 || IsHelp(arguments[0]))
             {
@@ -62,6 +67,22 @@ public static class CliRunner
                     cancellationToken,
                     ReferenceEquals(input, Console.In) && ReferenceEquals(output, Console.Out)).RunAsync(),
                 "shell" => await UsageError(error, "Use 'shell <database>' or 'shell --help'."),
+                "ai-assistant-shell" when arguments.Length == 2 && IsHelp(arguments[1]) =>
+                    await PrintAiAssistantHelp(output),
+                "ai-assistant-shell" when arguments.Length == 2 && authoringProvider is not null =>
+                    await new AiAssistantShell(
+                        authoringProvider,
+                        new AuthoringToolHost(application, arguments[1], Guid.NewGuid().ToString("N")),
+                        input,
+                        output,
+                        error,
+                        aiAuthoring.MaxToolCallsPerTurn,
+                        cancellationToken).RunAsync(),
+                "ai-assistant-shell" when arguments.Length == 2 =>
+                    await RunManualFallback(application, arguments[1], input, output, error,
+                        aiAuthoring, cancellationToken),
+                "ai-assistant-shell" =>
+                    await UsageError(error, "Use 'ai-assistant-shell <database>' or 'ai-assistant-shell --help'."),
                 "ndjson" when arguments.Length == 2 && IsHelp(arguments[1]) => await PrintNdjsonHelp(output),
                 "ndjson" when arguments.Length == 1 => await new NdjsonHost(
                     application, input, output, error, cancellationToken).RunAsync(),
@@ -85,6 +106,31 @@ public static class CliRunner
             await TryWriteError(error, $"error[{code}]: {message}");
             return exitCode;
         }
+    }
+
+    private static async Task<int> RunManualFallback(
+        ProjectApplication application,
+        string path,
+        TextReader input,
+        TextWriter output,
+        TextWriter error,
+        AiAuthoringConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var reason = !configuration.Enabled
+            ? "AI authoring is disabled."
+            : "AI authoring has no configured OpenAI key.";
+        await output.WriteLineAsync($"{reason} Continuing with the complete manual shell.");
+        if (!File.Exists(path))
+            return await UsageError(error, "The manual fallback requires an existing database; use 'project init' first.");
+        return await new HumanShell(
+            application,
+            path,
+            input,
+            output,
+            error,
+            cancellationToken,
+            showPrompt: ReferenceEquals(input, Console.In) && ReferenceEquals(output, Console.Out)).RunAsync();
     }
 
     private static async Task<int> RunProject(
@@ -280,11 +326,25 @@ public static class CliRunner
         await output.WriteLineAsync("  read      Run bounded graph queries");
         await output.WriteLineAsync("  sample    List or create built-in disposable samples");
         await output.WriteLineAsync("  shell     Run the stateful flag-based interface");
+        await output.WriteLineAsync("  ai-assistant-shell  Converse with the bounded optional OpenAI authoring agent");
         await output.WriteLineAsync("  ndjson    Run the structured automation and AI host");
         await output.WriteLineAsync();
         await output.WriteLineAsync("One-shot command results use JSON on stdout; errors and warnings use stderr.");
         await output.WriteLineAsync(
             "Run '<group> --help' for exact commands, 'shell --help' for stateful shell changes, or 'ndjson --help' for automation.");
+    }
+
+    private static async Task<int> PrintAiAssistantHelp(TextWriter output)
+    {
+        await output.WriteLineAsync("Conversational AI authoring:");
+        await output.WriteLineAsync("  ai-assistant-shell <database>");
+        await output.WriteLineAsync();
+        await output.WriteLineAsync("The authoring agent uses bounded graph tools and one process-local change session.");
+        await output.WriteLineAsync("It cannot use raw SQL, mark review dispositions, bypass semantic review, or write without");
+        await output.WriteLineAsync("the shell showing the exact proposal and receiving your explicit 'yes'.");
+        await output.WriteLineAsync("If AI authoring is disabled or unconfigured, an existing project opens in the manual shell.");
+        await output.WriteLineAsync("Type 'discard' to abandon the pending proposal or 'exit' to leave.");
+        return SuccessExitCode;
     }
 
     private static async Task PrintProjectHelp(TextWriter output)
