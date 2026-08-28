@@ -269,11 +269,22 @@ in the [development plan](docs/development_plan.md).
 
 ## Optional OpenAI configuration
 
-The manual workflow needs no API key. Semantic review defaults on but is
-effective only when its key is configured. Without a key—or when explicitly
-disabled—`change.write` uses the complete manual workflow without contacting
-OpenAI. Live development-test request/response logging remains disabled by
-default.
+The manual workflow needs no API key. Both product AI features default on, but
+either becomes active only when a key is configured. Paid live development
+tests default off and never follow from merely configuring a key.
+
+| Setting | Default | Effect |
+|---|---:|---|
+| `AiReview:Enabled` | `true` | Automatically run independent semantic review before a normal write when a key is configured. |
+| `AiAuthoring:Enabled` | `true` | Make `ai-assistant-shell` use conversational OpenAI authoring when a key is configured. |
+| `AiReview:LiveTests` | `false` | Opt into the paid T12 development test and credential-free request/response artifacts. |
+| `AiAuthoring:LiveTests` | `false` | Opt into the paid T13 development tests and credential-free request/response artifacts. |
+
+With no configured key, both AI roles are inactive and the complete manual
+workflow remains available. Set either `Enabled` value to `false` to turn that
+role off even while retaining the key. Environment variables use the `VW_`
+prefix and replace `:` with `__`, for example
+`VW_AIAUTHORING__ENABLED=false` or `VW_AIREVIEW__ENABLED=false`.
 
 For a source checkout, store the key once in the existing .NET User Secrets
 store. It stays outside the repository and persists across terminals:
@@ -282,34 +293,81 @@ store. It stays outside the repository and persists across terminals:
 dotnet user-secrets set "AiReview:OpenAI:ApiKey" "<key>" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
 ```
 
+That one key is shared by both initial AI roles. `AiAuthoring:OpenAI:ApiKey`
+may be set separately when desired; authoring otherwise falls back to the
+review key and then to `OPENAI_API_KEY`.
+
+Developers and coding agents should verify effective configuration without
+displaying the secret. Do not rely on checking `OPENAI_API_KEY` alone because a
+key in .NET User Secrets is intentionally absent from that process variable:
+
+```powershell
+'{"version":1,"command":"ai.status","payload":{}}' | dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- ndjson
+```
+
+The returned payload says whether review is `configured` and `enabled` but
+never includes the key. Do not use `dotnet user-secrets list` for this check.
+
 Enable credential-free request/response capture only while intentionally
-running a paid T12 development check:
+opting the corresponding paid development test into the normal test suite:
 
 ```powershell
 dotnet user-secrets set "AiReview:LiveTests" "true" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
+dotnet user-secrets set "AiAuthoring:LiveTests" "true" --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
 ```
 
-Run the small, explicitly categorized live T12 check separately from the
-ordinary offline suite:
+There is only one test command. It discovers the offline tests and both live
+test classes together:
 
 ```powershell
-dotnet test tests/ValidatedWorld.Cli.Tests/ValidatedWorld.Cli.Tests.csproj `
-    --filter Category=LiveOpenAI
+dotnet test ValidatedWorld.slnx --no-build --no-restore
 ```
 
-When enabled, the check writes credential-free
-`artifacts/ai-review-live-request.json` and
-`artifacts/ai-review-live-response.json` files relative to its working
+Each live test makes provider calls only when its own `LiveTests` setting is
+`true` and that feature is enabled with an effective key. Otherwise its test
+body returns without a provider call (the current test runner reports that case
+as passed rather than skipped). Never override these settings in the test
+command: the effective .NET configuration, including User Secrets, is the sole
+gate. When enabled, the checks write credential-free `ai-review-live-*.json`
+and `ai-authoring-live-*.json` files under `artifacts/` relative to the working
 directory. These ignored development artifacts can contain project text and
 model feedback. Sandbox network permission is handled as documented in
 `AGENTS.md`.
 
-Configuration uses ordinary .NET keys. Environment variables replace `:` with
-`__` and use the `VW_` prefix, for example `VW_AIREVIEW__MODEL`; the standard
-`OPENAI_API_KEY` variable is also accepted. Reviewer defaults are `Enabled=true`,
-`Provider=openai`, `Model=gpt-5.6-terra`, `TimeoutSeconds=1200`, and
-`LiveTests=false`. T13 uses the equivalent `AiAuthoring`/`VW_AIAUTHORING__`
-names. Never commit, log, or paste an API key into project data.
+Configuration uses ordinary .NET keys. The standard `OPENAI_API_KEY` variable
+is also accepted. Both roles default to `Enabled=true`, `Provider=openai`,
+`Model=gpt-5.6-terra`, and `TimeoutSeconds=1200`; both `LiveTests` values default
+to `false`. Never commit, log, or paste an API key into project data.
+
+Start the normal AI-first interface with:
+
+```powershell
+dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- ai-assistant-shell project.vw.db
+```
+
+The authoring agent uses bounded search, read, incremental node/edge, preview,
+approval, write, and discard tools. It has no raw SQL, direct write, automatic
+review-disposition, or AI-review bypass tool. Before a write, the shell itself
+shows the complete operations, affected evidence, required scope context, and
+fingerprints. Only the human's exact `yes` records review coverage and creates a
+short-lived approval bound to that exact state. Any subsequent proposal or
+review change invalidates it. A configured independent semantic reviewer then
+still gates the normal write.
+
+If authoring is disabled or unconfigured, `ai-assistant-shell` opens an existing
+database in the complete manual shell instead. The original `shell` and strict
+`ndjson` surfaces remain available; AI authoring does not duplicate their
+command vocabulary for humans.
+
+A public/local OpenAI plugin is not the MVP interface. A plugin can standardize
+tool discovery through MCP, but plugin-private storage is the wrong home for a
+portable user-owned `.vw.db`, and a generic MCP tool call does not itself prove
+that the human reviewed this exact proposal. The built-in assistant shell keeps
+the database at the user-selected path, the in-memory session and approval in
+one trusted local process, and the Application guarantees intact. A future
+plugin may wrap a distributable local ValidatedWorld executable and reuse these
+bounded tools; it must not move project ownership into an online service or
+weaken exact approval.
 
 When both the key and `AiReview:Enabled=true` are present, attempting
 `change.write` authorizes one review of the exact current proposal. The call

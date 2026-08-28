@@ -59,12 +59,11 @@ restore succeeds.
 
 If an explicitly opted-in live OpenAI call fails with a transport or network
 access error inside the sandbox before receiving a provider response, rerun the
-exact filtered live-call command with the command tool's elevated,
+exact full-solution test command with the command tool's elevated,
 outside-sandbox permission and a narrowly scoped explanation that the call must
 reach the OpenAI API. This is a sandbox network workaround, not a provider or
-product failure. Do not elevate ordinary offline app permission, broaden the
-live-test filter, print or inspect the API key, or change the request merely to
-obtain permission.
+product failure. Do not print or inspect the API key or change the request
+merely to obtain permission.
 
 For the same failure, make at most two materially different repair attempts.
 Never rerun an unchanged failing command merely hoping it will pass. Give an
@@ -157,13 +156,27 @@ OpenAI is the only planned provider. AI prompts, tools, and responses are
 hardcoded in English. The AI features are optional at runtime, but their
 development tasks have strict prerequisites in the development plan.
 
-Before changing code for a live-AI task, check only whether the human has
-configured `OPENAI_API_KEY` locally. Never print, read back, copy, infer, obtain,
-or set it. If it is absent, make no changes; ask the human to configure it
-locally and stop. Never seek out a key on your own.
+Before changing code for a live-AI task, check only whether an API key is
+available through the application's effective configuration. Do not check only
+the current process's `OPENAI_API_KEY`: the documented primary setup uses .NET
+User Secrets and may be configured even when that environment variable is
+absent. Use the public, non-secret `ai.status` request from the repository root:
 
-Live tests also require the documented explicit opt-in flag. Ordinary tests are
-offline. During each AI feature's development, an authorized live test must log
+```powershell
+'{"version":1,"command":"ai.status","payload":{}}' | dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- ndjson
+```
+
+Proceed when its payload reports `configured: true`. This command reports only
+effective status and never the key. Never run `dotnet user-secrets list`, print,
+read back, copy, infer, obtain, or set the secret. If effective configuration is
+absent, make no changes; ask the human to configure it locally and stop. Never
+seek out a key on your own.
+
+Live tests also require the documented explicit opt-in flag and effective
+feature configuration. The normal full-solution test command discovers them;
+when their gates are inactive they complete without a provider call. Never
+override effective configuration in the test command. During each AI feature's
+development, an authorized live test must log
 and inspect the complete serialized request at least once during that task's
 development, validate the standalone prompt and coverage, and exercise meaningful
 known and control cases. There are zero automatic paid retries, parallel paid

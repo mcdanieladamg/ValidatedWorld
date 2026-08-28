@@ -22,6 +22,7 @@ public sealed class CliWorkflowTests
     public void Ai_review_default_requires_a_key_and_the_kill_switch_still_disables_it()
     {
         Assert.True(AiReviewConfiguration.DefaultEnabled);
+        Assert.False(AiReviewConfiguration.DefaultLiveTests);
         var withoutKey = new AiReviewConfiguration(
             true, "openai", "test-model", 30, false, null);
         var disabled = new AiReviewConfiguration(
@@ -46,9 +47,12 @@ public sealed class CliWorkflowTests
         Assert.Equal(CliRunner.SuccessExitCode, help.ExitCode);
         Assert.Contains("read      Run bounded graph queries", help.Output, StringComparison.Ordinal);
         Assert.Contains("shell     Run the stateful flag-based interface", help.Output, StringComparison.Ordinal);
+        Assert.Contains("ai-assistant-shell", help.Output, StringComparison.Ordinal);
         Assert.Contains("ndjson", help.Output, StringComparison.Ordinal);
         var shellHelp = await Run(["shell", "--help"]);
         Assert.Contains("commit --bypass-ai-review", shellHelp.Output, StringComparison.Ordinal);
+        var assistantHelp = await Run(["ai-assistant-shell", "--help"]);
+        Assert.Contains("cannot use raw SQL", assistantHelp.Output, StringComparison.OrdinalIgnoreCase);
 
         var created = await Run(["sample", "create", "technical-project", project]);
         Assert.Equal(CliRunner.SuccessExitCode, created.ExitCode);
@@ -632,6 +636,27 @@ public sealed class CliWorkflowTests
             reference.Name?.Contains("OpenAI", StringComparison.OrdinalIgnoreCase) == true);
     }
 
+    [Fact]
+    public async Task Disabled_ai_assistant_command_falls_back_to_the_existing_manual_shell()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "manual-fallback.vw.db");
+        Assert.Equal(0, (await RunProcess(["sample", "create", "technical-project", project])).ExitCode);
+
+        var fallback = await RunProcess(
+            ["ai-assistant-shell", project],
+            "status" + Environment.NewLine + "exit" + Environment.NewLine);
+        Assert.Equal(CliRunner.SuccessExitCode, fallback.ExitCode);
+        Assert.Contains("AI authoring is disabled", fallback.Output, StringComparison.Ordinal);
+        Assert.Contains("technical-project", fallback.Output, StringComparison.Ordinal);
+
+        var missing = await RunProcess(
+            ["ai-assistant-shell", Path.Combine(temporary.Path, "missing.vw.db")],
+            "exit" + Environment.NewLine);
+        Assert.Equal(CliRunner.UsageExitCode, missing.ExitCode);
+        Assert.Contains("manual fallback requires an existing database", missing.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<CliResult> Run(string[] arguments, string input = "")
     {
         using var output = new StringWriter();
@@ -675,6 +700,7 @@ public sealed class CliWorkflowTests
             CreateNoWindow = true,
         };
         start.Environment["VW_AIREVIEW__ENABLED"] = "false";
+        start.Environment["VW_AIAUTHORING__ENABLED"] = "false";
         start.ArgumentList.Add(typeof(CliRunner).Assembly.Location);
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         return new Process { StartInfo = start };

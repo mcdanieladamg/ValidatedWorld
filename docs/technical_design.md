@@ -347,25 +347,30 @@ The planned provider path uses OpenAI Responses background mode and polls the
 same response within the configured 1,200-second end-to-end deadline. Returning
 tool results or polling the same response is continuation, not a new paid retry.
 
-Both features are optional at runtime. Semantic review defaults enabled but is
-effective only when its API key is configured. If disabled or unconfigured,
-the application reports it inactive and keeps the complete manual workflow
-usable. A `change.write` request may also explicitly bypass semantic review for
-that one write attempt; all deterministic and manual-review gates still apply.
+Both features are optional at runtime and both default enabled, but each is
+effective only when an API key is configured. Their separate paid live-test
+flags default false. If a role is disabled or unconfigured, the application
+reports it inactive and keeps the complete manual workflow usable. A
+`change.write` request may also explicitly bypass semantic review for that one
+write attempt; all deterministic and manual-review gates still apply.
 
 ### 8.1 Development gate for any live-AI task
 
 AI integration work is deliberately different from ordinary tasks:
 
 1. The AI task must be current in the development plan.
-2. Before changing code, the developer/agent checks only whether a locally
-   configured `OPENAI_API_KEY` is available. It must never print, read back,
-   copy, infer, acquire, or set the key.
+2. Before changing code, the developer/agent uses the README's public
+   `ai.status` request to check effective configuration. This intentionally
+   covers .NET User Secrets as well as `OPENAI_API_KEY` without printing,
+   reading back, copying, inferring, acquiring, or setting the key.
 3. If the key is absent, stop without attempting the task and ask the human to
    configure it locally. Do not ask the human to paste the key into chat or a
    tracked file.
-4. Live tests run only when the feature's `LIVETESTS` flag is explicitly true.
-   Ordinary restore/build/test runs remain offline.
+4. The normal full-solution test command discovers every test. Each live test
+   calls OpenAI only when its feature's `LiveTests` flag is explicitly true and
+   that feature is enabled with an effective key; otherwise it completes
+   without a provider call. Test commands must not override effective
+   configuration to force either outcome.
 5. There are no automatic paid retries, parallel paid calls, fallback models,
    or surprise provider calls. Polling or continuing the same response is not a
    retry.
@@ -461,6 +466,27 @@ conversation/session identity; and expiry. Any change invalidates approval.
 The initial intake is English descriptions and text only. The agent must work on
 graphs larger than its context window through repeated bounded search; it must
 not assume the whole project fits in one prompt.
+
+The public conversational entry point is
+`ai-assistant-shell <database>`. It and the provider-independent authoring tool
+host retain one process-local session. The model can request approval but cannot
+grant it: the shell renders the complete preview, reads the human response
+directly, records affected/context review only for an exact `yes`, and creates a
+short-lived approval bound to conversation, database/project, expiry, and every
+current fingerprint. The guarded authoring write requires that binding and
+always uses `BypassAiReview=false`.
+
+### 8.4 Local plugin evaluation
+
+The current OpenAI plugin format can bundle a local stdio MCP server, but the
+MVP does not package one. The portable user-selected `.vw.db` remains the
+authoritative workspace rather than moving into plugin-private data, and a
+generic model-issued MCP call is not accepted as proof of exact human semantic
+approval. Packaging also requires a distributable local executable rather than
+a source-checkout-relative command. A later plugin may reuse the bounded
+authoring tool host after those constraints are satisfied; it must preserve the
+same local database ownership, process-local session, exact approval, and
+independent review gate.
 
 ## 9. Realistic proof scenario
 

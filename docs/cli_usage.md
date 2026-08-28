@@ -622,6 +622,33 @@ Use `change.show` or `change.affected` with
 inspection. Use the latest complete reference for `change.expand`,
 `change.validate`, `change.write`, or `change.discard`.
 
+## Conversational AI authoring
+
+The default AI-first interface is a separate conversational entry point rather
+than another duplicate set of human edit commands:
+
+```powershell
+dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- ai-assistant-shell project.vw.db
+```
+
+Describe the project or desired change in English. The authoring agent checks
+status, performs bounded searches and reads, and builds one incremental
+in-memory proposal with strict node/edge tools. It cannot execute SQL, write the
+database directly, record review dispositions, or bypass independent semantic
+review. Type `discard` to abandon its current proposal or `exit` to leave.
+
+When the agent believes the proposal is ready, the application—not the
+model—prints every operation, affected path, required scope context, and exact
+fingerprint. The prompt accepts only `yes` as approval. That response records
+the displayed affected/context review and creates a ten-minute process-local
+approval for the exact current reference. Any edit invalidates it. The normal
+write still invokes the configured independent semantic reviewer.
+
+If AI authoring is disabled or has no configured key, this command opens an
+existing database in the manual shell. Use `ai-assistant-shell --help` for the
+short command reference and the root README for the explicit configuration
+defaults.
+
 ## Optional semantic AI write gate
 
 The root README documents one-time OpenAI configuration. `ai.status` inspects

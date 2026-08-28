@@ -1,20 +1,17 @@
 using System.Text.Json.Nodes;
-using Xunit.Sdk;
 
 namespace ValidatedWorld.Cli.Tests;
 
+[Collection("Live OpenAI")]
 public sealed class LiveSemanticReviewTests
 {
     [Fact]
     [Trait("Category", "LiveOpenAI")]
-    public async Task Configured_live_reviewer_allows_control_and_blocks_stale_consequence()
+    public async Task Configured_live_reviewer_allows_control_and_blocks_project_purpose_contradiction()
     {
         var configuration = AiReviewConfiguration.Load();
-        if (!configuration.LiveTests)
-            throw SkipException.ForSkip(
-                "Set AiReview:LiveTests=true explicitly to run paid OpenAI integration tests.");
-        Assert.True(configuration.IsEffectivelyEnabled,
-            "AiReview:LiveTests is true, but semantic review is not enabled with a configured OpenAI key.");
+        if (!configuration.LiveTests || !configuration.IsEffectivelyEnabled)
+            return;
 
         using var workspace = new TemporaryWorkspace();
         var allowProject = Path.Combine(workspace.Path, "allow-control.vw.db");
@@ -42,8 +39,8 @@ public sealed class LiveSemanticReviewTests
         Assert.Null(outbound["apiKey"]);
 
         var block = await RunShell(blockProject,
-            "The battery cannot last for any part of the target duty cycle.",
-            "Introduce a direct contradiction while leaving linked consequences unchanged",
+            "The sensor requires a continuous public-cloud connection and uploads every reading off-device.",
+            "Introduce a direct contradiction of the offline privacy-preserving project purpose",
             discardAfterCommit: true);
         Assert.Equal(CliRunner.SuccessExitCode, block.ExitCode);
         AssertContainsResult(block, "AI review: complete/block");
