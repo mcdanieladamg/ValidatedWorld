@@ -1,8 +1,33 @@
 # ValidatedWorld Product Roadmap
 
-This roadmap translates the self-blueprint review into product priorities. The
-ordered implementation contract remains
-[development_plan.md](development_plan.md).
+This is a transitional human-readable view of product priorities. The canonical
+detailed roadmap is `ValidatedWorld.Blueprint.vw.db`, where implemented state,
+gaps, recommendations, and their dependencies coexist. The ordered
+implementation checklist remains [development_plan.md](development_plan.md)
+until agents can depend on database-native planning tools.
+
+## Required for repository adoption
+
+1. **Track one canonical database.** Done for this repository: the root
+   `ValidatedWorld.Blueprint.vw.db` uses ordinary Git, while SQLite sidecars and
+   application-owned temporary files remain ignored. Do not use Git LFS by
+   default.
+2. **Keep a fingerprint-bound review projection.** The generated
+   `samples/ValidatedWorldBlueprint/baseline.json` makes ordinary Git review
+   possible without becoming a second source of truth. The repository script
+   can regenerate or check it; wire that check into CI before supplementary
+   Markdown is removed.
+3. **Add semantic version diff.** Compare two databases by stable ID and report
+   node/edge additions, replacements, removals, scope changes, review-direction
+   changes, and old/new fingerprints. This is the highest-value missing feature
+   for code-review use and should later support an optional Git diff driver.
+4. **Add explicit graph merge after diff.** A three-way merge must reconcile
+   compatible entity changes, reject conflicts, and run the result through
+   affected analysis and review. Never merge SQLite pages directly.
+5. **Standardize discovery.** README remains the zero-install bootstrap and
+   points to the one top-level database. If a repository legitimately has more
+   than one database, require an explicit manifest or command selection rather
+   than guessing.
 
 ## Required before claiming the AI-first workflow is proven
 

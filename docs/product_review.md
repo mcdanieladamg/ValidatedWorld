@@ -9,10 +9,11 @@ through the promised review path, because the public structured
 `project.init` command can currently establish a complete populated graph.
 T15 closes that trust-boundary bug.
 
-The evaluated blueprint contains 134 nodes and 219 explicit edges. It describes
+The evaluated blueprint contains 146 nodes and 248 explicit edges. It describes
 the product purpose, domain model, scope rules, affected propagation, review
 state, SQLite boundary, CLI/NDJSON surfaces, optional AI roles, implemented
-limits, product risks, and roadmap decisions.
+limits, product risks, roadmap decisions, and its own repository-adoption
+policy.
 
 ## Core model and flow
 
@@ -125,12 +126,12 @@ to AIReview.
 ## Files
 
 - `ValidatedWorld.Blueprint.vw.db` is the inspectable SQLite project in the
-  repository root. It currently verifies at 134 nodes, 219 edges, and state
+  repository root and is tracked as the canonical detailed project document. It
+  currently verifies at 146 nodes, 248 edges, and state
   fingerprint
-  `26fb46a514020ef931d621e5e3c4d8443753a5bdb56716373cd3821dbdd80b40`.
-  The repository ignores `.vw.db` files by design, so the binary will not
-  appear in Git status.
-- `samples/ValidatedWorldBlueprint/baseline.json` is the tracked, reviewable
-  source exported from that database.
+  `54d756e023862c058765e20f43926329a754b67471256e11c343ccd7ffa05df8`.
+- `samples/ValidatedWorldBlueprint/baseline.json` is its generated, reviewable
+  projection. `scripts/export-blueprint.ps1` regenerates it; it is not another
+  source of truth.
 - `docs/product_roadmap.md` records the prioritized product decisions, and
   `docs/development_plan.md` contains implementation-ready tasks.

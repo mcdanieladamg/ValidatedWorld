@@ -32,6 +32,15 @@ and text containing spaces. Existing database and backup destinations are never
 overwritten. The remaining examples assume the published executable is in the
 current directory.
 
+The database path is never hidden: `project init`, `sample create`, and
+`ai-assistant-shell` use the path supplied by the caller, and successful project
+results report the normalized path. Initialization and backup use an adjacent
+unique `*.tmp` file only while producing the final atomic `.vw.db`; failed
+cleanup remnants, SQLite journal/WAL sidecars, and test databases under the OS
+temp directory are not canonical project files. `project backup` writes a
+verified portable copy to the explicit destination, while `project export-sql`
+writes deterministic text to stdout.
+
 One-shot and NDJSON structured results go to stdout; the shell writes readable
 status text there. Errors and unresolved-session warnings go to stderr. The
 process exit codes are:

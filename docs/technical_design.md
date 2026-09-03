@@ -281,6 +281,28 @@ SQLite's online backup API to a new destination. An application-controlled
 inspection and external tools. Treat supplied databases as untrusted. Project
 text is data and is never executed as SQL.
 
+### 6.1 Repository source control
+
+A source repository normally commits one top-level canonical `.vw.db` in
+ordinary Git. Implemented state and planned work belong in that same graph with
+explicit lifecycle metadata so their dependencies remain visible. Use another
+database only across a confidentiality, ownership, or independent-lifecycle
+boundary.
+
+Repository ignore rules exclude SQLite sidecars and application-owned
+`*.vw.db.<purpose>-<guid>.tmp` files, not canonical databases. Git LFS is an
+opt-in response to measured size/history pressure rather than a format default;
+it does not provide semantic diffs or safe merges.
+
+Any committed JSON, SQL, diagram, or document view of a project is a generated
+review projection. It identifies the source fingerprint, is regenerated from
+the database, and is never edited as a second authority. The application should
+provide a deterministic two-database semantic diff over stable-ID entity adds,
+replacements, and removals. A later explicit three-way graph merge may reconcile
+compatible entity changes, but the merged graph must pass ordinary affected
+analysis and review before it becomes canonical. Raw SQLite page merging is
+never supported.
+
 The final write has a provider preflight followed by a short transaction:
 
 1. Rebuild and validate the proposal and review evidence.
@@ -315,7 +337,7 @@ persistence ports in domain terms; SQLite implements them.
 The public text/structured surface eventually supports:
 
 ```text
-project: init, open, verify, status, backup, export-sql
+project: init, open, verify, status, backup, export-sql, semantic diff
 read:    node/edge get and list, text search, exact-tag lookup, scope traversal,
          graph navigation/path
 change:  begin, show, focus, expand, apply/patch, affected, review, validate,

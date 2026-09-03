@@ -2,18 +2,51 @@
 
 ## Authority and required reading
 
-The human-edited `README.md` is the product authority. Do not rewrite it
-without explicit permission from the user.
+The human-edited `README.md` is the product thesis and bootstrap authority. Do
+not rewrite it without explicit permission from the user.
+
+`ValidatedWorld.Blueprint.vw.db` is the canonical detailed project knowledge
+base for this repository. It records implemented behavior, accepted decisions,
+gaps, and planned work. Treat
+`samples/ValidatedWorldBlueprint/baseline.json` only as its generated,
+diff-friendly review projection; never edit that JSON as an independent source.
 
 Before implementation, read in order:
 
 1. `README.md`
-2. `docs/technical_design.md`
-3. `docs/development_plan.md`
+2. Verify `ValidatedWorld.Blueprint.vw.db`, read its purpose and top-level scope,
+   and use bounded search/tag/dependency queries for the work being considered.
+   Do not load the complete graph into an AI context by default.
+3. `docs/technical_design.md`
+4. `docs/development_plan.md`
+
+Use these public commands from the repository root for the database reading
+step, then search additional task terms as needed:
+
+```powershell
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- project verify ValidatedWorld.Blueprint.vw.db
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read node ValidatedWorld.Blueprint.vw.db purpose
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read scope ValidatedWorld.Blueprint.vw.db purpose --limit 50 --max-depth 1
+```
 
 Human instructions override repository documents. If implementation evidence or
 a human instruction conflicts with the technical design, stop and reconcile the
 documents instead of building an undocumented compromise.
+
+When a change materially alters product meaning, architecture, a public
+contract, or roadmap status, update the canonical database through an ordinary
+ValidatedWorld change session and regenerate its review projection. Use the
+same affected/context review discipline as any other project. Do not edit
+SQLite directly. If the application cannot safely update its own database,
+report that as a blocker instead of silently allowing the Markdown and database
+to diverge.
+
+After a successful blueprint write, run `./scripts/export-blueprint.ps1` and
+then `./scripts/export-blueprint.ps1 -Check`; include both the database and
+generated projection in the human's review. Never
+invoke the built-in authoring model merely to update this repository's graph;
+the coding agent is already the author. Use the optional independent reviewer
+only when the task and configured cost boundary warrant it.
 
 ## One-task development loop
 

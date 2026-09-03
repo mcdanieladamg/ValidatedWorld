@@ -90,12 +90,30 @@ The authoritative workspace is one portable SQLite application file:
 project.vw.db
 ```
 
-That file is a user's mutable project state, not a source-controlled project
-template. The repository ignores `.vw.db` files and their SQLite sidecars
-outside `tests/`. Samples contain reviewed source descriptions, change scripts,
-and expected results; the app generates disposable databases locally. A binary
-database belongs in `tests/` only when a deliberately constructed persistence or
-corruption fixture cannot reasonably be generated during the test.
+A `.vw.db` is authored project source. When the project belongs to a source
+repository, the normal policy is to commit one top-level canonical database in
+ordinary Git. The caller always chooses its path; initialization creates the
+database there through an adjacent application-owned temporary file and then an
+atomic move. SQLite journal/WAL sidecars and those temporary files are ignored,
+but canonical databases are not.
+
+This repository uses `ValidatedWorld.Blueprint.vw.db` as its detailed project
+knowledge base. It contains implemented behavior, accepted decisions, gaps, and
+planned work in one graph, distinguished by kinds, tags, attributes, scope, and
+dependencies. Splitting present state and future work into separate databases
+would hide the relationships between them. Separate databases are appropriate
+only for a real confidentiality, ownership, or independent-lifecycle boundary.
+
+The current blueprint is small enough for ordinary Git and does not use Git
+LFS. LFS is not the default for `.vw.db`: it replaces the repository object with
+a pointer, adds a required client/storage service, and does not make SQLite
+changes semantically reviewable. A project should reconsider storage only when
+measured database size and repository-history growth justify that tradeoff.
+Git hosts generally treat SQLite as binary, so a deterministic text projection
+may be committed beside it for review. Such a projection is generated output,
+must match the database fingerprint, and is never edited as another source of
+truth. This repository currently keeps that projection at
+`samples/ValidatedWorldBlueprint/baseline.json`.
 
 SQLite supplies atomic transactions, foreign keys, indexes, and efficient
 queries. ValidatedWorld supplies the behavior a database schema cannot:
@@ -107,6 +125,13 @@ The SQLite database is the sole complete representation and interchange format
 for a project graph. Other tools may inspect the documented read-only schema and
 views in a `.vw.db` file, or consume an application-produced SQLite backup or SQL
 export.
+
+The README remains the concise bootstrap because repository hosts and humans can
+open it without installing ValidatedWorld. It states the thesis, identifies the
+canonical database, and shows how to query it. Supplementary design and roadmap
+documents may shrink into generated views after semantic diff, repository
+discovery, and readable export workflows are dependable; removing them sooner
+would make the binary knowledge base harder, not easier, to adopt.
 
 ## The simple mental model
 
@@ -237,9 +262,11 @@ working set while graph traversal and structural checks operate over the
 authoritative graph. No step requires loading a WoW-sized world into one prompt.
 
 If one affected set becomes unmanageably large, that may indicate an overly
-connected graph or a genuinely project-wide change. Coordinating multiple agents
-over partitioned review sets may be investigated later, but it is outside the
-initial application scope.
+connected graph or a genuinely broad change. The application should stop before
+an oversized provider call and ask the author to split the work naturally,
+remodel an over-broad relationship, or deliberately use the manual-review
+bypass. It does not automatically partition a proposal into multiple AI reviews
+or submit a whole project in pieces.
 
 Optional profiles may eventually make recurring domains easier to author and
 check. The initial implementation must first prove that the plain text-node and
@@ -266,6 +293,23 @@ The [CLI usage guide](docs/cli_usage.md) documents both the stateful shell and
 the alternative NDJSON interface protocol.
 Technical requirements and the one-task-at-a-time implementation checklist are
 in the [development plan](docs/development_plan.md).
+
+For repository-oriented work, first verify the canonical blueprint and then use
+bounded reads rather than opening the complete graph unless that is explicitly
+needed:
+
+```powershell
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- project verify ValidatedWorld.Blueprint.vw.db
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read search ValidatedWorld.Blueprint.vw.db "repository integration" --limit 20
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read tag ValidatedWorld.Blueprint.vw.db status:gap --limit 50
+```
+
+The near-term external-artifact workflow remains deliberate: nodes identify
+source files, chapters, diagrams, claims, or other consumers; affected analysis
+shows which anchors may be stale; and a human or AI applies the corresponding
+edits outside the database. Optional adapters may later compare content hashes
+or generate domain-specific outputs. A universal document renderer is not a
+core prerequisite and cannot safely infer every project's output format.
 
 ## Optional OpenAI configuration
 

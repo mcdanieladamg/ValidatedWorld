@@ -51,19 +51,16 @@ CodeCoverage/
 # MSBuild Binary and Structured Log
 *.binlog
 
-# ValidatedWorld workspaces and SQLite sidecars
+# ValidatedWorld transient files
 #
-# A .vw.db file is authoritative user/project state, not repository source.
-# Samples are rebuilt from reviewed source descriptions and change scripts. Binary
-# databases may be committed only as deliberate fixtures under tests/.
-*.vw.db
+# A canonical .vw.db is user-authored project source and may be committed.
+# Ignore only SQLite sidecars and application-owned atomic initialization/backup
+# files. Tests create disposable databases beneath the operating-system temp path.
 *.vw.db-journal
 *.vw.db-wal
 *.vw.db-shm
-!tests/**/*.vw.db
-!tests/**/*.vw.db-journal
-!tests/**/*.vw.db-wal
-!tests/**/*.vw.db-shm
+*.vw.db.initializing-*.tmp
+*.vw.db.backup-*.tmp
 
 # MSTest test Results
 [Tt]est[Rr]esult*/
