@@ -124,6 +124,20 @@ creation/update timestamps where relevant, nodes, and edges. Collections and
 diagnostics use deterministic ordinal ordering. The graph must be usable with
 no enabled profile or domain ontology.
 
+### 2.5 New-world bootstrap and trust boundary
+
+The public new-project operation creates exactly one purpose node and no edges.
+Every later node or edge, including the first usable tree structure, enters
+through the ordinary change session, affected analysis, manual review, and
+configured semantic-review gate. A public caller cannot initialize an already
+populated graph and thereby establish unreviewed canonical content.
+
+Opening an existing `.vw.db` is different: after structural validation and
+fingerprint verification, the file is treated as previously reviewed canonical
+state. It is not resubmitted to an AI provider. Built-in samples and test
+fixtures may use an internal trusted loader, but that loader is not a public
+authoring or import path.
+
 ## 3. Validation results
 
 Deterministic validation returns one of three outcomes:
@@ -187,8 +201,10 @@ propagation without expanding their other scope children.
 
 Traversal is breadth-first with deterministic ID/edge ordering. It retains edge
 evidence and shortest explanation paths. Configured depth, node, or output
-bounds return `inconclusive` with exact omissions; required items are never
-silently truncated.
+bounds return `inconclusive`; required items are never silently truncated. The
+primary response reports compact omission counts by reason and only a bounded
+sample. A cursor or bounded detail query retrieves omitted identities and
+evidence without allowing omission metadata itself to grow with the graph.
 
 After propagation, analysis adds every changed/affected node's complete current
 and proposed scope-upstream lineage as context. Context-only ancestors are not
@@ -403,11 +419,18 @@ but mocks do not replace the required development-phase live evidence.
 
 When `change.write` is attempted and semantic review is configured, enabled,
 and not bypassed for that command, the optional reviewer receives one immutable
-request for the complete current proposal after deterministic affected analysis
-and manual review readiness. All disjoint change chains stay together. The
-request includes project purpose, operations, affected nodes, current/proposed
-path evidence, complete required scope lineages, relevant validation findings,
-and an inclusion/omission manifest.
+request for the current change after deterministic affected analysis and manual
+review readiness. It receives the proposal's operations, affected nodes,
+current/proposed path evidence, complete required scope lineages, relevant
+validation findings, and a compact inclusion/omission manifest—not the complete
+project graph.
+
+Before any provider call, the application serializes that exact request and
+checks deterministic byte and item budgets. An over-budget request fails
+locally with a component breakdown and guidance to split the proposed work into
+smaller natural changes, remodel an overly broad dependency, or deliberately
+use the existing single-write bypass. The reviewer does not automatically
+partition one proposal, make parallel calls, or send a whole project in pieces.
 
 The standalone English prompt asks for cited concerns about contradictions,
 stale consequences, terminology drift, missing relationship candidates,
@@ -442,6 +465,12 @@ reads the smallest sufficient context plus all mandatory scope lineages, opens
 one in-memory session, applies explicit operations, inspects affected expansion,
 and asks the user when different interpretations would materially change graph
 meaning.
+
+Project construction is expected to proceed through many small reviewed
+changes. The authoring agent never treats a full-project review as a milestone
+or asks the semantic reviewer to establish an entire initial baseline. If a
+legitimate local change reaches a broad affected set, the request-size preflight
+applies before the provider boundary.
 
 Its authoring instructions use stable broad scope containers and stable IDs;
 place volatile counts, lists, names, and conclusions in focused claim nodes;

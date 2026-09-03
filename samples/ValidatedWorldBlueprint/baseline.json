@@ -1,0 +1,3968 @@
+{
+  "projectId": "validated-world-blueprint",
+  "title": "ValidatedWorld Architecture and Product Evaluation",
+  "purposeNodeId": "purpose",
+  "nodes": [
+    {
+      "id": "ai-author-limits",
+      "text": "One AI proposal is capped at 1,000 operations, search and scope reads return at most 50 items, and affected output is capped at 5,000 items.",
+      "kind": "limit",
+      "tags": [
+        "scale:bottleneck",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-author-no-review-power",
+      "text": "The author cannot mark affected nodes reviewed, grant its own approval, bypass semantic review, or write directly.",
+      "kind": "security-control",
+      "tags": [
+        "feature:separation-of-duties",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-author-role",
+      "text": "The optional author translates English intent into bounded graph searches, reads, and explicit in-memory node and edge operations.",
+      "kind": "ai-role",
+      "tags": [
+        "status:implemented",
+        "surface:ai"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-author-tools",
+      "text": "Author tools cover project status, initialization, text or tag search, node and edge read, scope read, begin, put, remove, preview, approval, guarded write, and discard; they expose no raw SQL.",
+      "kind": "tool-contract",
+      "tags": [
+        "status:implemented",
+        "surface:ai"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-human-approval",
+      "text": "The application renders the exact complete proposal and accepts only direct human yes; approval expires after ten minutes and is bound to conversation, project, database, and all fingerprints.",
+      "kind": "authorization",
+      "tags": [
+        "feature:approval",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-privacy-cost",
+      "text": "Configured AI roles send relevant project text to OpenAI and incur latency and token cost; manual mode is local and provider-free.",
+      "kind": "tradeoff",
+      "tags": [
+        "risk:cost",
+        "risk:privacy",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-bypass",
+      "text": "Manual shell and NDJSON writes may explicitly bypass AI review for one attempt, but never bypass structural validation, review readiness, fingerprint, or atomicity checks.",
+      "kind": "escape-hatch",
+      "tags": [
+        "feature:bypass",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-cache",
+      "text": "An allow or block decision is cached only for the exact current fingerprints; an unchanged retry is free, while any proposal or review change invalidates it.",
+      "kind": "cost-control",
+      "tags": [
+        "feature:cache",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-criteria",
+      "text": "The reviewer is instructed to inspect contradictions, stale consequences, terminology drift, missing relationship candidates, purpose conflicts, questionable dispositions, insufficient context, aliases, exact counts, and closed-world wording.",
+      "kind": "review-policy",
+      "tags": [
+        "feature:semantic-review",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-fail-closed",
+      "text": "Unknown citations, malformed output, refusal, timeout, transport failure, provider error, or any supported concern prevents the database transaction.",
+      "kind": "safety-rule",
+      "tags": [
+        "feature:fail-closed",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-request",
+      "text": "The review request includes project purpose, all operations, affected nodes and path evidence, scope topology changes, complete required context, dispositions, validation findings, fingerprints, and an inclusion manifest.",
+      "kind": "protocol",
+      "tags": [
+        "feature:review",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-role",
+      "text": "The independent semantic reviewer receives the exact ready proposal and returns only allow or block; it has no tools and cannot mutate the graph.",
+      "kind": "ai-role",
+      "tags": [
+        "feature:review",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-single-request",
+      "text": "Each write sends one complete affected transaction to the independent reviewer. The application currently has no explicit pre-provider request-size or token-budget check, so an accidentally broad proposal could attempt to send far more project text than intended.",
+      "kind": "limitation",
+      "tags": [
+        "priority:p0",
+        "scale:beyond-context",
+        "status:gap",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-search-before-add",
+      "text": "The authoring host rejects node or edge additions until at least one bounded graph search has occurred in that conversation.",
+      "kind": "guardrail",
+      "tags": [
+        "feature:duplicate-avoidance",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "architecture-dependency-rule",
+      "text": "Higher-level workflows depend on domain abstractions; Core remains independent, and Application defines persistence and reviewer ports implemented at the boundary.",
+      "kind": "architecture-rule",
+      "tags": [
+        "quality:separation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "blueprint-authorship",
+      "text": "The blueprint was authored directly by the external Codex agent through ValidatedWorld's manual and NDJSON surfaces. The built-in AI author was intentionally not used, avoiding duplicate authoring-model cost.",
+      "kind": "provenance",
+      "tags": [
+        "status:demonstrated",
+        "use-case:self-blueprint"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "blueprint-review-boundary",
+      "text": "The initial populated blueprint was admitted through complete-graph project.init, so its baseline received structural validation but not the normal change-session AIReview gate. Later corrections used reviewed change sessions. This demonstrates the initialization bug rather than proving the whole baseline was AI-reviewed.",
+      "kind": "finding",
+      "tags": [
+        "priority:p0",
+        "status:evaluated",
+        "use-case:self-blueprint"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "blueprint-use-case",
+      "text": "This ValidatedWorld project models the application itself: product purpose, semantic graph rules, scope and review behavior, change flow, SQLite persistence, public interfaces, AI roles, implementation components, test evidence, accepted boundaries, concrete defects, and prioritized recommendations.",
+      "kind": "case-study",
+      "tags": [
+        "status:demonstrated",
+        "use-case:self-blueprint"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-affected-union",
+      "text": "Affected analysis uses the union of current and proposed review arcs so removal or redirection cannot hide old consequences and new relationships expose new ones.",
+      "kind": "algorithm",
+      "tags": [
+        "feature:propagation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-atomic-write",
+      "text": "After optional semantic approval, BEGIN IMMEDIATE reloads and verifies the base, applies explicit operations in foreign-key-safe order, revalidates, updates the fingerprint, and commits once or rolls back all changes.",
+      "kind": "flow-step",
+      "tags": [
+        "feature:atomicity",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-bounds",
+      "text": "Depth, visited-node, affected-node, and output bounds return an explicit inconclusive result or omission rather than silently claiming completeness.",
+      "kind": "safety-rule",
+      "tags": [
+        "feature:bounded",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-breadth-first",
+      "text": "Traversal is deterministic breadth-first search with shortest explanation paths, stable ordering, and explicit edge evidence.",
+      "kind": "algorithm",
+      "tags": [
+        "feature:explainability",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-context-coverage",
+      "text": "Context-only ancestors require recorded presentation coverage even though they need no affected-node disposition.",
+      "kind": "review-state",
+      "tags": [
+        "feature:review",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-dispositions",
+      "text": "Each affected node is updated, reviewed-no-change, not-applicable with rationale, or pending; pending blocks persistence.",
+      "kind": "review-state",
+      "tags": [
+        "feature:review",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-fingerprints",
+      "text": "SHA-256 fingerprints bind base state, normalized operations, proposed state, affected evidence, and review dispositions to prevent stale or mismatched writes.",
+      "kind": "integrity-control",
+      "tags": [
+        "feature:fingerprint",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-operations",
+      "text": "Add, replace, and remove operations carry complete entities; repeated edits normalize to one final operation per entity and returning to base removes the operation.",
+      "kind": "command-model",
+      "tags": [
+        "feature:upsert",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-preflight",
+      "text": "A write rebuilds and validates the exact proposal and review evidence before any SQLite transaction begins.",
+      "kind": "flow-step",
+      "tags": [
+        "feature:atomicity",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-projection",
+      "text": "Projection applies operations to isolated builders and validates the complete proposed graph without modifying SQLite.",
+      "kind": "flow-step",
+      "tags": [
+        "layer:validation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-session",
+      "text": "One active change session per opened project and process stores author, intent, base identity, normalized operations, projected graph, review state, and fingerprints only in memory.",
+      "kind": "state",
+      "tags": [
+        "layer:application",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-application",
+      "text": "ValidatedWorld.Application owns project use cases, bounded query APIs, process-local change sessions, approvals, semantic-review planning, and write orchestration.",
+      "kind": "component",
+      "tags": [
+        "layer:application",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-cli",
+      "text": "ValidatedWorld.Cli composes configuration and providers and exposes one-shot commands, the human shell, NDJSON, and the AI assistant shell.",
+      "kind": "component",
+      "tags": [
+        "layer:interface",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-core",
+      "text": "ValidatedWorld.Core defines immutable graph entities, stable IDs, scalar values, project graphs, and operations without SQLite, JSON, file, provider, or UI dependencies.",
+      "kind": "component",
+      "tags": [
+        "layer:core",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-persistence",
+      "text": "ValidatedWorld.Persistence.Sqlite implements the project-store port, schema verification, mapping, backup, export, and atomic transaction behavior.",
+      "kind": "component",
+      "tags": [
+        "layer:persistence",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-serialization",
+      "text": "ValidatedWorld.Serialization defines strict DTOs, canonical encoding, deterministic fingerprints, and semantic-review protocol shapes.",
+      "kind": "component",
+      "tags": [
+        "layer:serialization",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-validation",
+      "text": "ValidatedWorld.Validation builds graph indexes, validates invariants, projects operations, computes affected paths, and tracks review readiness.",
+      "kind": "component",
+      "tags": [
+        "layer:validation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "finding-core-useful",
+      "text": "The explicit-edge model is useful today for traceability-heavy projects when authors can model dependencies deliberately and most edits have small affected sets.",
+      "kind": "finding",
+      "tags": [
+        "finding:strength",
+        "status:evaluated"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "finding-headless-strong",
+      "text": "Strict NDJSON plus a portable SQLite file is a credible foundation for agents, scripts, and future adapters without making an online service authoritative.",
+      "kind": "finding",
+      "tags": [
+        "finding:strength",
+        "status:evaluated"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "finding-locality-strong",
+      "text": "Separating scope context from semantic propagation is a particularly strong design choice because it preserves connection to the thesis without exploding every local review.",
+      "kind": "finding",
+      "tags": [
+        "finding:strength",
+        "status:evaluated"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "finding-safety-strong",
+      "text": "Structural validation, explainable affected paths, complete context obligations, fingerprint binding, and transactional rollback form a coherent defense-in-depth write boundary.",
+      "kind": "finding",
+      "tags": [
+        "finding:strength",
+        "status:evaluated"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-artifact-sync",
+      "text": "Artifact anchors are ordinary text; the engine cannot detect that an external chapter, diagram, source file, or patent draft changed or drifted away from its graph claim.",
+      "kind": "product-gap",
+      "tags": [
+        "area:integration",
+        "priority:p1",
+        "status:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-bounded-output",
+      "text": "Affected-output limits cap returned affected and context items but still emit one omission record for each omitted traversal candidate, so response metadata can grow linearly after the nominal output cap.",
+      "kind": "product-gap",
+      "tags": [
+        "area:performance",
+        "priority:p0",
+        "status:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-bulk-authoring",
+      "text": "The AI author tool cap of 1,000 operations and per-entity tool calls makes large initial imports, refactors, and generated structures expensive or impossible through the preferred conversational path.",
+      "kind": "product-gap",
+      "tags": [
+        "area:authoring",
+        "priority:p2",
+        "status:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-concurrency",
+      "text": "Multiplayer, concurrent-agent coordination, merging, and hosted collaboration are explicit non-goals. The intended product is one local user or agent operating one process-local proposal at a time.",
+      "kind": "non-goal",
+      "tags": [
+        "boundary:single-user",
+        "status:excluded"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-graph-observability",
+      "text": "The shell shows local neighborhoods but there is no first-class graph summary, orphan report, fan-out hotspot report, dependency coverage metric, or diagram export for model-quality inspection.",
+      "kind": "product-gap",
+      "tags": [
+        "area:usability",
+        "priority:p1",
+        "status:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-history-recovery",
+      "text": "Built-in history, undo, and audit storage are intentionally outside the current product boundary; atomicity protects each write, while backup and external versioning remain the recovery mechanisms.",
+      "kind": "accepted-boundary",
+      "tags": [
+        "area:recovery",
+        "status:accepted"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-import-trust",
+      "text": "The complete-graph NDJSON project.init path can write a structurally valid populated graph without the normal change review or AIReview gate. New worlds should bootstrap only a purpose root; their first real tree additions must use ordinary reviewed change sessions. Opening an existing ValidatedWorld database continues to assume its committed state is already validated.",
+      "kind": "product-gap",
+      "tags": [
+        "area:trust",
+        "priority:p0",
+        "status:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-missing-edge-completeness",
+      "text": "Because semantic relationships are explicit, an unmodeled dependency is intentionally outside affected traversal. This is an unavoidable semantic modeling risk rather than a correctness bug; author guidance and optional discovery should help find high-value missing links without pulling everything into every review.",
+      "kind": "accepted-risk",
+      "tags": [
+        "area:model-quality",
+        "priority:p1",
+        "status:accepted-risk"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-profile-extension",
+      "text": "Profiles are discussed as a future deterministic aid, but there is no implemented extension contract for domain schemas, validators, derived facts, or migrations.",
+      "kind": "product-gap",
+      "tags": [
+        "area:extensibility",
+        "priority:p2",
+        "status:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-query-scaling",
+      "text": "Bounded query output does not currently mean bounded internal work: each query reloads, validates, and indexes the full SQLite graph. This is conceptually safe and does not enlarge the AI context; optimize it only when realistic measurements show unacceptable latency or memory use.",
+      "kind": "implementation-tradeoff",
+      "tags": [
+        "area:performance",
+        "priority:p2",
+        "status:monitor"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-review-context-ceiling",
+      "text": "AI review needs a hard local request-size budget. If one proposal produces an affected slice above that budget, the application should stop before contacting the provider and ask the author to split or remodel the change, or deliberately use the existing manual bypass.",
+      "kind": "product-gap",
+      "tags": [
+        "area:scale",
+        "priority:p0",
+        "status:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-semantic-retrieval",
+      "text": "Literal substring and exact-tag lookup can miss paraphrases, aliases, and conceptually related candidate dependencies. This affects author discovery, not deterministic affected traversal, and any semantic result must remain advisory.",
+      "kind": "product-gap",
+      "tags": [
+        "area:retrieval",
+        "priority:p1",
+        "status:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-session-durability",
+      "text": "Change sessions intentionally live in one local process, and the shell warns before an unresolved session is lost. Durable drafts are not required for the current single-user product unless practical use later shows that normal sessions are too fragile.",
+      "kind": "accepted-boundary",
+      "tags": [
+        "boundary:process-local",
+        "status:accepted"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-attributes",
+      "text": "Attributes are deterministic scalar values: text, signed integer, canonical decimal, Boolean, symbol, or UTC instant.",
+      "kind": "value-model",
+      "tags": [
+        "feature:attributes",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-edge",
+      "text": "An edge has a stable ID, source, target, relationship label, explicit review direction, and optional rationale, tags, and scalar attributes.",
+      "kind": "entity",
+      "tags": [
+        "layer:core",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-metadata",
+      "text": "Kinds and tags organize and retrieve entities but have no hidden graph semantics; tag equality is exact and case-sensitive.",
+      "kind": "invariant",
+      "tags": [
+        "feature:tags",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-modeling-guidance",
+      "text": "Stable broad scopes, focused volatile claims, source-of-truth-to-consumer edges, roster hubs, and sparing bidirectional edges keep affected sets useful.",
+      "kind": "authoring-rule",
+      "tags": [
+        "status:documented",
+        "surface:ai"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-node",
+      "text": "A node has a stable ID, non-empty human-readable text, and optional kind, exact tags, and scalar attributes.",
+      "kind": "entity",
+      "tags": [
+        "layer:core",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-open-world",
+      "text": "Unknown kinds, labels, tags, and attributes are valid, and missing facts or links are unknown rather than false.",
+      "kind": "semantic-rule",
+      "tags": [
+        "risk:open-world",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-review-direction",
+      "text": "Review direction is explicit workflow metadata: none, source-to-target, target-to-source, or both; labels and database endpoint order do not imply propagation.",
+      "kind": "invariant",
+      "tags": [
+        "feature:propagation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-shared-id-space",
+      "text": "Node IDs and edge IDs share one ordinal, case-sensitive, opaque text namespace and are globally unique within a project.",
+      "kind": "invariant",
+      "tags": [
+        "status:implemented",
+        "validation:structural"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-ai-shell",
+      "text": "The AI assistant shell combines one provider conversation with guarded local authoring tools and direct application-owned human approval.",
+      "kind": "interface",
+      "tags": [
+        "status:implemented",
+        "surface:ai"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-errors",
+      "text": "Usage, domain, internal, broken-pipe, and cancellation failures have distinct exit codes; NDJSON errors are structured and the host can continue.",
+      "kind": "interface-contract",
+      "tags": [
+        "feature:diagnostics",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-help",
+      "text": "CLI group help, shell topic help, and host.help provide discoverable command vocabularies.",
+      "kind": "interface-contract",
+      "tags": [
+        "feature:discoverability",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-human-shell",
+      "text": "The stateful manual shell provides filesystem-like scope navigation, flag-based incremental edits, review commands, commit, bypass, discard, and readable diagnostics.",
+      "kind": "interface",
+      "tags": [
+        "status:implemented",
+        "surface:human"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-manual-fallback",
+      "text": "If AI authoring is disabled or unconfigured, ai-assistant-shell opens the complete manual shell for an existing project.",
+      "kind": "fallback",
+      "tags": [
+        "status:implemented",
+        "surface:human"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-ndjson",
+      "text": "The long-lived NDJSON host offers strict versioned request/result envelopes, exact session references, bounded reads, incremental patches, review, write, and discard.",
+      "kind": "interface",
+      "tags": [
+        "status:implemented",
+        "surface:automation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-one-shot-cli",
+      "text": "One-shot project, sample, and read command groups expose JSON results and stable exit codes.",
+      "kind": "interface",
+      "tags": [
+        "status:implemented",
+        "surface:cli"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-portability",
+      "text": "The absence of a GUI, web service, remote collaboration layer, and hosted workspace is intentional. The local executable and user-selected portable database are the product boundary; a future local wrapper may improve distribution without changing ownership.",
+      "kind": "accepted-boundary",
+      "tags": [
+        "status:accepted",
+        "status:implemented",
+        "surface:local"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-ai-first",
+      "text": "The preferred experience is an AI author repeatedly retrieving a bounded relevant slice and proposing explicit graph upserts through guarded application tools.",
+      "kind": "use-case",
+      "tags": [
+        "status:implemented",
+        "surface:ai"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-authority",
+      "text": "README.md is the human-edited authority for product meaning; technical_design.md translates it into implementation constraints and development_plan.md controls authorized implementation work.",
+      "kind": "governance",
+      "tags": [
+        "artifact:documentation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-current-state",
+      "text": "One SQLite file is the sole complete representation of the current project graph; the application deliberately does not retain project history.",
+      "kind": "boundary",
+      "tags": [
+        "status:implemented",
+        "storage:sqlite"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-external-artifacts",
+      "text": "ValidatedWorld models facts, claims, requirements, decisions, and artifact anchors but does not rewrite, render, publish, or certify the finished novel, paper, source tree, game, or media.",
+      "kind": "boundary",
+      "tags": [
+        "boundary:external",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-large-project-success",
+      "text": "The defining product test is useful authoring over a real corpus larger than an agent context window through many naturally small, bounded graph changes; ordinary operation must never require sending the entire project to an AI reviewer.",
+      "kind": "success-criterion",
+      "tags": [
+        "priority:p0",
+        "scale:beyond-context",
+        "status:unproven"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-local-change-success",
+      "text": "A local edit succeeds when the graph exposes every modeled consequence plus each selected node's scope lineage without forcing unrelated sibling branches into review.",
+      "kind": "success-criterion",
+      "tags": [
+        "status:implemented",
+        "test:acceptance"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-semantic-not-proof",
+      "text": "Deterministic rules prove structure and review completeness, not semantic truth; a thinking human or optional AI must judge whether related text remains coherent.",
+      "kind": "constraint",
+      "tags": [
+        "risk:semantic",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-thesis",
+      "text": "The product is a semantic change-control engine: it persists explicit meaning and relationships, computes what a proposal can make stale, requires review, and atomically advances one current valid state.",
+      "kind": "thesis",
+      "tags": [
+        "priority:p0",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "purpose",
+      "text": "ValidatedWorld should let AI and human authors maintain a very large, portable, human-readable project model while making contradictions and stale consequences difficult to introduce unnoticed.",
+      "kind": "purpose",
+      "tags": [
+        "blueprint:root",
+        "status:evaluated"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-ai-offline",
+      "text": "Mocked tests cover semantic-review request completeness and strict output plus author search, approval staleness, questions, tool bounds, block repair, and guarded writes.",
+      "kind": "test-evidence",
+      "tags": [
+        "status:implemented",
+        "surface:ai",
+        "test:offline"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-cli-coverage",
+      "text": "Tests drive one-shot reads, deterministic export, human shell navigation and edits, long-lived NDJSON changes, malformed requests, cancellation, and manual fallback.",
+      "kind": "test-evidence",
+      "tags": [
+        "status:implemented",
+        "test:offline"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-live-tests",
+      "text": "Explicitly opted-in live tests exercise semantic reviewer allow and contradiction block cases and minimal new and existing AI authoring cases, writing credential-free request and response artifacts.",
+      "kind": "test-evidence",
+      "tags": [
+        "risk:cost",
+        "status:implemented",
+        "test:live"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-no-scale-measurement",
+      "text": "On this host, a synthetic 10,000-node and 19,800-edge graph initialized in 5,129 ms into 7,049,216 bytes; five bounded reads in one NDJSON process took 3,775 ms total; a root change selected 10,000 nodes in 4,786 ms; and a 5,000-item affected cap returned 5,000 nodes plus 5,000 omission records. This is useful mechanical evidence but neither a near-maximum benchmark nor proof of semantic consistency.",
+      "kind": "test-evidence",
+      "tags": [
+        "priority:p2",
+        "scale:beyond-context",
+        "status:evaluated"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-persistence-coverage",
+      "text": "Tests cover schema checks, corrupt and oversized rows, logical fingerprint stability, backup, foreign keys, write ordering, busy and stale results, and injected rollback boundaries.",
+      "kind": "test-evidence",
+      "tags": [
+        "status:implemented",
+        "test:offline"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-technical-sample",
+      "text": "The built-in sensor project provides reviewed power, privacy, documentation, and accessibility scenarios with expected affected and excluded branches.",
+      "kind": "sample",
+      "tags": [
+        "status:implemented",
+        "test:scenario"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-unit-coverage",
+      "text": "Tests cover canonical values, graph validation, projection, affected traversal, review invalidation, fingerprints, queries, session staleness, and protocol strictness.",
+      "kind": "test-evidence",
+      "tags": [
+        "status:implemented",
+        "test:offline"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-context",
+      "text": "Context lookup unions scope-upstream lineages for requested nodes without sibling fan-out.",
+      "kind": "query",
+      "tags": [
+        "feature:context",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-dependencies",
+      "text": "Dependency lookup shows expanded outgoing and incoming review arcs derived from explicit edge direction.",
+      "kind": "query",
+      "tags": [
+        "feature:navigation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-entity-read",
+      "text": "Get and paged-list commands return complete nodes or edges by stable identity.",
+      "kind": "query",
+      "tags": [
+        "feature:read",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-load-whole-graph",
+      "text": "Each public query constructs ProjectQueries by loading and validating the complete graph from SQLite and building an in-memory GraphIndex; substring search then scans that snapshot.",
+      "kind": "implementation-fact",
+      "tags": [
+        "priority:p0",
+        "scale:bottleneck",
+        "status:gap",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-neighbors",
+      "text": "Neighbor lookup shows stored incoming and outgoing edge endpoints without interpreting review propagation.",
+      "kind": "query",
+      "tags": [
+        "feature:navigation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-pagination",
+      "text": "Pages are capped at 1,000 items and use state-bound deterministic cursors with explicit output omissions.",
+      "kind": "query-control",
+      "tags": [
+        "feature:bounded",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-path",
+      "text": "Path lookup performs bounded traversal over review arcs rather than containment edges.",
+      "kind": "query",
+      "tags": [
+        "feature:navigation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-scope",
+      "text": "Scope lookup returns the selected node, its full upstream path, and bounded descendants.",
+      "kind": "query",
+      "tags": [
+        "feature:scope",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-tag-search",
+      "text": "Exact tag lookup is ordinal and case-sensitive, returns complete matching entities, and creates no semantic dependencies.",
+      "kind": "query",
+      "tags": [
+        "feature:tags",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-text-search",
+      "text": "Text search is case-insensitive substring matching over node IDs, node text, kinds, tags, edge IDs, labels, rationales, and edge tags.",
+      "kind": "query",
+      "tags": [
+        "feature:search",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-artifact-adapters",
+      "text": "Add opt-in adapters that store stable external anchor identifiers and content hashes, detect drift, extract bounded chunks, and require graph updates without making external artifacts database-owned.",
+      "kind": "recommendation",
+      "tags": [
+        "area:integration",
+        "priority:p1",
+        "status:proposed"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-audit-history",
+      "text": "Reconsider a built-in audit ledger only if real users cannot meet recovery and provenance needs through the existing backup command and external versioning.",
+      "kind": "deferred-idea",
+      "tags": [
+        "area:recovery",
+        "status:deferred"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-bulk-plan",
+      "text": "Add a bounded bulk-import and refactor plan format with chunked staging, deterministic validation, resumability, and one final reviewed commit rather than thousands of conversational tool round trips.",
+      "kind": "recommendation",
+      "tags": [
+        "area:authoring",
+        "priority:p1",
+        "status:proposed"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-compact-omissions",
+      "text": "Bound omission metadata and return aggregate counts plus resumable frontier or continuation tokens, preserving exact evidence on demand without making the first bounded response proportional to everything omitted.",
+      "kind": "recommendation",
+      "tags": [
+        "area:performance",
+        "priority:p0",
+        "status:proposed"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-durable-drafts",
+      "text": "Durable draft sessions are deferred and should be reconsidered only if real single-user workflows prove that the existing exit warning and short-lived local sessions are inadequate.",
+      "kind": "deferred-idea",
+      "tags": [
+        "status:deferred"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-hybrid-retrieval",
+      "text": "Add ranked SQLite full-text search as the low-risk first step, then evaluate optional semantic candidate search for paraphrases and aliases. Return bounded provenance-bearing suggestions and never treat similarity as a dependency or canonical truth.",
+      "kind": "experiment",
+      "tags": [
+        "area:retrieval",
+        "priority:p1",
+        "status:planned-experiment"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-indexed-queries",
+      "text": "If realistic projects demonstrate unacceptable query latency or memory use, move bounded reads behind persistence query ports so SQLite performs indexed paging and projection without materializing the complete graph for every call.",
+      "kind": "conditional-recommendation",
+      "tags": [
+        "area:performance",
+        "priority:p2",
+        "status:conditional"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-link-audit",
+      "text": "Strengthen AI-author instructions and add optional candidate-link discovery for aliases, repeated claims, closed-world wording, and unexpectedly small affected sets. Suggested links remain ordinary reviewed edges; discovery must never imply that every related node should be pulled into each change.",
+      "kind": "recommendation",
+      "tags": [
+        "area:model-quality",
+        "priority:p1",
+        "status:proposed"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-observability",
+      "text": "Add graph health summaries and Mermaid or Graphviz export for scope trees, review arcs, hotspots, missing rationale, tag usage, and selected affected paths.",
+      "kind": "recommendation",
+      "tags": [
+        "area:usability",
+        "priority:p1",
+        "status:proposed"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-review-size-preflight",
+      "text": "Estimate the complete serialized semantic-review request before any provider call, enforce configurable item, byte, and token budgets, report which paths made it large, and guide the author toward a smaller change or explicit manual bypass.",
+      "kind": "recommendation",
+      "tags": [
+        "area:ai-review",
+        "priority:p0",
+        "status:proposed"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-scale-benchmark",
+      "text": "Keep a modest repeatable mechanical benchmark as regression evidence, but prioritize a realistic piecewise self-blueprint or domain project over testing the advertised maximum graph size.",
+      "kind": "conditional-recommendation",
+      "tags": [
+        "area:performance",
+        "priority:p2",
+        "status:conditional"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-trusted-import",
+      "text": "Remove populated initialization from the public authoring surface. Public new-world creation produces only the purpose root, and every subsequent node or edge uses ordinary reviewed change sessions. Existing verified databases remain trusted on open; full-graph loading is internal to fixtures only.",
+      "kind": "recommendation",
+      "tags": [
+        "area:trust",
+        "priority:p0",
+        "status:proposed"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "release-assessment",
+      "text": "ValidatedWorld is a useful and internally coherent local semantic change-control prototype. The next product work should prove piecewise self-blueprint authoring and fix reviewed initialization, pre-provider AIReview size limits, and bounded omission output; ranked or semantic discovery should then be evaluated as an advisory authoring aid.",
+      "kind": "assessment",
+      "tags": [
+        "priority:p0",
+        "status:evaluated"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-ai",
+      "text": "Optional OpenAI authoring and independent semantic write review.",
+      "kind": "scope",
+      "tags": [
+        "view:ai"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-architecture",
+      "text": "Solution components and dependency boundaries.",
+      "kind": "scope",
+      "tags": [
+        "view:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-change-control",
+      "text": "In-memory proposal, affected analysis, review, and atomic write lifecycle.",
+      "kind": "scope",
+      "tags": [
+        "view:workflow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-context-lineage",
+      "text": "Every directly changed or transitively affected node contributes its complete current and proposed scope-upstream lineage to mandatory review context.",
+      "kind": "review-rule",
+      "tags": [
+        "feature:context",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-context-no-fanout",
+      "text": "A context-only ancestor is not a propagation seed, so sharing the purpose does not select unrelated sibling branches.",
+      "kind": "review-rule",
+      "tags": [
+        "feature:locality",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-direct-change",
+      "text": "Directly changing a scope node selects its current and proposed descendant subtrees in addition to semantic consequences.",
+      "kind": "review-rule",
+      "tags": [
+        "feature:propagation",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-evaluation",
+      "text": "One-time product evaluation findings and proposed capability work.",
+      "kind": "scope",
+      "tags": [
+        "view:evaluation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-graph",
+      "text": "Canonical graph vocabulary and value model.",
+      "kind": "scope",
+      "tags": [
+        "view:domain"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-interfaces",
+      "text": "Headless public entry points and protocol behavior.",
+      "kind": "scope",
+      "tags": [
+        "view:interfaces"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-one-parent",
+      "text": "Every non-purpose node has exactly one outgoing scope-parent edge, and all such lineages are acyclic and terminate at the purpose.",
+      "kind": "invariant",
+      "tags": [
+        "status:implemented",
+        "validation:structural"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-product",
+      "text": "Product thesis, boundaries, and success criteria.",
+      "kind": "scope",
+      "tags": [
+        "view:product"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-purpose-root",
+      "text": "Every project has exactly one purpose node; changing it intentionally selects the entire project.",
+      "kind": "invariant",
+      "tags": [
+        "status:implemented",
+        "validation:structural"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-quality",
+      "text": "Automated evidence, realistic samples, and remaining proof burden.",
+      "kind": "scope",
+      "tags": [
+        "view:quality"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-query",
+      "text": "Bounded deterministic retrieval and graph navigation.",
+      "kind": "scope",
+      "tags": [
+        "view:retrieval"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-reparenting",
+      "text": "Changing a scope-parent edge selects the old and new child subtrees, both immediate parents, and both ancestry lineages without sibling fan-out.",
+      "kind": "review-rule",
+      "tags": [
+        "feature:topology",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-scope-tree",
+      "text": "Purpose-rooted containment and mandatory review context.",
+      "kind": "scope",
+      "tags": [
+        "view:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-storage",
+      "text": "Portable SQLite persistence and defensive database handling.",
+      "kind": "scope",
+      "tags": [
+        "view:storage"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-tree-role",
+      "text": "The scope tree supplies stable containment and context, while ordinary semantic edges express dependencies that can become stale.",
+      "kind": "modeling-rule",
+      "tags": [
+        "feature:context",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-backup",
+      "text": "Online backup creates a verified new destination and refuses overwrite.",
+      "kind": "operation",
+      "tags": [
+        "feature:recovery",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-capacity",
+      "text": "Persistence enforces ceilings of 100,000 nodes, 1,000,000 edges, 16 KiB primary text per entity field, 1 MiB metadata JSON per entity, and a 16 GiB database file.",
+      "kind": "limit",
+      "tags": [
+        "scale:bounded",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-defenses",
+      "text": "Every connection verifies application ID, version, migration checksum, exact schema, foreign keys, row bounds, integrity, and disables extension-based escape paths.",
+      "kind": "security-control",
+      "tags": [
+        "security:untrusted-data",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-export-sql",
+      "text": "Deterministic SQL export safely quotes schema and current data for inspection and external tools.",
+      "kind": "operation",
+      "tags": [
+        "feature:interop",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-file",
+      "text": "A closed project normally consists of one portable .vw.db file using rollback journal mode.",
+      "kind": "storage",
+      "tags": [
+        "status:implemented",
+        "storage:sqlite"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-four-tables",
+      "text": "SQLite schema v1 uses four STRICT tables: schema_migrations, projects, nodes, and edges.",
+      "kind": "schema",
+      "tags": [
+        "status:implemented",
+        "storage:sqlite"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-indexes",
+      "text": "Indexes cover node kind, edge source, edge target, and at-most-one scope-parent edge per child; there is no full-text or vector index.",
+      "kind": "schema",
+      "tags": [
+        "feature:index",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-no-history",
+      "text": "The database intentionally stores only the current graph. Backups or external versioning provide recovery, and built-in history is not required for the current local single-user product.",
+      "kind": "accepted-boundary",
+      "tags": [
+        "status:accepted",
+        "status:implemented"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-views",
+      "text": "Read-only views expose project, node, edge, scope, and expanded review-arc data for external inspection.",
+      "kind": "schema",
+      "tags": [
+        "feature:interop",
+        "status:implemented"
+      ],
+      "attributes": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "affected-feeds-context",
+      "source": "change-affected-union",
+      "target": "change-context-coverage",
+      "relationship": "next-step",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:flow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "affected-feeds-review",
+      "source": "change-affected-union",
+      "target": "change-dispositions",
+      "relationship": "next-step",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:flow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-author-limits-scope",
+      "source": "ai-author-limits",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-author-no-review-power-scope",
+      "source": "ai-author-no-review-power",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-author-role-scope",
+      "source": "ai-author-role",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-author-tools-scope",
+      "source": "ai-author-tools",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-human-approval-scope",
+      "source": "ai-human-approval",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-limits-cause-context-gap",
+      "source": "ai-author-limits",
+      "target": "gap-review-context-ceiling",
+      "relationship": "contributes-to",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-privacy-cost-scope",
+      "source": "ai-privacy-cost",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-bypass-scope",
+      "source": "ai-review-bypass",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-cache-scope",
+      "source": "ai-review-cache",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-criteria-scope",
+      "source": "ai-review-criteria",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-fail-closed-scope",
+      "source": "ai-review-fail-closed",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-request-scope",
+      "source": "ai-review-request",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-role-scope",
+      "source": "ai-review-role",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-review-single-request-scope",
+      "source": "ai-review-single-request",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-search-before-add-scope",
+      "source": "ai-search-before-add",
+      "target": "scope-ai",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-shell-contains-author",
+      "source": "ai-author-role",
+      "target": "interface-ai-shell",
+      "relationship": "implemented-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-shell-uses-search",
+      "source": "query-text-search",
+      "target": "interface-ai-shell",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ai-tools-constrain-author",
+      "source": "ai-author-tools",
+      "target": "ai-author-role",
+      "relationship": "constrains",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:security"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "application-to-cli",
+      "source": "component-application",
+      "target": "component-cli",
+      "relationship": "contract-consumed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "application-to-persistence",
+      "source": "component-application",
+      "target": "component-persistence",
+      "relationship": "port-implemented-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "approval-gates-ai-write",
+      "source": "ai-human-approval",
+      "target": "change-preflight",
+      "relationship": "authorizes",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:security"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "architecture-dependency-rule-scope",
+      "source": "architecture-dependency-rule",
+      "target": "scope-architecture",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "artifact-gap-to-adapters",
+      "source": "gap-artifact-sync",
+      "target": "recommend-artifact-adapters",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "author-limits-cause-bulk-gap",
+      "source": "ai-author-limits",
+      "target": "gap-bulk-authoring",
+      "relationship": "causes",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "author-separated-from-review",
+      "source": "ai-author-no-review-power",
+      "target": "ai-review-role",
+      "relationship": "separates-duty-from",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:security"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "authorship-documents-blueprint",
+      "source": "blueprint-authorship",
+      "target": "blueprint-use-case",
+      "relationship": "documents",
+      "reviewDirection": "sourceToTarget",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "backup-mitigates-no-history",
+      "source": "storage-no-history",
+      "target": "storage-backup",
+      "relationship": "partially-mitigated-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:risk"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "blueprint-authorship-scope-parent",
+      "source": "blueprint-authorship",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "blueprint-review-boundary-scope-parent",
+      "source": "blueprint-review-boundary",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "blueprint-supports-assessment",
+      "source": "blueprint-use-case",
+      "target": "release-assessment",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "blueprint-use-case-scope-parent",
+      "source": "blueprint-use-case",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "bounds-exposes-omission-gap",
+      "source": "change-bounds",
+      "target": "gap-bounded-output",
+      "relationship": "insufficiently-bounds",
+      "reviewDirection": "sourceToTarget",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "bulk-gap-to-plan",
+      "source": "gap-bulk-authoring",
+      "target": "recommend-bulk-plan",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "cache-reduces-cost",
+      "source": "ai-review-cache",
+      "target": "ai-privacy-cost",
+      "relationship": "mitigates",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:cost"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-affected-union-scope",
+      "source": "change-affected-union",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-atomic-write-scope",
+      "source": "change-atomic-write",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-bounds-scope",
+      "source": "change-bounds",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-breadth-first-scope",
+      "source": "change-breadth-first",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-context-coverage-scope",
+      "source": "change-context-coverage",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-dispositions-scope",
+      "source": "change-dispositions",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-fingerprints-scope",
+      "source": "change-fingerprints",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-operations-scope",
+      "source": "change-operations",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-preflight-scope",
+      "source": "change-preflight",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-projection-scope",
+      "source": "change-projection",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "change-session-scope",
+      "source": "change-session",
+      "target": "scope-change-control",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "cli-tests-support-headless",
+      "source": "quality-cli-coverage",
+      "target": "finding-headless-strong",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:evidence"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "compact-response-informs-assessment",
+      "source": "recommend-compact-omissions",
+      "target": "release-assessment",
+      "relationship": "required-before",
+      "reviewDirection": "sourceToTarget",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "component-application-scope",
+      "source": "component-application",
+      "target": "scope-architecture",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-cli-scope",
+      "source": "component-cli",
+      "target": "scope-architecture",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-core-scope",
+      "source": "component-core",
+      "target": "scope-architecture",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-persistence-scope",
+      "source": "component-persistence",
+      "target": "scope-architecture",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-serialization-scope",
+      "source": "component-serialization",
+      "target": "scope-architecture",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "component-validation-scope",
+      "source": "component-validation",
+      "target": "scope-architecture",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "context-feeds-preflight",
+      "source": "change-context-coverage",
+      "target": "change-preflight",
+      "relationship": "next-step",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:flow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "context-gap-to-review-preflight",
+      "source": "gap-review-context-ceiling",
+      "target": "recommend-review-size-preflight",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "context-no-fanout-supports-locality",
+      "source": "scope-context-no-fanout",
+      "target": "product-local-change-success",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:quality"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "core-to-application",
+      "source": "component-core",
+      "target": "component-application",
+      "relationship": "contract-consumed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "core-to-serialization",
+      "source": "component-core",
+      "target": "component-serialization",
+      "relationship": "contract-consumed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "core-to-validation",
+      "source": "component-core",
+      "target": "component-validation",
+      "relationship": "contract-consumed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "criteria-govern-reviewer",
+      "source": "ai-review-criteria",
+      "target": "ai-review-role",
+      "relationship": "governs",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:policy"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "defenses-guard-file",
+      "source": "storage-defenses",
+      "target": "storage-file",
+      "relationship": "guards",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:security"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "dependency-rule-governs-core",
+      "source": "architecture-dependency-rule",
+      "target": "component-core",
+      "relationship": "governs",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:policy"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "durability-gap-to-drafts",
+      "source": "gap-session-durability",
+      "target": "recommend-durable-drafts",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "external-boundary-causes-sync-gap",
+      "source": "product-external-artifacts",
+      "target": "gap-artifact-sync",
+      "relationship": "leaves",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "fail-closed-guards-write",
+      "source": "ai-review-fail-closed",
+      "target": "change-atomic-write",
+      "relationship": "guards",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:security"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "finding-core-useful-scope",
+      "source": "finding-core-useful",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "finding-headless-strong-scope",
+      "source": "finding-headless-strong",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "finding-locality-strong-scope",
+      "source": "finding-locality-strong",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "finding-safety-strong-scope",
+      "source": "finding-safety-strong",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "fingerprints-guard-preflight",
+      "source": "change-fingerprints",
+      "target": "change-preflight",
+      "relationship": "guards",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:security"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "full-load-causes-query-gap",
+      "source": "query-load-whole-graph",
+      "target": "gap-query-scaling",
+      "relationship": "causes",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-artifact-sync-scope",
+      "source": "gap-artifact-sync",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-bounded-output-scope-parent",
+      "source": "gap-bounded-output",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "gap-bulk-authoring-scope",
+      "source": "gap-bulk-authoring",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-concurrency-scope",
+      "source": "gap-concurrency",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-graph-observability-scope",
+      "source": "gap-graph-observability",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-history-recovery-scope",
+      "source": "gap-history-recovery",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-import-trust-scope",
+      "source": "gap-import-trust",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-missing-edge-completeness-scope",
+      "source": "gap-missing-edge-completeness",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-profile-extension-scope",
+      "source": "gap-profile-extension",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-query-scaling-scope",
+      "source": "gap-query-scaling",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-review-context-ceiling-scope",
+      "source": "gap-review-context-ceiling",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-semantic-retrieval-scope",
+      "source": "gap-semantic-retrieval",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "gap-session-durability-scope",
+      "source": "gap-session-durability",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-attributes-scope",
+      "source": "graph-attributes",
+      "target": "scope-graph",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-edge-scope",
+      "source": "graph-edge",
+      "target": "scope-graph",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-metadata-scope",
+      "source": "graph-metadata",
+      "target": "scope-graph",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-modeling-guidance-scope",
+      "source": "graph-modeling-guidance",
+      "target": "scope-graph",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-node-scope",
+      "source": "graph-node",
+      "target": "scope-graph",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-open-world-scope",
+      "source": "graph-open-world",
+      "target": "scope-graph",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-review-direction-scope",
+      "source": "graph-review-direction",
+      "target": "scope-graph",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "graph-shared-id-space-scope",
+      "source": "graph-shared-id-space",
+      "target": "scope-graph",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "history-gap-to-ledger",
+      "source": "gap-history-recovery",
+      "target": "recommend-audit-history",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "human-shell-uses-queries",
+      "source": "query-entity-read",
+      "target": "interface-human-shell",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "import-gap-to-trust",
+      "source": "gap-import-trust",
+      "target": "recommend-trusted-import",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-ai-shell-scope",
+      "source": "interface-ai-shell",
+      "target": "scope-interfaces",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-errors-scope",
+      "source": "interface-errors",
+      "target": "scope-interfaces",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-help-scope",
+      "source": "interface-help",
+      "target": "scope-interfaces",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-human-shell-scope",
+      "source": "interface-human-shell",
+      "target": "scope-interfaces",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-manual-fallback-scope",
+      "source": "interface-manual-fallback",
+      "target": "scope-interfaces",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-ndjson-scope",
+      "source": "interface-ndjson",
+      "target": "scope-interfaces",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-one-shot-cli-scope",
+      "source": "interface-one-shot-cli",
+      "target": "scope-interfaces",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "interface-portability-scope",
+      "source": "interface-portability",
+      "target": "scope-interfaces",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "link-gap-to-audit",
+      "source": "gap-missing-edge-completeness",
+      "target": "recommend-link-audit",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "local-interface-contributes-observability-gap",
+      "source": "interface-human-shell",
+      "target": "gap-graph-observability",
+      "relationship": "partially-addresses",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "modeling-guidance-supports-locality",
+      "source": "graph-modeling-guidance",
+      "target": "product-local-change-success",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:quality"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "ndjson-uses-queries",
+      "source": "query-entity-read",
+      "target": "interface-ndjson",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "no-history-causes-recovery-gap",
+      "source": "storage-no-history",
+      "target": "gap-history-recovery",
+      "relationship": "causes",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "no-scale-evidence-threatens-success",
+      "source": "quality-no-scale-measurement",
+      "target": "product-large-project-success",
+      "relationship": "leaves-unproven",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:risk"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "node-and-edge-share-ids",
+      "source": "graph-shared-id-space",
+      "target": "graph-node",
+      "relationship": "constrains",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:invariant"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "node-and-edge-share-ids-2",
+      "source": "graph-shared-id-space",
+      "target": "graph-edge",
+      "relationship": "constrains",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:invariant"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "observability-gap-to-tools",
+      "source": "gap-graph-observability",
+      "target": "recommend-observability",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "omission-gap-to-compact-response",
+      "source": "gap-bounded-output",
+      "target": "recommend-compact-omissions",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "open-world-causes-link-gap",
+      "source": "graph-open-world",
+      "target": "gap-missing-edge-completeness",
+      "relationship": "permits",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "operations-feed-projection",
+      "source": "change-operations",
+      "target": "change-projection",
+      "relationship": "next-step",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:flow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "pagination-bounds-search-output",
+      "source": "query-pagination",
+      "target": "query-text-search",
+      "relationship": "bounds",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:control"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "pagination-bounds-tag-output",
+      "source": "query-pagination",
+      "target": "query-tag-search",
+      "relationship": "bounds",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:control"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "persistence-tests-support-safety",
+      "source": "quality-persistence-coverage",
+      "target": "finding-safety-strong",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:evidence"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "persistence-to-cli",
+      "source": "component-persistence",
+      "target": "component-cli",
+      "relationship": "composed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "preflight-feeds-atomic-write",
+      "source": "change-preflight",
+      "target": "change-atomic-write",
+      "relationship": "next-step",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:flow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-ai-first-scope",
+      "source": "product-ai-first",
+      "target": "scope-product",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-authority-scope",
+      "source": "product-authority",
+      "target": "scope-product",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-current-state-scope",
+      "source": "product-current-state",
+      "target": "scope-product",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-external-artifacts-scope",
+      "source": "product-external-artifacts",
+      "target": "scope-product",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-large-project-success-scope",
+      "source": "product-large-project-success",
+      "target": "scope-product",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-local-change-success-scope",
+      "source": "product-local-change-success",
+      "target": "scope-product",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-semantic-not-proof-scope",
+      "source": "product-semantic-not-proof",
+      "target": "scope-product",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "product-thesis-scope",
+      "source": "product-thesis",
+      "target": "scope-product",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "projection-feeds-affected",
+      "source": "change-projection",
+      "target": "change-affected-union",
+      "relationship": "next-step",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:flow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-ai-offline-scope",
+      "source": "quality-ai-offline",
+      "target": "scope-quality",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-cli-coverage-scope",
+      "source": "quality-cli-coverage",
+      "target": "scope-quality",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-live-tests-scope",
+      "source": "quality-live-tests",
+      "target": "scope-quality",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-no-scale-measurement-scope",
+      "source": "quality-no-scale-measurement",
+      "target": "scope-quality",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-persistence-coverage-scope",
+      "source": "quality-persistence-coverage",
+      "target": "scope-quality",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-technical-sample-scope",
+      "source": "quality-technical-sample",
+      "target": "scope-quality",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "quality-unit-coverage-scope",
+      "source": "quality-unit-coverage",
+      "target": "scope-quality",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-context-scope",
+      "source": "query-context",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-dependencies-scope",
+      "source": "query-dependencies",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-entity-read-scope",
+      "source": "query-entity-read",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-gap-to-indexing",
+      "source": "gap-query-scaling",
+      "target": "recommend-indexed-queries",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-load-whole-graph-scope",
+      "source": "query-load-whole-graph",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-neighbors-scope",
+      "source": "query-neighbors",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-pagination-scope",
+      "source": "query-pagination",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-path-scope",
+      "source": "query-path",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-scan-uses-full-load",
+      "source": "query-load-whole-graph",
+      "target": "query-text-search",
+      "relationship": "implements",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-scope-scope",
+      "source": "query-scope",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-tag-search-scope",
+      "source": "query-tag-search",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "query-text-search-scope",
+      "source": "query-text-search",
+      "target": "scope-query",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-artifact-adapters-scope",
+      "source": "recommend-artifact-adapters",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-audit-history-scope",
+      "source": "recommend-audit-history",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-bulk-plan-scope",
+      "source": "recommend-bulk-plan",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-compact-omissions-scope-parent",
+      "source": "recommend-compact-omissions",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "recommend-durable-drafts-scope",
+      "source": "recommend-durable-drafts",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-hybrid-retrieval-scope",
+      "source": "recommend-hybrid-retrieval",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-indexed-queries-scope",
+      "source": "recommend-indexed-queries",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-link-audit-scope",
+      "source": "recommend-link-audit",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-observability-scope",
+      "source": "recommend-observability",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-review-size-preflight-scope-parent",
+      "source": "recommend-review-size-preflight",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "recommend-scale-benchmark-scope",
+      "source": "recommend-scale-benchmark",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "recommend-trusted-import-scope",
+      "source": "recommend-trusted-import",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "release-assessment-scope",
+      "source": "release-assessment",
+      "target": "scope-evaluation",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "review-boundary-demonstrates-init-gap",
+      "source": "blueprint-review-boundary",
+      "target": "gap-import-trust",
+      "relationship": "demonstrates",
+      "reviewDirection": "sourceToTarget",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "review-direction-controls-affected",
+      "source": "graph-review-direction",
+      "target": "change-affected-union",
+      "relationship": "governs",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:workflow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "review-feeds-preflight",
+      "source": "change-dispositions",
+      "target": "change-preflight",
+      "relationship": "next-step",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:flow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "review-gates-atomic-write",
+      "source": "ai-review-role",
+      "target": "change-atomic-write",
+      "relationship": "authorizes",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:flow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "review-preflight-informs-assessment",
+      "source": "recommend-review-size-preflight",
+      "target": "release-assessment",
+      "relationship": "required-before",
+      "reviewDirection": "sourceToTarget",
+      "rationale": null,
+      "tags": [],
+      "attributes": []
+    },
+    {
+      "id": "review-request-feeds-reviewer",
+      "source": "ai-review-request",
+      "target": "ai-review-role",
+      "relationship": "input-to",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:flow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "sample-supports-usefulness",
+      "source": "quality-technical-sample",
+      "target": "finding-core-useful",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:evidence"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scale-gap-to-benchmark",
+      "source": "quality-no-scale-measurement",
+      "target": "recommend-scale-benchmark",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "schema-realizes-file",
+      "source": "storage-four-tables",
+      "target": "storage-file",
+      "relationship": "defines",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-ai-scope",
+      "source": "scope-ai",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-architecture-scope",
+      "source": "scope-architecture",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-change-control-scope",
+      "source": "scope-change-control",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-context-lineage-scope",
+      "source": "scope-context-lineage",
+      "target": "scope-scope-tree",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-context-no-fanout-scope",
+      "source": "scope-context-no-fanout",
+      "target": "scope-scope-tree",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-design-supports-locality",
+      "source": "scope-context-no-fanout",
+      "target": "finding-locality-strong",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:evidence"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-direct-change-scope",
+      "source": "scope-direct-change",
+      "target": "scope-scope-tree",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-evaluation-scope",
+      "source": "scope-evaluation",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-graph-scope",
+      "source": "scope-graph",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-interfaces-scope",
+      "source": "scope-interfaces",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-one-parent-scope",
+      "source": "scope-one-parent",
+      "target": "scope-scope-tree",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-parent-controls-context",
+      "source": "scope-one-parent",
+      "target": "scope-context-lineage",
+      "relationship": "governs",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:workflow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-product-scope",
+      "source": "scope-product",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-purpose-root-scope",
+      "source": "scope-purpose-root",
+      "target": "scope-scope-tree",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-quality-scope",
+      "source": "scope-quality",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-query-scope",
+      "source": "scope-query",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-reparenting-scope",
+      "source": "scope-reparenting",
+      "target": "scope-scope-tree",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-root-controls-context",
+      "source": "scope-purpose-root",
+      "target": "scope-context-lineage",
+      "relationship": "governs",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:workflow"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-scope-tree-scope",
+      "source": "scope-scope-tree",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-storage-scope",
+      "source": "scope-storage",
+      "target": "purpose",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "scope-tree-role-scope",
+      "source": "scope-tree-role",
+      "target": "scope-scope-tree",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "search-guard-constrains-author",
+      "source": "ai-search-before-add",
+      "target": "ai-author-role",
+      "relationship": "constrains",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:security"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "semantic-gap-to-hybrid",
+      "source": "gap-semantic-retrieval",
+      "target": "recommend-hybrid-retrieval",
+      "relationship": "addressed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:recommendation"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "semantic-limit-informs-success",
+      "source": "product-semantic-not-proof",
+      "target": "product-large-project-success",
+      "relationship": "constrains",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:risk"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "serialization-to-application",
+      "source": "component-serialization",
+      "target": "component-application",
+      "relationship": "contract-consumed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "serialization-to-cli",
+      "source": "component-serialization",
+      "target": "component-cli",
+      "relationship": "contract-consumed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "session-causes-durability-gap",
+      "source": "change-session",
+      "target": "gap-session-durability",
+      "relationship": "causes",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "single-request-causes-context-gap",
+      "source": "ai-review-single-request",
+      "target": "gap-review-context-ceiling",
+      "relationship": "causes",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "single-request-constrains-success",
+      "source": "ai-review-single-request",
+      "target": "product-large-project-success",
+      "relationship": "threatens",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:risk"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-backup-scope",
+      "source": "storage-backup",
+      "target": "scope-storage",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-capacity-scope",
+      "source": "storage-capacity",
+      "target": "scope-storage",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-defenses-scope",
+      "source": "storage-defenses",
+      "target": "scope-storage",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-export-sql-scope",
+      "source": "storage-export-sql",
+      "target": "scope-storage",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-file-realizes-current-state",
+      "source": "product-current-state",
+      "target": "storage-file",
+      "relationship": "realized-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-file-scope",
+      "source": "storage-file",
+      "target": "scope-storage",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-four-tables-scope",
+      "source": "storage-four-tables",
+      "target": "scope-storage",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-indexes-scope",
+      "source": "storage-indexes",
+      "target": "scope-storage",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-no-history-scope",
+      "source": "storage-no-history",
+      "target": "scope-storage",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "storage-views-scope",
+      "source": "storage-views",
+      "target": "scope-storage",
+      "relationship": "scope-parent",
+      "reviewDirection": "none",
+      "rationale": null,
+      "tags": [
+        "relation:scope"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "substring-causes-semantic-gap",
+      "source": "query-text-search",
+      "target": "gap-semantic-retrieval",
+      "relationship": "insufficient-for",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:gap"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "tag-search-supports-ai",
+      "source": "query-tag-search",
+      "target": "ai-author-role",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "tests-support-safety",
+      "source": "quality-unit-coverage",
+      "target": "finding-safety-strong",
+      "relationship": "supports",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:evidence"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "thesis-requires-current-state",
+      "source": "product-thesis",
+      "target": "product-current-state",
+      "relationship": "requires",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "The current-state file is the authoritative result of change control.",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "thesis-requires-edge-model",
+      "source": "product-thesis",
+      "target": "graph-edge",
+      "relationship": "requires",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "thesis-requires-node-model",
+      "source": "product-thesis",
+      "target": "graph-node",
+      "relationship": "requires",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "trust-informs-assessment",
+      "source": "recommend-trusted-import",
+      "target": "release-assessment",
+      "relationship": "required-before",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:decision"
+      ],
+      "attributes": []
+    },
+    {
+      "id": "validation-to-application",
+      "source": "component-validation",
+      "target": "component-application",
+      "relationship": "contract-consumed-by",
+      "reviewDirection": "sourceToTarget",
+      "rationale": "",
+      "tags": [
+        "relation:architecture"
+      ],
+      "attributes": []
+    }
+  ]
+}

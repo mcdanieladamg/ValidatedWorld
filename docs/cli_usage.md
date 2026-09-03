@@ -407,9 +407,15 @@ readiness. For a final proposal preview, use `change.show` with
 `includeOperations:true` and `includeProposedGraph:false` to retrieve the
 normalized operation batch without retrieving the whole graph.
 
-## Create a complete graph through NDJSON
+## Legacy complete-graph NDJSON initialization
 
-`project.init` accepts the complete graph DTO. The examples below are formatted
+The current `project.init` accepts a complete graph DTO and writes it after
+structural validation, without the ordinary change-session manual/AI review
+gate. Treat it only as a temporary trusted-fixture path; do not use it to create
+a real new world. T15 removes this public bypass so project creation accepts
+only the purpose root and all later content uses reviewed change sessions.
+
+The example below records the current protocol and is formatted
 for reading; serialize each request as one physical line before sending it to
 the NDJSON host. This small graph contains a purpose, one child, and the child's
 required scope edge:
@@ -457,9 +463,8 @@ required scope edge:
 }
 ```
 
-For a large initial import, generate one graph object deliberately and validate
-the returned project. For incremental authoring, create a minimal project and
-use a change session.
+Do not use this path for a large initial import. Create a minimal project and
+use change sessions to build it piecewise.
 
 ## Manual change workflow
 

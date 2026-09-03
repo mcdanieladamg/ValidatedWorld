@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** None
+**Current task:** T15 — safe new-world bootstrap and tracked self-blueprint scenario
 
-**Current task estimate:** None
+**Current task estimate:** large
 
 This file is the current implementation checklist for humans and coding agents.
 It contains one current task and the complete ordered backlog. The README is the
@@ -101,6 +101,10 @@ paid calls immediately and report the non-secret failure.
 | T12 | complete | Automatic OpenAI semantic write gate |
 | T13 | complete | OpenAI authoring agent |
 | T14 | complete | Plugin format evaluated within T13; no MVP plugin retained |
+| T15 | current | Safe new-world bootstrap and tracked self-blueprint scenario |
+| T16 | pending | Provider request-size preflight and compact bounded omissions |
+| T17 | pending | Author discovery guidance and ranked lexical retrieval |
+| T18 | pending | Evidence-gated semantic retrieval experiment |
 
 ## T13 — optional OpenAI authoring agent
 
@@ -174,3 +178,118 @@ at the user-selected path, preserves one trusted process for the in-memory
 session and direct human approval, and avoids packaging a source-relative server
 before ValidatedWorld has a distributable local executable. Any future plugin
 must reuse the bounded tool contract without weakening those guarantees.
+
+## T15 — safe new-world bootstrap and tracked self-blueprint scenario
+
+**Goal:** Close the initialization trust bypass and make ValidatedWorld's own
+architecture a repeatable, tracked, realistic use case.
+
+**Implement:**
+
+- Restrict every public new-project entry point to one purpose node and no
+  edges. Reject attempts to establish a populated canonical graph through
+  `project.init` with an actionable message directing the caller to change
+  sessions.
+- Keep existing `.vw.db` open behavior: verify structure and fingerprints, then
+  assume the committed world was already reviewed. Do not call AIReview merely
+  because a database is opened.
+- If tests or built-in sample creation need complete graph loading, keep it an
+  internal trusted-fixture path that is unavailable to CLI/NDJSON authoring.
+- Retain `samples/ValidatedWorldBlueprint/baseline.json` as the readable source
+  for the semantic blueprint. Add a repeatable scenario that starts with the
+  purpose root, adds the graph in stable scope-sized batches through ordinary
+  change sessions, reviews the affected/context slice, and commits each batch.
+- Do not use the authoring model to build the sample. Do not submit the complete
+  blueprint or complete project to AIReview. Provider-enabled smoke coverage is
+  limited to one representative small change; deterministic reviewer doubles
+  cover the complete piecewise replay without paid calls.
+- Exercise user questions against the resulting database: find the write path,
+  locate a feature and its risks, inspect one dependency path, make one local
+  correction, and verify unrelated scope branches stay out of the affected set.
+
+**Tests and acceptance:**
+
+- Public purpose-only creation succeeds; public populated initialization fails
+  before SQLite establishes canonical content.
+- The first non-root addition follows normal validation, manual review, and the
+  enabled reviewer gate. Existing-project open performs no provider call.
+- Explicit single-write bypass remains available and still requires all
+  deterministic/manual readiness.
+- The generated blueprint verifies, matches the tracked source counts and
+  fingerprint, and the user-style queries above return useful bounded results.
+
+## T16 — provider request-size preflight and compact bounded omissions
+
+**Goal:** Make both sides of a bounded interaction remain bounded without
+inventing automatic multi-call review.
+
+**Implement:**
+
+- Serialize the exact semantic-review request before provider dispatch and
+  enforce configurable byte and item ceilings. On failure, do not call the
+  provider; return totals grouped by operations, affected nodes, edges, paths,
+  scope context, and manifest data, plus guidance to split the change, improve
+  graph modeling, or use the explicit bypass.
+- Replace one-record-per-omission responses with counts grouped by omission
+  reason, a small deterministic sample, and a stable cursor/detail query for
+  retrieving additional omitted identities and evidence in bounded pages.
+- Apply the same response accounting to CLI, NDJSON, and authoring tools. An
+  item limit includes omission metadata rather than counting only primary rows.
+- Do not automatically partition a proposal, make parallel reviewer calls, add
+  multiplayer behavior, or send a whole project in one request or many pieces.
+
+**Tests and acceptance:**
+
+- An over-budget review reaches no provider and identifies which components
+  caused the limit; an unchanged in-budget request remains fingerprint-bound.
+- Large omitted sets produce constant-size first responses, deterministic
+  pages recover exact details, and required data is never reported as complete
+  when it was omitted.
+
+## T17 — author discovery guidance and ranked lexical retrieval
+
+**Goal:** Reduce missed relevant nodes without pretending retrieval can infer
+all dependencies.
+
+**Implement:**
+
+- Strengthen author instructions to search several terms, aliases, canonical
+  names, and closed-world wording before edits; inspect incoming/outgoing review
+  neighbors and relevant paths when affected results look unexpectedly small.
+- Expose concise bounded neighbor/dependency reads to the author if the current
+  tools cannot answer those questions directly.
+- Add deterministic ranked lexical search with stable pagination and match
+  explanations. Prefer exact stable ID and exact tag, then phrase, token
+  coverage, kind, and metadata matches. Preserve the existing literal search.
+- Start without embeddings. Use in-memory ranking unless measurements justify
+  a SQLite search index; adding FTS or another dependency requires the normal
+  schema/dependency decision.
+
+**Tests and acceptance:**
+
+- Domain synonyms supplied as aliases/tags and multi-token queries rank useful
+  nodes ahead of incidental substring hits with a visible reason.
+- Search remains bounded and deterministic. Candidate discovery never creates
+  dependency edges, broadens required review silently, or claims completeness.
+
+## T18 — evidence-gated semantic retrieval experiment
+
+**Goal:** Decide whether semantic similarity materially improves discovery over
+ranked lexical search on real semantic graphs.
+
+**Implement:**
+
+- Evaluate the self-blueprint and one unrelated realistic corpus using queries
+  whose relevant nodes and lexical misses are recorded in advance.
+- Compare retrieval quality, latency, privacy, provider cost, index size,
+  invalidation on node updates, and offline behavior against T17.
+- Implement semantic retrieval only if the measured benefit is material and the
+  human approves any provider, model, schema, or dependency choice. Otherwise
+  record the rejection in the current design and close the task.
+- Treat semantic results as advisory candidates. They never become canonical
+  edges, proof of consistency, or mandatory affected nodes without review.
+
+**Tests and acceptance:**
+
+- The evaluation is reproducible and reports both useful discoveries and false
+  positives. The task may validly conclude with no semantic feature.
