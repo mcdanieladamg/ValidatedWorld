@@ -1,44 +1,19 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T15 — safe new-world bootstrap and tracked self-blueprint scenario
+**Current task:** T15 — bounded semantic database diff
 
 **Current task estimate:** large
 
-This file is the current implementation checklist for humans and coding agents.
-It contains one current task and the complete ordered backlog. The README is the
-product authority, and [technical_design.md](technical_design.md) defines the
-current technical contract. Git history and task reports record past work; do
-not append dated implementation narratives or corrective addenda here.
+This is the single implementation roadmap. `ValidatedWorld.Blueprint.vw.db` is
+the canonical detailed product map; this file selects one executable phase and
+orders the remaining gaps. The README is the product thesis/bootstrap and
+[technical_design.md](technical_design.md) is the precise implementation
+contract.
 
 ## Development loop
 
-Before implementation:
-
-1. Read `README.md`, `AGENTS.md`, `docs/technical_design.md`, and this file.
-2. Inspect the current source, tests, and working-tree changes.
-3. Implement only Current task. Do not begin or delegate the next task.
-4. Reconcile any human instruction or implementation evidence that conflicts
-   with the documented design before changing dependent code.
-
-On success:
-
-1. Add meaningful automated tests and perform an informal public-surface smoke
-   check with disposable realistic data.
-2. Run the required completion sequence below.
-3. Mark only the completed task in the progress table.
-4. Point Current task to the next prewritten task and set its estimate to
-   `small`, `medium`, `large`, or `gigantic`; use `None` when no task is
-   authorized.
-5. Report implementation, exact checks, smoke findings, uncertainty, and the
-   new Current task to the human, then stop.
-
-On failure, leave Current task unchanged, report the command, non-secret output,
-cause, and repairs tried, then stop. Do not preserve a troubleshooting transcript
-in product or design documentation.
-
-## Testing and bounded repair
-
-Use focused tests while developing. When ready, run sequentially:
+Implement only Current task. Preserve human changes, add focused automated
+tests, perform a public-surface smoke check, then run:
 
 ```powershell
 dotnet restore ValidatedWorld.slnx
@@ -46,250 +21,148 @@ dotnet build ValidatedWorld.slnx --no-restore
 dotnet test ValidatedWorld.slnx --no-build --no-restore
 ```
 
-If restore cannot read the user-level `NuGet.Config`, follow the exact elevated
-permission workaround in `AGENTS.md`; do not inspect or modify that file. Make
-at most two materially different repairs for one failure, never weaken an
-acceptance criterion, and give infrastructure failures only one diagnostic
-retry after a concrete repair.
-
-The smoke check enters through the public surface, follows public help, uses a
-disposable application-created database, attempts the main user goal, makes one
-natural mistake when useful, and tries a plausible alternate path. Report the
-walkthrough and findings to the human rather than adding a dated evidence
-section here.
-
-The normal full-solution test command discovers offline and live tests together.
-A live test calls OpenAI only when its feature has an effective key, is enabled,
-and has its explicit `LiveTests` flag set; otherwise it completes without a
-provider call. Do not override those effective settings in the test command.
-For an enabled live check, log and inspect the exact credential-free serialized
-request and provider response, use the smallest meaningful known/control cases,
-and make no automatic paid retries, parallel paid calls, or fallback-model
-calls. At provider trouble, follow the human's current retry instructions and
-the sandbox network workaround in `AGENTS.md`; absent a human override, stop
-paid calls immediately and report the non-secret failure.
-
-## Repository guardrails
-
-- Preserve unrelated human changes.
-- Do not create/switch branches or stage, commit, merge, rebase, cherry-pick,
-  revert, reset, clean, stash, alter Git configuration, contact remotes, push,
-  or open pull requests.
-- Do not launch another agent.
-- Do not add a project, major dependency, persistence mechanism, provider, UI,
-  or domain feature unless Current task requires it.
-- Never search for, expose, copy, or configure credentials.
-- “Write” and “apply” in product prose mean the ValidatedWorld transaction, not
-  a Git operation.
+On success, mark the task complete, select the next prewritten task, set its
+estimate, update affected canonical database nodes through an ordinary reviewed
+change session, and stop for human review. On failure, leave Current task
+unchanged and report the command, output, cause, and repairs. Follow all testing,
+AI-cost, security, and Git boundaries in `AGENTS.md`.
 
 ## Progress
 
 | Task | Status | Purpose |
 |---|---|---|
-| T0 | complete | Repository scaffold and consolidated documentation |
-| T1 | complete | Common immutable graph domain |
-| T2 | complete | Graph index and structural validation |
-| T3 | complete | Change operations and projection |
-| T4 | complete | Affected-set analysis and manual review |
-| T5 | complete | Structured protocol and deterministic fingerprints |
-| T6 | complete | SQLite current-state persistence and first public read slice |
-| T7 | complete | Application queries and in-memory session lifecycle |
-| T8 | complete | Atomic write and rollback behavior |
-| T9 | complete | Filesystem-like stateful shell and structured CLI/NDJSON workflows |
-| T10 | complete | Realistic MVP scenarios and usability hardening |
-| T11 | complete | MVP release decision |
-| T12 | complete | Automatic OpenAI semantic write gate |
-| T13 | complete | OpenAI authoring agent |
-| T14 | complete | Plugin format evaluated within T13; no MVP plugin retained |
-| T15 | current | Safe new-world bootstrap and tracked self-blueprint scenario |
-| T16 | pending | Provider request-size preflight and compact bounded omissions |
-| T17 | pending | Author discovery guidance and ranked lexical retrieval |
-| T18 | pending | Evidence-gated semantic retrieval experiment |
+| T0–T14 | complete | MVP, SQLite workflows, review, AI gate, and optional AI authoring |
+| T15 | current | Bounded semantic database diff |
+| T16 | pending | Reviewed purpose-only project bootstrap |
+| T17 | pending | Provider request limits and compact bounded omissions |
+| T18 | pending | Graph observability and dependency-quality reports |
+| T19 | pending | Ranked lexical retrieval and measured query scaling |
+| T20 | pending | Evidence-gated semantic retrieval experiment |
+| T21 | pending | Graph-aware three-way merge and optional Git integration |
+| T22 | pending | External-artifact drift and renderer adapter evaluation |
+| T23 | pending | Large-import and bulk-authoring workflow |
+| T24 | pending | Domain profile extension contract |
 
-## T13 — optional OpenAI authoring agent
+## T15 — bounded semantic database diff
 
-**Prerequisites:** T12 complete; T13 is current; a human-configured local key
-reported by the README's non-secret `ai.status` check; and the explicit
-authoring live-test flag. If effective key configuration is absent, make no code
-changes and ask the human to configure it locally. Never set or display it.
+**Goal:** Make a committed `.vw.db` reviewable without a redundant full JSON or
+SQL mirror. Here, “semantic diff” means graph entities and their human-readable
+values, not embedding or AI judgment.
 
-**Read:** README AI-first flow and technical design section 8.
+**Public contract:**
 
-**Goal:** Add optional conversational English authoring through the same bounded
-Application use cases while preserving exact human approval, the automatic
-independent semantic write gate, and complete manual use.
+- Compare two verified `.vw.db` files with the same project ID. Never write
+  either database and never call an AI provider.
+- Return base/target state fingerprints, project metadata changes, summary
+  counts, and stable-ID node/edge additions, replacements, and removals.
+- A replacement contains complete old/new values plus deterministic
+  `changedFields`; scope-parent endpoint and edge review-direction changes must
+  be explicit.
+- Order results deterministically by entity category and stable ID. Bound detail
+  with `limit` and an opaque cursor bound to both fingerprints and all query
+  options. Summary counts remain present on every page.
+- Add one-shot CLI
+  `project diff <base-db> <target-db> [--limit N] [--cursor TOKEN]` and NDJSON
+  `project.diff` with `basePath`, `targetPath`, optional `limit`, and optional
+  `cursor`.
+- Reject unreadable/invalid databases, a project-ID mismatch, invalid limits,
+  and stale or cross-request cursors with actionable errors. Identical databases
+  succeed with zero changes; reversing inputs reverses adds/removes and old/new.
+- Keep SQL export as an on-demand interchange tool. Do not add a history table,
+  committed text mirror, Git filter, custom merge driver, schema migration,
+  provider, or new major dependency in this phase.
 
-**Implement:**
+**Implementation shape:**
 
-- Strict read/change tools with bounded context, tool-call, search, traversal,
-  and operation limits; no raw SQL or direct canonical writes. Prefer compact
-  incremental entity operations over complete-batch retransmission, and omit
-  complete proposed graphs and accumulated batches from iterative tool results.
-- Search-before-create behavior, material clarification questions, one
-  process-local change session, affected/review iteration, and new/existing
-  project previews.
-- Exact short-lived human approval bound to database/project, conversation/
-  session, expiry, and all base/operation/proposed/affected/context/review
-  fingerprints. Any change invalidates approval.
-- A guarded normal write tool that never sets `bypassAiReview`. When semantic
-  review is configured and enabled, `change.write` automatically obtains or
-  reuses the independent `allow`/`block` decision. The authoring agent may repair
-  or discuss a block but cannot create, override, or dismiss that decision.
-- Disabled/unconfigured fallback, one OpenAI Responses client, and zero
-  automatic paid retries or fallback providers/models.
-- English authoring instructions that teach stable broad scope containers and
-  IDs, focused volatile claims, source-of-truth-to-consumer direction,
-  fan-in/fan-out roster hubs rather than sibling cliques, useful artifact-level
-  anchors, and `both` only for genuine mutual reconsideration.
-- Before changing counts, complete lists, canonical names, or aliases, search
-  closed-world wording and propose missing semantic edges when warranted. Ask
-  when the set/reference is materially ambiguous. Treat unexpectedly tiny or
-  huge affected previews as a reason to inspect the model.
-- Reuse deliberate namespaced tags after exact-tag lookup; explain that tags do
-  not create dependencies or executable conditions. Use attributes for named
-  scalar values and explicit edges for stale-if-changed relationships. Never
-  tag-filter required affected/context data.
+- Put deterministic comparison/result values in Core or Application without a
+  SQLite dependency. Persistence loads and verifies each immutable snapshot;
+  CLI and NDJSON are thin adapters over one Application use case.
+- Fingerprint cursors with the established serialization/fingerprint approach.
+  Pagination must not require retaining process-local state.
+- Reuse canonical node/edge encoding so tags, attributes, kind, text, endpoints,
+  relationship, review direction, title, and purpose ID compare exactly.
 
-**Tests and acceptance:**
+**Tests and smoke acceptance:**
 
-- Small offline scripted tests cover bounded search, duplicate/unrelated
-  avoidance, material questions, session loss, review iteration, stale approval,
-  no SQL/direct write/automatic disposition, no AI-review bypass, independent
-  block repair, and disabled/unconfigured manual fallback.
-- An explicitly enabled minimal live run logs and inspects exact prompts,
-  context, and tool schemas without credentials. Use the smallest practical
-  new-project and existing-project cases to evaluate correctness, user burden,
-  unrelated mutations, questions, affected coverage, approval binding, reviewer
-  block/repair flow, tokens, cost, and latency.
-- Exercise a compact lore progression covering a sixth roster member,
-  roster/count reconciliation, canonical rename, local detail, broad scope
-  change, deletion, and reparent. Assert roster hubs rather than sibling cliques,
-  stable IDs, semantic consumers, old/new scope lineages, visible topology
-  changes, and exclusion of unrelated local lore.
-- Retain the authoring feature only if it meaningfully reduces burden without
-  bypassing the README’s review/write guarantees.
+- Cover identical and reversed comparisons; every add/replace/remove category;
+  metadata, tag/attribute, scope-parent, endpoint, relationship, and review-
+  direction changes; deterministic order; page boundaries; empty final page;
+  invalid/stale cursor; invalid database; and mismatched project.
+- Exercise CLI and NDJSON output/error envelopes using temporary application-
+  created databases. Prove a second page reconstructs the same ordered detail
+  as one larger page.
+- Smoke with a temporary copy of the real self-blueprint plus a small reviewed
+  target change. Confirm the report explains the intended node/edge meaning,
+  excludes unchanged entities, is useful in both directions, and leaves both
+  source files byte-for-byte unchanged.
 
-## T14 — plugin-format evaluation
+## Ordered backlog
 
-Evaluate feasibility and value with the human. The authorized evaluation was
-absorbed into T13. The current plugin format can bundle a local stdio MCP
-server, but the MVP retains `ai-assistant-shell`: it keeps the portable database
-at the user-selected path, preserves one trusted process for the in-memory
-session and direct human approval, and avoids packaging a source-relative server
-before ValidatedWorld has a distributable local executable. Any future plugin
-must reuse the bounded tool contract without weakening those guarantees.
+### T16 — reviewed purpose-only project bootstrap
 
-## T15 — safe new-world bootstrap and tracked self-blueprint scenario
+Restrict public initialization to a purpose root with no edges. All first-tree
+content must pass ordinary change review and the configured AI gate; opening an
+existing verified database remains trusted and causes no provider call. Keep a
+private fixture-only populated initializer where tests require it.
 
-**Goal:** Close the initialization trust bypass and make ValidatedWorld's own
-architecture a repeatable, tracked, realistic use case.
+### T17 — provider request limits and compact bounded omissions
 
-**Implement:**
+Measure the exact AI-review payload before dispatch and stop locally above
+configured byte/item ceilings with component counts and split/remodel/bypass
+guidance. Replace one-record-per-omission output with grouped counts, a small
+sample, and fingerprint-bound detail pages. Never auto-partition a write or make
+multiple paid review calls.
 
-- Restrict every public new-project entry point to one purpose node and no
-  edges. Reject attempts to establish a populated canonical graph through
-  `project.init` with an actionable message directing the caller to change
-  sessions.
-- Keep existing `.vw.db` open behavior: verify structure and fingerprints, then
-  assume the committed world was already reviewed. Do not call AIReview merely
-  because a database is opened.
-- If tests or built-in sample creation need complete graph loading, keep it an
-  internal trusted-fixture path that is unavailable to CLI/NDJSON authoring.
-- Retain `samples/ValidatedWorldBlueprint/baseline.json` as the readable source
-  for the semantic blueprint. Add a repeatable scenario that starts with the
-  purpose root, adds the graph in stable scope-sized batches through ordinary
-  change sessions, reviews the affected/context slice, and commits each batch.
-- Do not use the authoring model to build the sample. Do not submit the complete
-  blueprint or complete project to AIReview. Provider-enabled smoke coverage is
-  limited to one representative small change; deterministic reviewer doubles
-  cover the complete piecewise replay without paid calls.
-- Exercise user questions against the resulting database: find the write path,
-  locate a feature and its risks, inspect one dependency path, make one local
-  correction, and verify unrelated scope branches stay out of the affected set.
+### T18 — graph observability and dependency-quality reports
 
-**Tests and acceptance:**
+Add bounded graph summaries for scope coverage, orphaned/unreachable entities,
+review fan-out hotspots, and suspiciously isolated claims. Reports are
+diagnostic author aids, not proof and not automatic dependency creation. Add a
+deterministic diagram-oriented export only if the reports demonstrate a useful
+consumer.
 
-- Public purpose-only creation succeeds; public populated initialization fails
-  before SQLite establishes canonical content.
-- The first non-root addition follows normal validation, manual review, and the
-  enabled reviewer gate. Existing-project open performs no provider call.
-- Explicit single-write bypass remains available and still requires all
-  deterministic/manual readiness.
-- The generated blueprint verifies, matches the tracked source counts and
-  fingerprint, and the user-style queries above return useful bounded results.
+### T19 — ranked lexical retrieval and measured query scaling
 
-## T16 — provider request-size preflight and compact bounded omissions
+Add deterministic explainable ranking: stable ID and exact tag first, then
+phrase/token/metadata matches, while preserving literal search. Teach authors to
+search aliases, closed-world wording, neighbors, and paths before edits. Measure
+the self-blueprint and a larger realistic corpus; avoid loading the complete
+graph for bounded reads only where evidence shows material latency or memory
+cost. Any SQLite index/schema change requires explicit design reconciliation.
 
-**Goal:** Make both sides of a bounded interaction remain bounded without
-inventing automatic multi-call review.
+### T20 — evidence-gated semantic retrieval experiment
 
-**Implement:**
+Pre-record relevant answers and lexical misses for the self-blueprint and one
+unrelated corpus. Compare semantic candidates with T19 on recall, false
+positives, latency, privacy, offline behavior, cost, index size, and update
+invalidation. Ship only with human approval and material measured benefit;
+semantic hits remain advisory and never silently expand required review.
 
-- Serialize the exact semantic-review request before provider dispatch and
-  enforce configurable byte and item ceilings. On failure, do not call the
-  provider; return totals grouped by operations, affected nodes, edges, paths,
-  scope context, and manifest data, plus guidance to split the change, improve
-  graph modeling, or use the explicit bypass.
-- Replace one-record-per-omission responses with counts grouped by omission
-  reason, a small deterministic sample, and a stable cursor/detail query for
-  retrieving additional omitted identities and evidence in bounded pages.
-- Apply the same response accounting to CLI, NDJSON, and authoring tools. An
-  item limit includes omission metadata rather than counting only primary rows.
-- Do not automatically partition a proposal, make parallel reviewer calls, add
-  multiplayer behavior, or send a whole project in one request or many pieces.
+### T21 — graph-aware three-way merge and optional Git integration
 
-**Tests and acceptance:**
+Using T15’s entity diff, classify compatible stable-ID edits and explicit
+conflicts across base/ours/theirs. Never merge SQLite pages. A merged proposal
+must enter the normal affected/context review and atomic write path. Evaluate a
+read-only Git diff driver after the standalone contract is stable; do not make
+Git tooling a runtime requirement.
 
-- An over-budget review reaches no provider and identifies which components
-  caused the limit; an unchanged in-budget request remains fingerprint-bound.
-- Large omitted sets produce constant-size first responses, deterministic
-  pages recover exact details, and required data is never reported as complete
-  when it was omitted.
+### T22 — external-artifact drift and renderer adapter evaluation
 
-## T17 — author discovery guidance and ranked lexical retrieval
+Evaluate optional artifact anchors containing path plus content hash and a
+small versioned adapter contract for generating or checking external documents.
+Keep manual/AI propagation from affected anchors as the baseline. Do not turn
+arbitrary project text into executable commands or require generated artifacts
+to use the core graph.
 
-**Goal:** Reduce missed relevant nodes without pretending retrieval can infer
-all dependencies.
+### T23 — large-import and bulk-authoring workflow
 
-**Implement:**
+Design bounded, resumable import planning for large initial graphs and
+refactors without bypassing review or the atomic final write. Prefer validated
+local manifests and scope-sized batches; do not raise AI tool limits blindly or
+send a whole project to a provider.
 
-- Strengthen author instructions to search several terms, aliases, canonical
-  names, and closed-world wording before edits; inspect incoming/outgoing review
-  neighbors and relevant paths when affected results look unexpectedly small.
-- Expose concise bounded neighbor/dependency reads to the author if the current
-  tools cannot answer those questions directly.
-- Add deterministic ranked lexical search with stable pagination and match
-  explanations. Prefer exact stable ID and exact tag, then phrase, token
-  coverage, kind, and metadata matches. Preserve the existing literal search.
-- Start without embeddings. Use in-memory ranking unless measurements justify
-  a SQLite search index; adding FTS or another dependency requires the normal
-  schema/dependency decision.
+### T24 — domain profile extension contract
 
-**Tests and acceptance:**
-
-- Domain synonyms supplied as aliases/tags and multi-token queries rank useful
-  nodes ahead of incidental substring hits with a visible reason.
-- Search remains bounded and deterministic. Candidate discovery never creates
-  dependency edges, broadens required review silently, or claims completeness.
-
-## T18 — evidence-gated semantic retrieval experiment
-
-**Goal:** Decide whether semantic similarity materially improves discovery over
-ranked lexical search on real semantic graphs.
-
-**Implement:**
-
-- Evaluate the self-blueprint and one unrelated realistic corpus using queries
-  whose relevant nodes and lexical misses are recorded in advance.
-- Compare retrieval quality, latency, privacy, provider cost, index size,
-  invalidation on node updates, and offline behavior against T17.
-- Implement semantic retrieval only if the measured benefit is material and the
-  human approves any provider, model, schema, or dependency choice. Otherwise
-  record the rejection in the current design and close the task.
-- Treat semantic results as advisory candidates. They never become canonical
-  edges, proof of consistency, or mandatory affected nodes without review.
-
-**Tests and acceptance:**
-
-- The evaluation is reproducible and reports both useful discoveries and false
-  positives. The task may validly conclude with no semantic feature.
+Only after real projects reveal repeated needs, define versioned deterministic
+profiles for additional schemas, validators, or derived facts. Keep Core domain-
+neutral and require explicit migration and compatibility behavior.

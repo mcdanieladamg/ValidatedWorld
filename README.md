@@ -109,11 +109,11 @@ LFS. LFS is not the default for `.vw.db`: it replaces the repository object with
 a pointer, adds a required client/storage service, and does not make SQLite
 changes semantically reviewable. A project should reconsider storage only when
 measured database size and repository-history growth justify that tradeoff.
-Git hosts generally treat SQLite as binary, so a deterministic text projection
-may be committed beside it for review. Such a projection is generated output,
-must match the database fingerprint, and is never edited as another source of
-truth. This repository currently keeps that projection at
-`samples/ValidatedWorldBlueprint/baseline.json`.
+Git hosts generally treat SQLite as binary. Do not commit a complete JSON or SQL
+mirror merely to obtain text diffs: it duplicates the database and invites two
+sources of truth. The next planned feature is a deterministic, bounded semantic
+diff between two database revisions; SQL export remains an on-demand inspection
+and interchange tool.
 
 SQLite supplies atomic transactions, foreign keys, indexes, and efficient
 queries. ValidatedWorld supplies the behavior a database schema cannot:

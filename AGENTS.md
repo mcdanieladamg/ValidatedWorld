@@ -7,9 +7,8 @@ not rewrite it without explicit permission from the user.
 
 `ValidatedWorld.Blueprint.vw.db` is the canonical detailed project knowledge
 base for this repository. It records implemented behavior, accepted decisions,
-gaps, and planned work. Treat
-`samples/ValidatedWorldBlueprint/baseline.json` only as its generated,
-diff-friendly review projection; never edit that JSON as an independent source.
+gaps, and planned work. Do not maintain a complete JSON, SQL, Markdown, or
+diagram mirror beside it as a second authority.
 
 Before implementation, read in order:
 
@@ -35,18 +34,15 @@ documents instead of building an undocumented compromise.
 
 When a change materially alters product meaning, architecture, a public
 contract, or roadmap status, update the canonical database through an ordinary
-ValidatedWorld change session and regenerate its review projection. Use the
-same affected/context review discipline as any other project. Do not edit
-SQLite directly. If the application cannot safely update its own database,
-report that as a blocker instead of silently allowing the Markdown and database
-to diverge.
-
-After a successful blueprint write, run `./scripts/export-blueprint.ps1` and
-then `./scripts/export-blueprint.ps1 -Check`; include both the database and
-generated projection in the human's review. Never
-invoke the built-in authoring model merely to update this repository's graph;
-the coding agent is already the author. Use the optional independent reviewer
-only when the task and configured cost boundary warrant it.
+ValidatedWorld change session. Use the same affected/context review discipline
+as any other project. Do not edit SQLite directly. Include the database in the
+human's review and, until the product has semantic database diff, summarize the
+changed node and edge meanings in the task report. If the application cannot
+safely update its own database, report that as a blocker instead of silently
+allowing Markdown and database meaning to diverge. Never invoke the built-in
+authoring model merely to update this repository's graph; the coding agent is
+already the author. Use the optional independent reviewer only when the task
+and configured cost boundary warrant it.
 
 ## One-task development loop
 

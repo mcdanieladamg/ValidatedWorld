@@ -294,14 +294,13 @@ Repository ignore rules exclude SQLite sidecars and application-owned
 opt-in response to measured size/history pressure rather than a format default;
 it does not provide semantic diffs or safe merges.
 
-Any committed JSON, SQL, diagram, or document view of a project is a generated
-review projection. It identifies the source fingerprint, is regenerated from
-the database, and is never edited as a second authority. The application should
-provide a deterministic two-database semantic diff over stable-ID entity adds,
-replacements, and removals. A later explicit three-way graph merge may reconcile
-compatible entity changes, but the merged graph must pass ordinary affected
-analysis and review before it becomes canonical. Raw SQLite page merging is
-never supported.
+Do not commit a complete JSON or SQL mirror solely to make the database
+text-diffable. Deterministic exports remain useful on-demand interchange and
+inspection formats, but the application provides a bounded two-database
+semantic diff over project metadata and stable-ID entity adds, replacements,
+and removals. A later explicit three-way graph merge may reconcile compatible
+entity changes, but the merged graph must pass ordinary affected analysis and
+review before it becomes canonical. Raw SQLite page merging is never supported.
 
 The final write has a provider preflight followed by a short transaction:
 
