@@ -89,6 +89,7 @@ Inspect and protect a project:
 ./ValidatedWorld.Cli.exe project verify world.vw.db
 ./ValidatedWorld.Cli.exe project backup world.vw.db world-backup.vw.db
 ./ValidatedWorld.Cli.exe project export-sql world.vw.db > world.sql
+./ValidatedWorld.Cli.exe project diff world-before.vw.db world.vw.db --limit 100
 ```
 
 List or create a built-in disposable sample:
@@ -100,6 +101,47 @@ List or create a built-in disposable sample:
 
 `project open` returns the complete graph and can be large. Prefer bounded read
 commands when only part of a project is needed.
+
+## Semantic database diff
+
+`project diff` compares two verified files belonging to the same project. It is
+read-only and makes no AI call:
+
+```powershell
+./ValidatedWorld.Cli.exe project diff base.vw.db target.vw.db `
+    --limit 100
+./ValidatedWorld.Cli.exe project diff base.vw.db target.vw.db `
+    --limit 100 --cursor <nextCursor>
+```
+
+The JSON result contains:
+
+- `basePath`, `targetPath`, `projectId`, and both state fingerprints;
+- `metadataChanges` for title or purpose-node changes;
+- a `summary` of metadata and node/edge adds, replacements, and removals;
+- bounded `items`, `totalCount`, `nextCursor`, and `omission` fields.
+
+An added item contains its complete `newNode` or `newEdge`; a removed item
+contains its complete `oldNode` or `oldEdge`. A replacement contains both and a
+`changedFields` list. Nodes precede edges, with ordinal stable-ID ordering inside
+each category. Summary and metadata remain on every page.
+
+The cursor belongs to the exact project ID, base/target fingerprints, input
+order, and page limit. Reversing the comparison, changing either database, or
+changing `--limit` requires starting again without the old cursor. Identical
+files succeed with no items. Different project IDs, invalid databases, and bad
+cursors fail explicitly.
+
+The NDJSON equivalent is:
+
+```json
+{"version":1,"command":"project.diff","payload":{"basePath":"base.vw.db","targetPath":"target.vw.db","limit":100}}
+```
+
+Use a temporary `project backup` made before editing a repository's canonical
+database as the base, then diff it against the reviewed result. A Git revision
+materialized as a `.vw.db` file is equally valid. The diff is derived review
+output, not another authority or stored project history.
 
 ## Bounded reads
 
@@ -416,15 +458,15 @@ readiness. For a final proposal preview, use `change.show` with
 `includeOperations:true` and `includeProposedGraph:false` to retrieve the
 normalized operation batch without retrieving the whole graph.
 
-## Legacy complete-graph NDJSON initialization
+## Complete-graph NDJSON initialization
 
-The current `project.init` accepts a complete graph DTO and writes it after
-structural validation, without the ordinary change-session manual/AI review
-gate. Treat it only as a temporary trusted-fixture path; do not use it to create
-a real new world. T15 removes this public bypass so project creation accepts
-only the purpose root and all later content uses reviewed change sessions.
+`project.init` accepts a complete graph DTO and writes it after structural
+validation, without the ordinary change-session manual/AI review gate. It is a
+trusted-fixture/import surface, not the recommended way to establish a real new
+world. For authored projects, use the purpose-only one-shot `project init`, then
+add all other content through reviewed change sessions.
 
-The example below records the current protocol and is formatted
+The example below records the complete-graph protocol and is formatted
 for reading; serialize each request as one physical line before sending it to
 the NDJSON host. This small graph contains a purpose, one child, and the child's
 required scope edge:

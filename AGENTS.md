@@ -35,14 +35,16 @@ documents instead of building an undocumented compromise.
 When a change materially alters product meaning, architecture, a public
 contract, or roadmap status, update the canonical database through an ordinary
 ValidatedWorld change session. Use the same affected/context review discipline
-as any other project. Do not edit SQLite directly. Include the database in the
-human's review and, until the product has semantic database diff, summarize the
-changed node and edge meanings in the task report. If the application cannot
-safely update its own database, report that as a blocker instead of silently
-allowing Markdown and database meaning to diverge. Never invoke the built-in
-authoring model merely to update this repository's graph; the coding agent is
-already the author. Use the optional independent reviewer only when the task
-and configured cost boundary warrant it.
+as any other project. Do not edit SQLite directly. Before that session, create a
+verified temporary backup outside the repository. After the write, run bounded
+`project diff` pages from the backup to the canonical database and include that
+semantic report in the human's review; then remove the temporary backup. If the
+application cannot safely update or diff its own database, report that as a
+blocker instead of silently allowing code, focused Markdown contracts, and
+database meaning to diverge. Never invoke the built-in authoring model merely
+to update this repository's graph; the coding agent is already the author. Use
+the optional independent reviewer only when the task and configured cost
+boundary warrant it.
 
 ## One-task development loop
 
@@ -181,7 +183,7 @@ not a Git operation.
 
 ## Optional OpenAI tasks
 
-OpenAI is the only planned provider. AI prompts, tools, and responses are
+OpenAI is the only supported provider. AI prompts, tools, and responses are
 hardcoded in English. The AI features are optional at runtime, but their
 development tasks have strict prerequisites in the development plan.
 

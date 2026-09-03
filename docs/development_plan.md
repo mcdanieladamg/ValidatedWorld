@@ -1,8 +1,8 @@
 # ValidatedWorld Development Plan
 
-**Current task:** T15 — bounded semantic database diff
+**Current task:** T16 — reviewed purpose-only project bootstrap
 
-**Current task estimate:** large
+**Current task estimate:** medium
 
 This is the single implementation roadmap. `ValidatedWorld.Blueprint.vw.db` is
 the canonical detailed product map; this file selects one executable phase and
@@ -32,8 +32,8 @@ AI-cost, security, and Git boundaries in `AGENTS.md`.
 | Task | Status | Purpose |
 |---|---|---|
 | T0–T14 | complete | MVP, SQLite workflows, review, AI gate, and optional AI authoring |
-| T15 | current | Bounded semantic database diff |
-| T16 | pending | Reviewed purpose-only project bootstrap |
+| T15 | complete | Bounded semantic database diff |
+| T16 | current | Reviewed purpose-only project bootstrap |
 | T17 | pending | Provider request limits and compact bounded omissions |
 | T18 | pending | Graph observability and dependency-quality reports |
 | T19 | pending | Ranked lexical retrieval and measured query scaling |
@@ -43,67 +43,38 @@ AI-cost, security, and Git boundaries in `AGENTS.md`.
 | T23 | pending | Large-import and bulk-authoring workflow |
 | T24 | pending | Domain profile extension contract |
 
-## T15 — bounded semantic database diff
-
-**Goal:** Make a committed `.vw.db` reviewable without a redundant full JSON or
-SQL mirror. Here, “semantic diff” means graph entities and their human-readable
-values, not embedding or AI judgment.
-
-**Public contract:**
-
-- Compare two verified `.vw.db` files with the same project ID. Never write
-  either database and never call an AI provider.
-- Return base/target state fingerprints, project metadata changes, summary
-  counts, and stable-ID node/edge additions, replacements, and removals.
-- A replacement contains complete old/new values plus deterministic
-  `changedFields`; scope-parent endpoint and edge review-direction changes must
-  be explicit.
-- Order results deterministically by entity category and stable ID. Bound detail
-  with `limit` and an opaque cursor bound to both fingerprints and all query
-  options. Summary counts remain present on every page.
-- Add one-shot CLI
-  `project diff <base-db> <target-db> [--limit N] [--cursor TOKEN]` and NDJSON
-  `project.diff` with `basePath`, `targetPath`, optional `limit`, and optional
-  `cursor`.
-- Reject unreadable/invalid databases, a project-ID mismatch, invalid limits,
-  and stale or cross-request cursors with actionable errors. Identical databases
-  succeed with zero changes; reversing inputs reverses adds/removes and old/new.
-- Keep SQL export as an on-demand interchange tool. Do not add a history table,
-  committed text mirror, Git filter, custom merge driver, schema migration,
-  provider, or new major dependency in this phase.
-
-**Implementation shape:**
-
-- Put deterministic comparison/result values in Core or Application without a
-  SQLite dependency. Persistence loads and verifies each immutable snapshot;
-  CLI and NDJSON are thin adapters over one Application use case.
-- Fingerprint cursors with the established serialization/fingerprint approach.
-  Pagination must not require retaining process-local state.
-- Reuse canonical node/edge encoding so tags, attributes, kind, text, endpoints,
-  relationship, review direction, title, and purpose ID compare exactly.
-
-**Tests and smoke acceptance:**
-
-- Cover identical and reversed comparisons; every add/replace/remove category;
-  metadata, tag/attribute, scope-parent, endpoint, relationship, and review-
-  direction changes; deterministic order; page boundaries; empty final page;
-  invalid/stale cursor; invalid database; and mismatched project.
-- Exercise CLI and NDJSON output/error envelopes using temporary application-
-  created databases. Prove a second page reconstructs the same ordered detail
-  as one larger page.
-- Smoke with a temporary copy of the real self-blueprint plus a small reviewed
-  target change. Confirm the report explains the intended node/edge meaning,
-  excludes unchanged entities, is useful in both directions, and leaves both
-  source files byte-for-byte unchanged.
-
 ## Ordered backlog
 
 ### T16 — reviewed purpose-only project bootstrap
 
-Restrict public initialization to a purpose root with no edges. All first-tree
-content must pass ordinary change review and the configured AI gate; opening an
-existing verified database remains trusted and causes no provider call. Keep a
-private fixture-only populated initializer where tests require it.
+**Goal:** A new canonical world cannot acquire populated content outside the
+ordinary review/write path.
+
+**Implement:**
+
+- Make every public initializer accept only project metadata plus one purpose
+  node and no edges. Reject a populated graph before creating a database, with
+  guidance to use a change session for all later content.
+- Give one-shot CLI and NDJSON the same purpose-only contract. Keep complete-
+  graph initialization private to built-in samples and test fixtures rather
+  than exposing a second public trust path.
+- Preserve existing-project behavior: opening a structurally valid,
+  fingerprint-correct `.vw.db` trusts its committed state and never invokes AI
+  review merely because it was opened.
+- The first node/edge addition uses ordinary projection, affected/context
+  review, optional AI gate, stale checks, and atomic write. The explicit single-
+  write bypass continues to waive only AI review.
+
+**Tests and smoke acceptance:**
+
+- Purpose-only creation succeeds through CLI and NDJSON; populated public
+  initialization fails without leaving a canonical or temporary database.
+- A first real addition cannot write with pending manual review and reaches an
+  enabled deterministic reviewer double only after manual readiness. Existing-
+  project open reaches no provider.
+- Built-in samples and existing test fixtures still initialize through the
+  private trusted path. Smoke a new project from purpose creation through one
+  reviewed child/scope-edge commit and reopen the verified result.
 
 ### T17 — provider request limits and compact bounded omissions
 
@@ -140,7 +111,7 @@ semantic hits remain advisory and never silently expand required review.
 
 ### T21 — graph-aware three-way merge and optional Git integration
 
-Using T15’s entity diff, classify compatible stable-ID edits and explicit
+Using the semantic entity diff, classify compatible stable-ID edits and explicit
 conflicts across base/ours/theirs. Never merge SQLite pages. A merged proposal
 must enter the normal affected/context review and atomic write path. Evaluate a
 read-only Git diff driver after the standalone contract is stable; do not make

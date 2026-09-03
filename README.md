@@ -104,16 +104,16 @@ dependencies. Splitting present state and future work into separate databases
 would hide the relationships between them. Separate databases are appropriate
 only for a real confidentiality, ownership, or independent-lifecycle boundary.
 
-The current blueprint is small enough for ordinary Git and does not use Git
+The blueprint is small enough for ordinary Git and does not use Git
 LFS. LFS is not the default for `.vw.db`: it replaces the repository object with
 a pointer, adds a required client/storage service, and does not make SQLite
 changes semantically reviewable. A project should reconsider storage only when
 measured database size and repository-history growth justify that tradeoff.
 Git hosts generally treat SQLite as binary. Do not commit a complete JSON or SQL
 mirror merely to obtain text diffs: it duplicates the database and invites two
-sources of truth. The next planned feature is a deterministic, bounded semantic
-diff between two database revisions; SQL export remains an on-demand inspection
-and interchange tool.
+sources of truth. `project diff` provides a deterministic, bounded semantic
+comparison between two database revisions; SQL export remains an on-demand
+inspection and interchange tool.
 
 SQLite supplies atomic transactions, foreign keys, indexes, and efficient
 queries. ValidatedWorld supplies the behavior a database schema cannot:
@@ -128,10 +128,23 @@ export.
 
 The README remains the concise bootstrap because repository hosts and humans can
 open it without installing ValidatedWorld. It states the thesis, identifies the
-canonical database, and shows how to query it. Supplementary design and roadmap
-documents may shrink into generated views after semantic diff, repository
-discovery, and readable export workflows are dependable; removing them sooner
-would make the binary knowledge base harder, not easier, to adopt.
+canonical database, and shows how to query it. Other repository documents have
+distinct operational or implementation-contract roles; they do not duplicate
+the complete graph.
+
+Compare any two verified versions of the same project without writing either
+file or calling an AI provider:
+
+```powershell
+dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
+    project diff base.vw.db target.vw.db --limit 100
+```
+
+The result includes both state fingerprints, project metadata changes, summary
+counts, and stable-ID node/edge additions, replacements, and removals.
+Replacements include complete old/new values and the names of changed fields.
+Use the returned cursor for another bounded page. Because the comparison is
+derived, it is never another project authority or a retained history system.
 
 ## The simple mental model
 
@@ -208,6 +221,7 @@ ValidatedWorld owns:
 - structural validation and optional profile validation;
 - explained affected-subgraph expansion and complete review obligations;
 - atomic in-memory-to-SQLite change transactions;
+- bounded read-only semantic comparison of two verified project revisions;
 - a stateful flag-based shell that selects the purpose root and navigates the
   scope tree with `pwd`, `dir`/`ls`, `cd`, and `root`; and
 - bounded structured commands for AIs, scripts, and integrations.
@@ -217,10 +231,11 @@ manual, source tree, game project, or media. External artifact/anchor nodes may
 point to those products, but the engine does not rewrite, render, publish, or
 certify them.
 
-The operation batch is the direct description of a pending change. There is no
-separate semantic-diff format and no retained commit-history subsystem.
+The operation batch is the direct description of a pending change. A semantic
+database diff is a read-only comparison of two independently supplied current
+states; it is not stored in either project and is not a commit-history subsystem.
 
-The planned AI support has two separate roles. The optional authoring agent
+AI support has two separate roles. The optional authoring agent
 searches the project and operates the same change tools available to a human.
 The optional semantic reviewer independently examines one complete proposed
 transaction and its affected context when a database write is attempted. The
@@ -268,11 +283,10 @@ remodel an over-broad relationship, or deliberately use the manual-review
 bypass. It does not automatically partition a proposal into multiple AI reviews
 or submit a whole project in pieces.
 
-Optional profiles may eventually make recurring domains easier to author and
-check. The initial implementation must first prove that the plain text-node and
-relationship model is useful without requiring a profile. An AI may use an
-installed profile when one fits; unsupported structure remains plain graph data
-unless the user later chooses to preserve a separately designed profile.
+Optional profiles can make recurring domains easier to author and check, but the
+plain text-node and relationship model remains independently useful. An AI may
+use an installed profile when one fits; unsupported structure remains plain
+graph data unless the user chooses to preserve a separately designed profile.
 
 ## Intended uses
 
@@ -304,7 +318,15 @@ dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.cspr
 dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read tag ValidatedWorld.Blueprint.vw.db status:gap --limit 50
 ```
 
-The near-term external-artifact workflow remains deliberate: nodes identify
+When changing product meaning, keep a temporary verified pre-change backup,
+update the canonical graph through an ordinary reviewed change session, and run
+`project diff` from that backup to the resulting database. Review that semantic
+report alongside source and focused documentation changes, then discard the
+temporary backup. The `.vw.db` is the detailed product authority; the README,
+technical design, development plan, and CLI guide retain only their distinct
+bootstrap, contract, execution, and operational responsibilities.
+
+The external-artifact workflow is deliberate: nodes identify
 source files, chapters, diagrams, claims, or other consumers; affected analysis
 shows which anchors may be stale; and a human or AI applies the corresponding
 edits outside the database. Optional adapters may later compare content hashes

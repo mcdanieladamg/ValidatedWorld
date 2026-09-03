@@ -173,7 +173,16 @@ public static class CliRunner
             case "export-sql" when arguments.Length == 3:
                 await output.WriteAsync(application.ExportSql(arguments[2]).Sql);
                 return SuccessExitCode;
-            case "init" or "open" or "status" or "verify" or "backup" or "export-sql":
+            case "diff" when arguments.Length >= 4:
+                {
+                    var options = CliProjectDiffOptions.Parse(arguments);
+                    result = CliDto.Diff(application.Diff(
+                        arguments[2],
+                        arguments[3],
+                        new QueryPageRequest(options.Limit, options.Cursor)));
+                    break;
+                }
+            case "init" or "open" or "status" or "verify" or "backup" or "export-sql" or "diff":
                 throw new CliUsageException($"Incorrect arguments for 'project {arguments[1]}'.");
             default:
                 throw new CliUsageException($"Unknown project command '{arguments[1]}'.");
@@ -322,7 +331,7 @@ public static class CliRunner
         await output.WriteLineAsync("ValidatedWorld - local semantic graph change control");
         await output.WriteLineAsync();
         await output.WriteLineAsync("Commands:");
-        await output.WriteLineAsync("  project   Initialize, inspect, verify, back up, or export a project");
+        await output.WriteLineAsync("  project   Initialize, inspect, compare, verify, back up, or export a project");
         await output.WriteLineAsync("  read      Run bounded graph queries");
         await output.WriteLineAsync("  sample    List or create built-in disposable samples");
         await output.WriteLineAsync("  shell     Run the stateful flag-based interface");
@@ -356,6 +365,8 @@ public static class CliRunner
         await output.WriteLineAsync("  project verify <database>");
         await output.WriteLineAsync("  project backup <source-database> <new-destination-database>");
         await output.WriteLineAsync("  project export-sql <database>");
+        await output.WriteLineAsync(
+            "  project diff <base-database> <target-database> [--limit N] [--cursor TOKEN]");
         await output.WriteLineAsync();
         await output.WriteLineAsync(
             "Quote arguments containing spaces. Existing database destinations are not overwritten.");
@@ -426,6 +437,32 @@ public static class CliRunner
 
     private sealed class CliUsageException(string message) : Exception(message);
 
+    private sealed record CliProjectDiffOptions(int Limit, string? Cursor)
+    {
+        public static CliProjectDiffOptions Parse(string[] arguments)
+        {
+            var limit = QueryPageRequest.DefaultLimit;
+            string? cursor = null;
+            var index = 4;
+            while (index < arguments.Length)
+            {
+                if (index + 1 >= arguments.Length)
+                    throw new CliUsageException($"Option '{arguments[index]}' requires a value.");
+                var value = arguments[index + 1];
+                switch (arguments[index])
+                {
+                    case "--limit": limit = PositiveInt(value, "limit"); break;
+                    case "--cursor": cursor = value; break;
+                    default: throw new CliUsageException($"Unknown option '{arguments[index]}'.");
+                }
+
+                index += 2;
+            }
+
+            return new CliProjectDiffOptions(limit, cursor);
+        }
+    }
+
     private sealed record CliReadOptions(int Limit, string? Cursor, int MaxDepth, int MaxVisitedNodes)
     {
         public static CliReadOptions Parse(string[] arguments, int requiredPositionals)
@@ -458,11 +495,12 @@ public static class CliRunner
             return new CliReadOptions(limit, cursor, maxDepth, maxNodes);
         }
 
-        private static int PositiveInt(string value, string option)
-        {
-            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed <= 0)
-                throw new CliUsageException($"Option '--{option}' requires a positive integer.");
-            return parsed;
-        }
+    }
+
+    private static int PositiveInt(string value, string option)
+    {
+        if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed <= 0)
+            throw new CliUsageException($"Option '--{option}' requires a positive integer.");
+        return parsed;
     }
 }

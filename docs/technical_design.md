@@ -296,11 +296,29 @@ it does not provide semantic diffs or safe merges.
 
 Do not commit a complete JSON or SQL mirror solely to make the database
 text-diffable. Deterministic exports remain useful on-demand interchange and
-inspection formats, but the application provides a bounded two-database
-semantic diff over project metadata and stable-ID entity adds, replacements,
-and removals. A later explicit three-way graph merge may reconcile compatible
-entity changes, but the merged graph must pass ordinary affected analysis and
-review before it becomes canonical. Raw SQLite page merging is never supported.
+inspection formats. The read-only `project diff`/`project.diff` operation loads
+and verifies a base and target database, requires the same project ID, and then
+compares their immutable graphs. It never writes either file or contacts an AI
+provider.
+
+The diff result contains normalized base/target paths and state fingerprints;
+changed title or purpose-node metadata; summary counts; and stable-ID node and
+edge additions, replacements, and removals. Additions carry the complete target
+value, removals the complete base value, and replacements both complete values
+plus deterministic changed-field names. Field comparison includes node text,
+kind, tags, and attributes, and edge endpoints, relationship, review direction,
+rationale, tags, and attributes. Node entries precede edge entries and each
+category uses ordinal stable-ID order.
+
+Detail paging uses the ordinary 1–1,000 item bound. Its opaque cursor is bound
+to the project ID, both state fingerprints, page limit, and cursor format
+version; using it with changed content, reversed inputs, or different options
+fails explicitly. Metadata and aggregate counts remain visible on every page.
+The comparison creates no history rows or persistent diff object.
+
+A later explicit three-way graph merge may reconcile compatible entity changes,
+but the merged graph must pass ordinary affected analysis and review before it
+becomes canonical. Raw SQLite page merging is never supported.
 
 The final write has a provider preflight followed by a short transaction:
 
@@ -333,10 +351,10 @@ ValidatedWorld.Cli                  CLI shell, NDJSON host, and composition root
 Core has no SQLite, JSON, provider, file, or UI dependency. Application defines
 persistence ports in domain terms; SQLite implements them.
 
-The public text/structured surface eventually supports:
+The public text/structured surface supports:
 
 ```text
-project: init, open, verify, status, backup, export-sql, semantic diff
+project: init, open, verify, status, backup, export-sql, diff
 read:    node/edge get and list, text search, exact-tag lookup, scope traversal,
          graph navigation/path
 change:  begin, show, focus, expand, apply/patch, affected, review, validate,
@@ -375,12 +393,12 @@ validation, affected analysis, fingerprints, and review invalidation.
 
 ## 8. Optional OpenAI features
 
-OpenAI is the only provider planned for the initial AI features. Provider choice
+OpenAI is the only supported provider for the built-in AI features. Provider choice
 and all user-facing instructions/prompts are hardcoded in English. Defaults and
 local setup are documented in the README; the application uses .NET
 configuration, user-secrets, or process environment.
 
-The planned provider path uses OpenAI Responses background mode and polls the
+The provider path uses OpenAI Responses background mode and polls the
 same response within the configured 1,200-second end-to-end deadline. Returning
 tool results or polling the same response is continuation, not a new paid retry.
 

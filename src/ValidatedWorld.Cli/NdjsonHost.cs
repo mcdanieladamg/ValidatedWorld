@@ -17,6 +17,7 @@ internal sealed class NdjsonHost(
     [
         "host.help", "host.exit",
         "project.init", "project.open", "project.status", "project.verify", "project.backup", "project.export-sql",
+        "project.diff",
         "sample.list", "sample.create",
         "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.tag", "read.scope",
         "read.neighbors", "read.dependencies", "read.path", "read.context",
@@ -81,6 +82,7 @@ internal sealed class NdjsonHost(
         "project.verify" => (ProjectVerify(payload), false),
         "project.backup" => (ProjectBackup(payload), false),
         "project.export-sql" => (ProjectExportSql(payload), false),
+        "project.diff" => (ProjectDiff(payload), false),
         "sample.list" => (SampleList(payload), false),
         "sample.create" => (SampleCreate(payload), false),
         "read.node" => (ReadNode(payload), false),
@@ -122,7 +124,8 @@ internal sealed class NdjsonHost(
             payloads = new
             {
                 project = "init {path,graph}; open|status|verify|export-sql {path}; " +
-                    "backup {sourcePath,destinationPath}",
+                    "backup {sourcePath,destinationPath}; " +
+                    "diff {basePath,targetPath,limit?,cursor?}",
                 sample = "list {}; create {sampleName,path}",
                 read = "node|edge {path,entityId,expectedProjectId?}; " +
                     "nodes|edges {path,limit?,cursor?,expectedProjectId?}; " +
@@ -193,6 +196,15 @@ internal sealed class NdjsonHost(
         var request = CliJson.Payload<PathRequest>(payload);
         var result = application.ExportSql(request.Path);
         return new SqlExportDto(result.Path, result.StateFingerprint, result.Sql);
+    }
+
+    private object ProjectDiff(JsonElement payload)
+    {
+        var request = CliJson.Payload<ProjectDiffRequest>(payload);
+        return CliDto.Diff(application.Diff(
+            request.BasePath,
+            request.TargetPath,
+            CliDto.Page(request.Limit, request.Cursor)));
     }
 
     private static object SampleList(JsonElement payload)
