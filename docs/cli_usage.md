@@ -1,6 +1,6 @@
 # ValidatedWorld CLI usage
 
-ValidatedWorld is currently a local, headless .NET 10 command-line application.
+ValidatedWorld is a local, headless .NET 10 command-line application.
 One-shot commands cover project storage and bounded reads. Long-lived change
 sessions have two interfaces over the same Application behavior:
 
@@ -138,10 +138,9 @@ The NDJSON equivalent is:
 {"version":1,"command":"project.diff","payload":{"basePath":"base.vw.db","targetPath":"target.vw.db","limit":100}}
 ```
 
-Use a temporary `project backup` made before editing a repository's canonical
-database as the base, then diff it against the reviewed result. A Git revision
-materialized as a `.vw.db` file is equally valid. The diff is derived review
-output, not another authority or stored project history.
+Use a `project backup` made before editing as the base, then diff it against the
+result. A Git revision materialized as a `.vw.db` file is equally valid. Diff
+output is not stored in either database.
 
 ## Bounded reads
 
@@ -680,8 +679,7 @@ inspection. Use the latest complete reference for `change.expand`,
 
 ## Conversational AI authoring
 
-The default AI-first interface is a separate conversational entry point rather
-than another duplicate set of human edit commands:
+The conversational authoring entry point is:
 
 ```powershell
 dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- ai-assistant-shell project.vw.db

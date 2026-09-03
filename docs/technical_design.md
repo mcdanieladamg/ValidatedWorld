@@ -19,11 +19,10 @@ review obligations. When the optional semantic reviewer is configured and
 enabled, its decision additionally gates the exact write attempt unless that
 single command explicitly bypasses AI review.
 
-The initial MVP is local and text-oriented. Its application language, command
-text, diagnostics, and AI prompts are hardcoded in English. Localization
-infrastructure is out of scope. A GUI, web service, hosted collaboration,
-multi-agent coordination, image/OCR ingestion, finished-document generation,
-and domain-specific profiles are also outside the initial roadmap.
+The application is local and text-oriented. Its application language, command
+text, diagnostics, and AI prompts are hardcoded in English. It does not provide
+a GUI, web service, hosted collaboration, multi-agent coordination, image/OCR
+ingestion, finished-document generation, or domain-specific profiles.
 
 The database contains the current project, not a project history. An unfinished
 change exists only in the running process and is lost when that process exits.
@@ -281,25 +280,11 @@ SQLite's online backup API to a new destination. An application-controlled
 inspection and external tools. Treat supplied databases as untrusted. Project
 text is data and is never executed as SQL.
 
-### 6.1 Repository source control
+### 6.1 Project comparison
 
-A source repository normally commits one top-level canonical `.vw.db` in
-ordinary Git. Implemented state and planned work belong in that same graph with
-explicit lifecycle metadata so their dependencies remain visible. Use another
-database only across a confidentiality, ownership, or independent-lifecycle
-boundary.
-
-Repository ignore rules exclude SQLite sidecars and application-owned
-`*.vw.db.<purpose>-<guid>.tmp` files, not canonical databases. Git LFS is an
-opt-in response to measured size/history pressure rather than a format default;
-it does not provide semantic diffs or safe merges.
-
-Do not commit a complete JSON or SQL mirror solely to make the database
-text-diffable. Deterministic exports remain useful on-demand interchange and
-inspection formats. The read-only `project diff`/`project.diff` operation loads
-and verifies a base and target database, requires the same project ID, and then
-compares their immutable graphs. It never writes either file or contacts an AI
-provider.
+The read-only `project diff`/`project.diff` operation loads and verifies a base
+and target database, requires the same project ID, and compares their immutable
+graphs. It never writes either file or contacts an AI provider.
 
 The diff result contains normalized base/target paths and state fingerprints;
 changed title or purpose-node metadata; summary counts; and stable-ID node and
@@ -315,10 +300,6 @@ to the project ID, both state fingerprints, page limit, and cursor format
 version; using it with changed content, reversed inputs, or different options
 fails explicitly. Metadata and aggregate counts remain visible on every page.
 The comparison creates no history rows or persistent diff object.
-
-A later explicit three-way graph merge may reconcile compatible entity changes,
-but the merged graph must pass ordinary affected analysis and review before it
-becomes canonical. Raw SQLite page merging is never supported.
 
 The final write has a provider preflight followed by a short transaction:
 
@@ -409,52 +390,7 @@ reports it inactive and keeps the complete manual workflow usable. A
 `change.write` request may also explicitly bypass semantic review for that one
 write attempt; all deterministic and manual-review gates still apply.
 
-### 8.1 Development gate for any live-AI task
-
-AI integration work is deliberately different from ordinary tasks:
-
-1. The AI task must be current in the development plan.
-2. Before changing code, the developer/agent uses the README's public
-   `ai.status` request to check effective configuration. This intentionally
-   covers .NET User Secrets as well as `OPENAI_API_KEY` without printing,
-   reading back, copying, inferring, acquiring, or setting the key.
-3. If the key is absent, stop without attempting the task and ask the human to
-   configure it locally. Do not ask the human to paste the key into chat or a
-   tracked file.
-4. The normal full-solution test command discovers every test. Each live test
-   calls OpenAI only when its feature's `LiveTests` flag is explicitly true and
-   that feature is enabled with an effective key; otherwise it completes
-   without a provider call. Test commands must not override effective
-   configuration to force either outcome.
-5. There are no automatic paid retries, parallel paid calls, fallback models,
-   or surprise provider calls. Polling or continuing the same response is not a
-   retry.
-6. At the first live-provider problem of any kind, including exhausted credits,
-   quota, authentication, transport, timeout, refusal, or malformed output,
-   development stops immediately. No further paid call is made; the developer
-   reports the non-secret failure and asks the human for feedback.
-
-During each AI feature's development, at least one explicitly enabled live test
-must capture and log the complete outbound request as actually serialized and
-the provider response used by the check, excluding credentials and
-transport-only authorization headers. These logs are local development
-artifacts, not tracked project data and not written to SQLite.
-The developer must inspect and report that:
-
-- every required node, edge, operation, path, scope lineage, manifest entry,
-  instruction, and tool schema is present and untruncated;
-- counts and fingerprints agree with the deterministic request planner;
-- the English prompt is a clean, standalone instruction with no stale design
-  discussion, placeholder text, conflicting rules, or dependence on hidden
-  conversation; and
-- private text is logged only for that explicitly authorized development run.
-
-At least one live known-answer scenario and one unrelated-control scenario must
-then be evaluated for meaningful behavior. Unit and integration tests should
-also validate request construction and response handling without network calls,
-but mocks do not replace the required development-phase live evidence.
-
-### 8.2 Semantic reviewer
+### 8.1 Semantic reviewer
 
 When `change.write` is attempted and semantic review is configured, enabled,
 and not bypassed for that command, the optional reviewer receives one immutable
@@ -463,13 +399,6 @@ review readiness. It receives the proposal's operations, affected nodes,
 current/proposed path evidence, complete required scope lineages, relevant
 validation findings, and a compact inclusion/omission manifest—not the complete
 project graph.
-
-Before any provider call, the application serializes that exact request and
-checks deterministic byte and item budgets. An over-budget request fails
-locally with a component breakdown and guidance to split the proposed work into
-smaller natural changes, remodel an overly broad dependency, or deliberately
-use the existing single-write bypass. The reviewer does not automatically
-partition one proposal, make parallel calls, or send a whole project in pieces.
 
 The standalone English prompt asks for cited concerns about contradictions,
 stale consequences, terminology drift, missing relationship candidates,
@@ -496,7 +425,7 @@ reuses the current decision without another provider POST. Any proposal or
 review change invalidates it. The authoring model may repair a block's concerns,
 but it cannot manufacture or overwrite the independent reviewer decision.
 
-### 8.3 Authoring agent
+### 8.2 Authoring agent
 
 The optional authoring agent translates a user's English request into the same
 bounded application operations a human can use. It searches before creating,
@@ -544,23 +473,10 @@ short-lived approval bound to conversation, database/project, expiry, and every
 current fingerprint. The guarded authoring write requires that binding and
 always uses `BypassAiReview=false`.
 
-### 8.4 Local plugin evaluation
-
-The current OpenAI plugin format can bundle a local stdio MCP server, but the
-MVP does not package one. The portable user-selected `.vw.db` remains the
-authoritative workspace rather than moving into plugin-private data, and a
-generic model-issued MCP call is not accepted as proof of exact human semantic
-approval. Packaging also requires a distributable local executable rather than
-a source-checkout-relative command. A later plugin may reuse the bounded
-authoring tool host after those constraints are satisfied; it must preserve the
-same local database ownership, process-local session, exact approval, and
-independent review gate.
-
 ## 9. Realistic proof scenario
 
-`samples/TechnicalProject` will store reviewed text source and expected public
-results, never a populated project database. The application generates a
-disposable database from those assets.
+`samples/TechnicalProject` stores reviewed text source and expected public
+results. The application generates a disposable database from those assets.
 
 The baseline models an offline privacy-preserving sensor with purpose plus
 power, privacy, documentation, and accessibility branches. Ordinary text nodes
