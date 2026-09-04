@@ -28,6 +28,11 @@ internal sealed record EmptyRequest;
 internal sealed record PathRequest(string Path);
 internal sealed record ProjectInitRequest(string Path, GraphDto Graph);
 internal sealed record ProjectBackupRequest(string SourcePath, string DestinationPath);
+internal sealed record ProjectDiffRequest(
+    string BasePath,
+    string TargetPath,
+    int Limit = QueryPageRequest.DefaultLimit,
+    string? Cursor = null);
 internal sealed record SampleCreateRequest(string SampleName, string Path);
 internal sealed record ReadEntityRequest(string Path, string EntityId, string? ExpectedProjectId = null);
 internal sealed record ReadPageRequest(
@@ -160,6 +165,38 @@ internal sealed record ProjectVerificationDto(
     int EdgeCount,
     IReadOnlyList<string> Checks);
 internal sealed record SqlExportDto(string Path, string StateFingerprint, string Sql);
+internal sealed record ProjectMetadataChangeDto(string Field, string OldValue, string NewValue);
+internal sealed record ProjectDiffSummaryDto(
+    int MetadataChanges,
+    int NodesAdded,
+    int NodesReplaced,
+    int NodesRemoved,
+    int EdgesAdded,
+    int EdgesReplaced,
+    int EdgesRemoved,
+    int EntityChanges,
+    int TotalChanges);
+internal sealed record ProjectDiffEntryDto(
+    GraphOperationKind Kind,
+    GraphEntityKind EntityKind,
+    string EntityId,
+    NodeDto? OldNode,
+    NodeDto? NewNode,
+    EdgeDto? OldEdge,
+    EdgeDto? NewEdge,
+    IReadOnlyList<string> ChangedFields);
+internal sealed record ProjectDiffDto(
+    string BasePath,
+    string TargetPath,
+    string ProjectId,
+    string BaseFingerprint,
+    string TargetFingerprint,
+    IReadOnlyList<ProjectMetadataChangeDto> MetadataChanges,
+    ProjectDiffSummaryDto Summary,
+    IReadOnlyList<ProjectDiffEntryDto> Items,
+    int TotalCount,
+    string? NextCursor,
+    QueryOmissionDto? Omission);
 internal sealed record PageDto<T>(
     IReadOnlyList<T> Items,
     int TotalCount,
@@ -323,6 +360,37 @@ internal static class CliDto
 
     public static ProjectVerificationDto Verification(ProjectVerification value) => new(
         value.Path, value.IsValid, value.StateFingerprint, value.NodeCount, value.EdgeCount, value.Checks);
+
+    public static ProjectDiffDto Diff(ProjectDiffResult value) => new(
+        value.BasePath,
+        value.TargetPath,
+        value.ProjectId.Value,
+        value.BaseFingerprint,
+        value.TargetFingerprint,
+        value.MetadataChanges.Select(change => new ProjectMetadataChangeDto(
+            change.Field, change.OldValue, change.NewValue)).ToArray(),
+        new ProjectDiffSummaryDto(
+            value.Summary.MetadataChanges,
+            value.Summary.NodesAdded,
+            value.Summary.NodesReplaced,
+            value.Summary.NodesRemoved,
+            value.Summary.EdgesAdded,
+            value.Summary.EdgesReplaced,
+            value.Summary.EdgesRemoved,
+            value.Summary.EntityChanges,
+            value.Summary.TotalChanges),
+        value.Changes.Items.Select(change => new ProjectDiffEntryDto(
+            change.Kind,
+            change.EntityKind,
+            change.EntityId.Value,
+            change.OldNode is null ? null : GraphProtocol.ToDto(change.OldNode),
+            change.NewNode is null ? null : GraphProtocol.ToDto(change.NewNode),
+            change.OldEdge is null ? null : GraphProtocol.ToDto(change.OldEdge),
+            change.NewEdge is null ? null : GraphProtocol.ToDto(change.NewEdge),
+            change.ChangedFields)).ToArray(),
+        value.Changes.TotalCount,
+        value.Changes.NextCursor,
+        value.Changes.Omission is null ? null : Omission(value.Changes.Omission));
 
     public static PageDto<NodeDto> Nodes(QueryPage<GraphNode> page) => new(
         page.Items.Select(GraphProtocol.ToDto).ToArray(), page.TotalCount, page.NextCursor,

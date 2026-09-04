@@ -1,6 +1,6 @@
 # ValidatedWorld CLI usage
 
-ValidatedWorld is currently a local, headless .NET 10 command-line application.
+ValidatedWorld is a local, headless .NET 10 command-line application.
 One-shot commands cover project storage and bounded reads. Long-lived change
 sessions have two interfaces over the same Application behavior:
 
@@ -31,6 +31,15 @@ The executable name differs on platforms that do not use `.exe`. Quote paths
 and text containing spaces. Existing database and backup destinations are never
 overwritten. The remaining examples assume the published executable is in the
 current directory.
+
+The database path is never hidden: `project init`, `sample create`, and
+`ai-assistant-shell` use the path supplied by the caller, and successful project
+results report the normalized path. Initialization and backup use an adjacent
+unique `*.tmp` file only while producing the final atomic `.vw.db`; failed
+cleanup remnants, SQLite journal/WAL sidecars, and test databases under the OS
+temp directory are not canonical project files. `project backup` writes a
+verified portable copy to the explicit destination, while `project export-sql`
+writes deterministic text to stdout.
 
 One-shot and NDJSON structured results go to stdout; the shell writes readable
 status text there. Errors and unresolved-session warnings go to stderr. The
@@ -80,6 +89,7 @@ Inspect and protect a project:
 ./ValidatedWorld.Cli.exe project verify world.vw.db
 ./ValidatedWorld.Cli.exe project backup world.vw.db world-backup.vw.db
 ./ValidatedWorld.Cli.exe project export-sql world.vw.db > world.sql
+./ValidatedWorld.Cli.exe project diff world-before.vw.db world.vw.db --limit 100
 ```
 
 List or create a built-in disposable sample:
@@ -91,6 +101,46 @@ List or create a built-in disposable sample:
 
 `project open` returns the complete graph and can be large. Prefer bounded read
 commands when only part of a project is needed.
+
+## Semantic database diff
+
+`project diff` compares two verified files belonging to the same project. It is
+read-only and makes no AI call:
+
+```powershell
+./ValidatedWorld.Cli.exe project diff base.vw.db target.vw.db `
+    --limit 100
+./ValidatedWorld.Cli.exe project diff base.vw.db target.vw.db `
+    --limit 100 --cursor <nextCursor>
+```
+
+The JSON result contains:
+
+- `basePath`, `targetPath`, `projectId`, and both state fingerprints;
+- `metadataChanges` for title or purpose-node changes;
+- a `summary` of metadata and node/edge adds, replacements, and removals;
+- bounded `items`, `totalCount`, `nextCursor`, and `omission` fields.
+
+An added item contains its complete `newNode` or `newEdge`; a removed item
+contains its complete `oldNode` or `oldEdge`. A replacement contains both and a
+`changedFields` list. Nodes precede edges, with ordinal stable-ID ordering inside
+each category. Summary and metadata remain on every page.
+
+The cursor belongs to the exact project ID, base/target fingerprints, input
+order, and page limit. Reversing the comparison, changing either database, or
+changing `--limit` requires starting again without the old cursor. Identical
+files succeed with no items. Different project IDs, invalid databases, and bad
+cursors fail explicitly.
+
+The NDJSON equivalent is:
+
+```json
+{"version":1,"command":"project.diff","payload":{"basePath":"base.vw.db","targetPath":"target.vw.db","limit":100}}
+```
+
+Use a `project backup` made before editing as the base, then diff it against the
+result. A Git revision materialized as a `.vw.db` file is equally valid. Diff
+output is not stored in either database.
 
 ## Bounded reads
 
@@ -407,9 +457,15 @@ readiness. For a final proposal preview, use `change.show` with
 `includeOperations:true` and `includeProposedGraph:false` to retrieve the
 normalized operation batch without retrieving the whole graph.
 
-## Create a complete graph through NDJSON
+## Complete-graph NDJSON initialization
 
-`project.init` accepts the complete graph DTO. The examples below are formatted
+`project.init` accepts a complete graph DTO and writes it after structural
+validation, without the ordinary change-session manual/AI review gate. It is a
+trusted-fixture/import surface, not the recommended way to establish a real new
+world. For authored projects, use the purpose-only one-shot `project init`, then
+add all other content through reviewed change sessions.
+
+The example below records the complete-graph protocol and is formatted
 for reading; serialize each request as one physical line before sending it to
 the NDJSON host. This small graph contains a purpose, one child, and the child's
 required scope edge:
@@ -457,9 +513,8 @@ required scope edge:
 }
 ```
 
-For a large initial import, generate one graph object deliberately and validate
-the returned project. For incremental authoring, create a minimal project and
-use a change session.
+Do not use this path for a large initial import. Create a minimal project and
+use change sessions to build it piecewise.
 
 ## Manual change workflow
 
@@ -624,8 +679,7 @@ inspection. Use the latest complete reference for `change.expand`,
 
 ## Conversational AI authoring
 
-The default AI-first interface is a separate conversational entry point rather
-than another duplicate set of human edit commands:
+The conversational authoring entry point is:
 
 ```powershell
 dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- ai-assistant-shell project.vw.db
