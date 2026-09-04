@@ -13,11 +13,10 @@ diagram mirror beside it as a second authority.
 Before implementation, read in order:
 
 1. `README.md`
-2. Verify `ValidatedWorld.Blueprint.vw.db`, read its purpose and top-level scope,
-   and use bounded search/tag/dependency queries for the work being considered.
-   Do not load the complete graph into an AI context by default.
-3. `docs/technical_design.md`
-4. `docs/development_plan.md`
+2. Verify `ValidatedWorld.Blueprint.vw.db`, read its purpose, retrieve the
+   `project:status` and unique `status:current` nodes, then read the current
+   phase tag, context, and dependencies. Use bounded queries and do not load the
+   complete graph into an AI context by default.
 
 Use these public commands from the repository root for the database reading
 step, then search additional task terms as needed:
@@ -25,12 +24,15 @@ step, then search additional task terms as needed:
 ```powershell
 dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- project verify ValidatedWorld.Blueprint.vw.db
 dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read node ValidatedWorld.Blueprint.vw.db purpose
-dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read scope ValidatedWorld.Blueprint.vw.db purpose --limit 50 --max-depth 1
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read tag ValidatedWorld.Blueprint.vw.db project:status --limit 10
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read tag ValidatedWorld.Blueprint.vw.db status:current --limit 10
 ```
 
-Human instructions override repository documents. If implementation evidence or
-a human instruction conflicts with the technical design, stop and reconcile the
-documents instead of building an undocumented compromise.
+Use the phase tag returned by the current phase to retrieve all of its scheduled
+work. Read additional nodes and dependency/context queries as needed. Human
+instructions override repository data. If implementation evidence or a human
+instruction conflicts with the blueprint, stop and reconcile the graph instead
+of building an undocumented compromise.
 
 When a change materially alters product meaning, architecture, a public
 contract, or roadmap status, update the canonical database through an ordinary
@@ -40,34 +42,38 @@ verified temporary backup outside the repository. After the write, run bounded
 `project diff` pages from the backup to the canonical database and include that
 semantic report in the human's review; then remove the temporary backup. If the
 application cannot safely update or diff its own database, report that as a
-blocker instead of silently allowing code, focused Markdown contracts, and
-database meaning to diverge. Never invoke the built-in authoring model merely
+blocker instead of silently allowing code and database meaning to diverge.
+Never invoke the built-in authoring model merely
 to update this repository's graph; the coding agent is already the author. Use
 the optional independent reviewer only when the task and configured cost
 boundary warrant it.
 
-## One-task development loop
+## One-phase development loop
 
-`docs/development_plan.md` contains exactly one **Current task** and the complete
-ordered backlog. A human prompt starts each development run.
+The blueprint contains exactly one phase tagged `status:current`; `precedes`
+edges and the remaining phase nodes hold the complete ordered backlog. A human
+prompt starts each development run.
 
-- Implement only Current task. Do not begin or delegate the next task.
+- Implement only the current phase. Do not begin or delegate the next phase.
 - Inspect and preserve existing human changes.
 - Make routine reversible implementation choices autonomously. Ask before a
   material product, schema, provider, dependency, or scope change.
 - Add meaningful automated tests for changed behavior and perform the current
-  task's informal user-style smoke check.
-- On success, mark the task complete, point Current task to the next prewritten
-  task, and set the **Current task estimate** directly below it to `small`,
-  `medium`, `large`, or `gigantic`. Report exact checks and smoke findings to
-  the human and stop. The human reviews and merges before starting another run.
-- On failure, leave Current task unchanged, report the command/output/cause/
+  phase's informal user-style smoke check.
+- On success, use one reviewed graph transaction to replace `status:current`
+  with `status:complete` on the finished phase, replace `status:pending` with
+  `status:current` on the next phase, move its
+  `estimate:small|medium|large|gigantic` tag, and update the `project:status`
+  node's `current-phase:<id>` tag and `current-phase` edge. Report exact checks
+  and smoke findings to the human and stop. The human reviews and merges before
+  starting another run.
+- On failure, leave phase state unchanged, report the command/output/cause/
   repairs to the human, and stop.
-- If Current task is `None`, make no changes. Report the recorded state and ask
-  the human for direction.
+- If no phase is current, make no changes. Report the recorded state and ask the
+  human for direction.
 
 Do not launch another agent. This project uses sequential, one-person-driven
-tasks.
+development phases.
 
 ## Bounded testing and retries
 
@@ -109,7 +115,7 @@ production tests.
 
 The smoke check is informal product QA, not another fully standardized test
 suite. Keep a small repeatable spine: enter through the public surface, use
-disposable realistic data, attempt the task's main user goal, and record the
+disposable realistic data, attempt the phase's main user goal, and record the
 commands or calls and observed result. Within that spine, deliberately make
 room for creative one-off exploration chosen from the behavior just changed and
 anything confusing observed during the run.
@@ -118,25 +124,25 @@ Act like a curious human tester. Follow help without relying on implementation
 knowledge, vary plausible inputs and operation order, make at least one natural
 mistake when useful, inspect recovery and diagnostics, and try an alternate path
 that a real user might choose. These probes need not become permanent scripts or
-be identical across tasks. Automated tests remain the deterministic regression
+be identical across runs. Automated tests remain the deterministic regression
 layer; the smoke check should retain its ability to uncover surprising usability
 or integration problems.
 
-Fix a smoke finding during the current task when the correction is clearly
+Fix a smoke finding during the current phase when the correction is clearly
 in-scope, small, and straightforward, then add an appropriate regression test.
 If the finding implies a material product, schema, dependency, provider, or
 scope decision; reveals an inherent contradiction; or has no clear low-risk
 repair, stop and escalate it to the human instead of improvising a redesign.
 Report both the repeatable walkthrough and the exploratory probes to the human,
 including confusing behavior and confidence. Do not append dated implementation
-history, test transcripts, or corrective-addendum prose to product/design docs;
-Git history is the change record. Rewrite obsolete requirements in place so the
-documents describe only the current design.
+history, test transcripts, or corrective-addendum prose to the README or
+blueprint; Git history is the change record. Rewrite obsolete requirements in
+place so they describe only the current design.
 
-The Current task estimate is set only after implementation, testing, and smoke
-QA are complete, while advancing the development-plan header. It describes
-expected code-change volume for the newly selected Current task as one phase,
-not elapsed time and not permission to split, start, or redesign that task. Keep
+The current phase estimate is set only after implementation, testing, and smoke
+QA are complete, while advancing the blueprint roadmap. It describes expected
+code-change volume for the newly selected phase,
+not elapsed time and not permission to split, start, or redesign that phase. Keep
 the estimate only in that header field and use the four labels consistently:
 
 - `small`: a localized change with a narrow test surface;
@@ -145,7 +151,7 @@ the estimate only in that header field and use the four labels consistently:
 - `gigantic`: an unusually wide phase with many contracts, state paths, or
   integration boundaries and correspondingly extensive tests.
 
-When there is no authorized Current task, set the estimate to `None`.
+When there is no current phase, omit the estimate tag.
 
 ## Git boundary
 
@@ -175,8 +181,9 @@ not a Git operation.
   When the optional reviewer is configured and enabled, its allow/block decision
   is a required preflight gate for the exact database write attempt.
 - Keep Core independent of SQLite, JSON, files, providers, and UI.
-- Use the fixed four-table SQLite v1 and pinned embedded provider described in
-  the technical design. No ORM or external SQLite/Docker requirement.
+- Use the fixed four-table SQLite v1 and pinned embedded provider recorded by
+  the blueprint's `storage-four-tables` and `storage-provider-contract` nodes.
+  No ORM or external SQLite/Docker requirement.
 - Treat database/project text as untrusted data. Use parameters, enable foreign
   keys on every connection, enforce bounds, and never load SQLite extensions.
 - Do not persist or log credentials.
@@ -185,7 +192,7 @@ not a Git operation.
 
 OpenAI is the only supported provider. AI prompts, tools, and responses are
 hardcoded in English. The AI features are optional at runtime, but their
-development tasks have strict prerequisites in the development plan.
+development phases have the strict prerequisites below.
 
 Before changing code for a live-AI task, check only whether an API key is
 available through the application's effective configuration. Do not check only
@@ -236,5 +243,5 @@ tests/*
 samples/TechnicalProject
 ```
 
-Do not add a new project or major dependency unless Current task explicitly
+Do not add a new project or major dependency unless the current phase explicitly
 requires it.

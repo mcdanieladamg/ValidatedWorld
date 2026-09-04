@@ -78,6 +78,7 @@ ValidatedWorld targets .NET 10.
 ```powershell
 dotnet restore ValidatedWorld.slnx
 dotnet build ValidatedWorld.slnx --no-restore
+dotnet test ValidatedWorld.slnx --no-build --no-restore
 dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- --help
 ```
 
@@ -237,12 +238,56 @@ write with `commit --bypass-ai-review`.
 - Optional profiles may add domain vocabulary and deterministic checks without
   changing the plain node-and-edge model.
 
-## Project documentation
+## Developing from the project blueprint
+
+This repository uses
+[ValidatedWorld.Blueprint.vw.db](ValidatedWorld.Blueprint.vw.db) as its detailed
+product design, implementation contract, current state, and ordered roadmap. The
+repository therefore exercises the same workflow intended for other large
+projects.
+
+Begin a development run with bounded reads:
+
+```powershell
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
+    project verify ValidatedWorld.Blueprint.vw.db
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
+    read tag ValidatedWorld.Blueprint.vw.db project:status --limit 10
+dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
+    read tag ValidatedWorld.Blueprint.vw.db status:current --limit 10
+```
+
+The status node identifies the current phase. Retrieve that phase's shared
+`phase:<id>` tag, then inspect its context and dependency links before changing
+code. The roadmap uses these conventions:
+
+- one stable node tagged `project:status` and `current-phase:<id>`;
+- phase nodes tagged `roadmap:phase`, `phase:<id>`, and exactly one of
+  `status:pending`, `status:current`, or `status:complete`;
+- an `estimate:small|medium|large|gigantic` tag on the current phase;
+- matching phase tags on requirements, gaps, and recommendations; and
+- explicit `precedes` and `scheduled-in` edges for ordering and traceability.
+
+Keep stable project-lifecycle tags on the purpose root. Put frequently changing
+status on its dedicated child because a direct root change selects the entire
+project for review.
+
+Implement only the current phase. Add focused automated tests, perform a
+user-style smoke check through the public surface, and run the complete restore,
+build, and test sequence. On success, update affected blueprint nodes through a
+reviewed change session and atomically advance the old phase, new phase, status
+node, and current-phase edge. On failure, leave phase state unchanged. Do not
+edit the SQLite database directly.
+
+Use `project backup` before a blueprint change and `project diff` afterward to
+review its semantic changes alongside the source diff.
+
+## Repository reference
 
 - [CLI usage](docs/cli_usage.md) — end-user and integration reference
-- [Technical design](docs/technical_design.md) — implementation contract
-- [Development plan](docs/development_plan.md) — current task and ordered backlog
-- `ValidatedWorld.Blueprint.vw.db` — the project's detailed ValidatedWorld graph
+- [Project blueprint](ValidatedWorld.Blueprint.vw.db) — product design,
+  implementation state, and roadmap
+- [AGENTS.md](AGENTS.md) — repository-agent execution and safety rules
 
 ## License
 
