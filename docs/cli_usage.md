@@ -496,18 +496,16 @@ readiness. For a final proposal preview, use `change.show` with
 `includeOperations:true` and `includeProposedGraph:false` to retrieve the
 normalized operation batch without retrieving the whole graph.
 
-## Complete-graph NDJSON initialization
+## NDJSON project initialization
 
-`project.init` accepts a complete graph DTO and writes it after structural
-validation, without the ordinary change-session manual/AI review gate. It is a
-trusted-fixture/import surface, not the recommended way to establish a real new
-world. For authored projects, use the purpose-only one-shot `project init`, then
-add all other content through reviewed change sessions.
+`project.init` creates only project metadata and one purpose node. It does not
+accept a complete graph and it does not create a populated project outside the
+ordinary change-session review workflow. Add every later node and edge through
+`change.begin`, `change.patch` or `change.apply`, `change.review`, and
+`change.write`.
 
-The example below records the complete-graph protocol and is formatted
-for reading; serialize each request as one physical line before sending it to
-the NDJSON host. This small graph contains a purpose, one child, and the child's
-required scope edge:
+The request below is formatted for reading; serialize it as one physical line
+before sending it to the NDJSON host:
 
 ```json
 {
@@ -515,45 +513,13 @@ required scope edge:
   "command": "project.init",
   "payload": {
     "path": "world.vw.db",
-    "graph": {
-      "projectId": "world-id",
-      "title": "World title",
-      "purposeNodeId": "purpose",
-      "nodes": [
-        {
-          "id": "purpose",
-          "text": "A coherent game world",
-          "kind": "purpose",
-          "tags": [],
-          "attributes": []
-        },
-        {
-          "id": "tamriel",
-          "text": "Tamriel is the primary known world region",
-          "kind": "scope",
-          "tags": [],
-          "attributes": []
-        }
-      ],
-      "edges": [
-        {
-          "id": "tamriel-scope-parent",
-          "source": "tamriel",
-          "target": "purpose",
-          "relationship": "scope-parent",
-          "reviewDirection": "none",
-          "rationale": null,
-          "tags": [],
-          "attributes": []
-        }
-      ]
-    }
+    "projectId": "world-id",
+    "title": "World title",
+    "purposeNodeId": "purpose",
+    "purposeText": "A coherent game world"
   }
 }
 ```
-
-Do not use this path for a large initial import. Create a minimal project and
-use change sessions to build it piecewise.
 
 ## Manual change workflow
 

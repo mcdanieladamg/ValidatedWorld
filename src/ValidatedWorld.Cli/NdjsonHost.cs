@@ -123,7 +123,7 @@ internal sealed class NdjsonHost(
             commands = Commands,
             payloads = new
             {
-                project = "init {path,graph}; open|status|verify|export-sql {path}; " +
+                project = "init {path,projectId,title,purposeNodeId,purposeText}; open|status|verify|export-sql {path}; " +
                     "backup {sourcePath,destinationPath}; " +
                     "diff {basePath,targetPath,limit?,cursor?}",
                 sample = "list {}; create {sampleName,path}",
@@ -163,7 +163,12 @@ internal sealed class NdjsonHost(
     private object ProjectInit(JsonElement payload)
     {
         var request = CliJson.Payload<ProjectInitRequest>(payload);
-        return CliDto.Stored(application.Initialize(request.Path, GraphProtocol.FromDto(request.Graph)));
+        return CliDto.Stored(application.Initialize(
+            request.Path,
+            new ProjectId(request.ProjectId),
+            request.Title,
+            new EntityId(request.PurposeNodeId),
+            request.PurposeText));
     }
 
     private object ProjectStatus(JsonElement payload)

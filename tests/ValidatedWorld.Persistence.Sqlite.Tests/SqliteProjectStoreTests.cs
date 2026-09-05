@@ -192,6 +192,20 @@ public sealed class SqliteProjectStoreTests
             ProjectStorageErrorCode.InvalidGraph,
             () => application.Initialize(invalidPath, invalidGraph));
         Assert.False(File.Exists(invalidPath));
+
+        var child = new GraphNode(new EntityId("child"), "Child", "scope");
+        var populatedGraph = new ProjectGraph(
+            new ProjectId("populated"),
+            "Populated",
+            purpose.Id,
+            [purpose, child],
+            [new GraphEdge(
+                new EntityId("child-parent"), child.Id, purpose.Id, "scope-parent", ReviewDirection.None)]);
+        var populatedPath = workspace.PathFor("populated.vw.db");
+        AssertStorageError(
+            ProjectStorageErrorCode.InvalidGraph,
+            () => application.Initialize(populatedPath, populatedGraph));
+        Assert.False(File.Exists(populatedPath));
     }
 
     private static ProjectApplication CreateApplication() =>

@@ -26,7 +26,12 @@ internal static class CliJson
 
 internal sealed record EmptyRequest;
 internal sealed record PathRequest(string Path);
-internal sealed record ProjectInitRequest(string Path, GraphDto Graph);
+internal sealed record ProjectInitRequest(
+    string Path,
+    string ProjectId,
+    string Title,
+    string PurposeNodeId,
+    string PurposeText);
 internal sealed record ProjectBackupRequest(string SourcePath, string DestinationPath);
 internal sealed record ProjectDiffRequest(
     string BasePath,

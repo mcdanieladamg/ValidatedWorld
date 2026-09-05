@@ -149,10 +149,12 @@ public static class CliRunner
         {
             case "init" when arguments.Length == 7:
             {
-                var purpose = new GraphNode(new EntityId(arguments[5]), arguments[6]);
-                var graph = new ProjectGraph(
-                    new ProjectId(arguments[3]), arguments[4], purpose.Id, [purpose], []);
-                result = CliDto.Stored(application.Initialize(arguments[2], graph));
+                result = CliDto.Stored(application.Initialize(
+                    arguments[2],
+                    new ProjectId(arguments[3]),
+                    arguments[4],
+                    new EntityId(arguments[5]),
+                    arguments[6]));
                 break;
             }
             case "status" when arguments.Length == 3:

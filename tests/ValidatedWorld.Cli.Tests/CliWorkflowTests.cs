@@ -133,6 +133,156 @@ public sealed class CliWorkflowTests
     }
 
     [Fact]
+    public async Task Public_initializers_create_only_a_purpose_and_ndjson_rejects_populated_graphs()
+    {
+        using var temporary = new TemporaryDirectory();
+        var cliProject = Path.Combine(temporary.Path, "cli project.vw.db");
+        var ndjsonProject = Path.Combine(temporary.Path, "ndjson project.vw.db");
+        var populatedPath = Path.Combine(temporary.Path, "rejected project.vw.db");
+
+        var cli = await Run(["project", "init", cliProject, "cli-project", "CLI Project", "purpose", "Keep it coherent"]);
+        Assert.Equal(CliRunner.SuccessExitCode, cli.ExitCode);
+        Assert.Equal(1, JsonNode.Parse((await Run(["project", "status", cliProject])).Output)!["nodeCount"]!.GetValue<int>());
+
+        var ndjson = await Run(["ndjson"], string.Join(Environment.NewLine,
+            Envelope("project.init", new
+            {
+                path = ndjsonProject,
+                projectId = "ndjson-project",
+                title = "NDJSON Project",
+                purposeNodeId = "purpose",
+                purposeText = "Keep the boundary clear",
+            }),
+            Envelope("project.open", new { path = ndjsonProject }),
+            Envelope("host.exit", new { })) + Environment.NewLine);
+        var ndjsonLines = Lines(ndjson.Output);
+        Assert.Equal(3, ndjsonLines.Length);
+        Assert.Equal("ok", JsonNode.Parse(ndjsonLines[0])!["status"]!.GetValue<string>());
+        Assert.Single(JsonNode.Parse(ndjsonLines[1])!["payload"]!["graph"]!["nodes"]!.AsArray());
+
+        var rejected = await Run(["ndjson"], Envelope("project.init", new
+        {
+            path = populatedPath,
+            graph = new
+            {
+                projectId = "populated-project",
+                title = "Populated Project",
+                purposeNodeId = "purpose",
+                nodes = new[]
+                {
+                    new { id = "purpose", text = "Purpose", kind = "purpose", tags = Array.Empty<string>(), attributes = Array.Empty<object>() },
+                    new { id = "child", text = "Child", kind = "scope", tags = Array.Empty<string>(), attributes = Array.Empty<object>() },
+                },
+                edges = Array.Empty<object>(),
+            },
+        }) + Environment.NewLine);
+        var rejectedJson = JsonNode.Parse(rejected.Output)!;
+        Assert.Equal("error", rejectedJson["status"]!.GetValue<string>());
+        Assert.Equal("malformed-json", rejectedJson["payload"]!["code"]!.GetValue<string>());
+        Assert.False(File.Exists(populatedPath));
+    }
+
+    [Fact]
+    public async Task Purpose_bootstrap_then_first_child_uses_reviewed_change_and_reopens()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "reviewed bootstrap.vw.db");
+        await using var host = await NdjsonProcess.Start();
+
+        var initialized = await host.Send("project.init", new
+        {
+            path = project,
+            projectId = "reviewed-bootstrap",
+            title = "Reviewed Bootstrap",
+            purposeNodeId = "purpose",
+            purposeText = "Keep the project coherent",
+        });
+        Assert.Equal("ok", initialized["status"]!.GetValue<string>());
+
+        var begun = await host.Send("change.begin", new
+        {
+            path = project,
+            projectId = "reviewed-bootstrap",
+            author = "smoke tester",
+            intent = "Add the first scope under the purpose",
+        });
+        var reference = begun["payload"]!["reference"]!.DeepClone();
+        var patched = await host.SendNode("change.patch", new JsonObject
+        {
+            ["reference"] = reference,
+            ["operations"] = new JsonObject
+            {
+                ["operations"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["kind"] = "add",
+                        ["entityKind"] = "node",
+                        ["entityId"] = "first-scope",
+                        ["node"] = new JsonObject
+                        {
+                            ["id"] = "first-scope",
+                            ["text"] = "The first scope",
+                            ["kind"] = "scope",
+                            ["tags"] = new JsonArray(),
+                            ["attributes"] = new JsonArray(),
+                        },
+                        ["edge"] = null,
+                    },
+                    new JsonObject
+                    {
+                        ["kind"] = "add",
+                        ["entityKind"] = "edge",
+                        ["entityId"] = "first-scope-parent",
+                        ["node"] = null,
+                        ["edge"] = new JsonObject
+                        {
+                            ["id"] = "first-scope-parent",
+                            ["source"] = "first-scope",
+                            ["target"] = "purpose",
+                            ["relationship"] = "scope-parent",
+                            ["reviewDirection"] = "none",
+                            ["rationale"] = null,
+                            ["tags"] = new JsonArray(),
+                            ["attributes"] = new JsonArray(),
+                        },
+                    },
+                },
+            },
+        });
+        var patchedPayload = patched["payload"]!;
+        Assert.Equal("complete", patchedPayload["affected"]!["status"]!.GetValue<string>());
+        var dispositions = new JsonArray(patchedPayload["affected"]!["affectedNodes"]!.AsArray()
+            .Select(node => (JsonNode)new JsonObject
+            {
+                ["nodeId"] = node!["nodeId"]!.GetValue<string>(),
+                ["kind"] = node["isDirectChange"]!.GetValue<bool>() ? "updated" : "reviewedNoChange",
+            }).ToArray());
+        var context = new JsonArray(patchedPayload["affected"]!["scopeContext"]!.AsArray()
+            .Select(node => (JsonNode?)node!["nodeId"]!.GetValue<string>()).ToArray());
+        var reviewed = await host.SendNode("change.review", new JsonObject
+        {
+            ["reference"] = patchedPayload["reference"]!.DeepClone(),
+            ["dispositions"] = dispositions,
+            ["presentedContextNodeIds"] = context,
+        });
+        Assert.True(reviewed["payload"]!["readiness"]!["isReady"]!.GetValue<bool>());
+
+        var written = await host.SendNode("change.write", new JsonObject
+        {
+            ["reference"] = reviewed["payload"]!["reference"]!.DeepClone(),
+        });
+        Assert.Equal("written", written["payload"]!["status"]!.GetValue<string>());
+        _ = await host.Send("host.exit", new { });
+        Assert.Equal(0, await host.WaitForExit());
+
+        var reopened = await Run(["project", "open", project]);
+        Assert.Equal(2, JsonNode.Parse(reopened.Output)!["graph"]!["nodes"]!.AsArray().Count);
+        Assert.Equal("The first scope",
+            JsonNode.Parse((await Run(["read", "node", project, "first-scope"])).Output)!["text"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Human_shell_accumulates_small_flag_based_edits_and_commits_with_one_line()
     {
         using var temporary = new TemporaryDirectory();
