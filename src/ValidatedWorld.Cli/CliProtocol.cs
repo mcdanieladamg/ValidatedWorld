@@ -84,6 +84,10 @@ internal sealed record ContextRequest(
     int MaxDepth = 10_000,
     int MaxVisitedNodes = 100_000,
     string? ExpectedProjectId = null);
+internal sealed record GraphObservabilityRequest(
+    string Path,
+    int Limit = QueryPageRequest.DefaultLimit,
+    string? ExpectedProjectId = null);
 
 internal sealed record SessionBeginRequest(
     string Path,
@@ -232,6 +236,41 @@ internal sealed record DependencyPathDto(
 internal sealed record ScopeContextDto(
     IReadOnlyList<string> RequestedNodeIds,
     IReadOnlyList<NodeDto> ContextNodes,
+    IReadOnlyList<QueryOmissionDto> Omissions);
+internal sealed record GraphReportSectionDto<T>(
+    int TotalCount,
+    IReadOnlyList<T> Items,
+    int OmittedCount);
+internal sealed record ScopeCoverageDto(
+    int TotalNodeCount,
+    int ScopeParentEdgeCount,
+    int NodesWithExactlyOneScopeParent,
+    int NodesReachingPurpose,
+    double CoveragePercent);
+internal sealed record ReviewFanOutHotspotDto(
+    string NodeId,
+    int OutgoingReviewArcCount,
+    int IncomingReviewArcCount);
+internal sealed record IsolatedClaimDto(string NodeId, string? Kind);
+internal sealed record MissingRationaleDto(
+    string EdgeId,
+    string Source,
+    string Target,
+    string Relationship);
+internal sealed record TagUsageDto(string Tag, int NodeCount, int EdgeCount, int TotalCount);
+internal sealed record GraphObservabilityDto(
+    int NodeCount,
+    int EdgeCount,
+    int SemanticReviewArcCount,
+    ScopeCoverageDto ScopeCoverage,
+    GraphReportSectionDto<string> UnreachableNodeIds,
+    GraphReportSectionDto<ReviewFanOutHotspotDto> ReviewFanOutHotspots,
+    GraphReportSectionDto<IsolatedClaimDto> SuspiciouslyIsolatedClaims,
+    GraphReportSectionDto<MissingRationaleDto> MissingRationales,
+    GraphReportSectionDto<TagUsageDto> TagUsage,
+    int UntaggedNodeCount,
+    int UntaggedEdgeCount,
+    bool WasCancelled,
     IReadOnlyList<QueryOmissionDto> Omissions);
 internal sealed record ValidationResultDto(ValidationStatus Status, IReadOnlyList<DiagnosticDto> Diagnostics);
 internal sealed record AffectedPathDto(IReadOnlyList<string> Nodes, IReadOnlyList<string> Edges);
@@ -462,6 +501,45 @@ internal static class CliDto
     public static ScopeContextDto Context(ScopeContextResult value) => new(
         value.RequestedNodeIds.Select(id => id.Value).ToArray(),
         value.ContextNodes.Select(GraphProtocol.ToDto).ToArray(),
+        value.Omissions.Select(Omission).ToArray());
+
+    public static GraphObservabilityDto GraphObservability(GraphObservabilityReport value) => new(
+        value.NodeCount,
+        value.EdgeCount,
+        value.SemanticReviewArcCount,
+        new ScopeCoverageDto(
+            value.ScopeCoverage.TotalNodeCount,
+            value.ScopeCoverage.ScopeParentEdgeCount,
+            value.ScopeCoverage.NodesWithExactlyOneScopeParent,
+            value.ScopeCoverage.NodesReachingPurpose,
+            value.ScopeCoverage.CoveragePercent),
+        new GraphReportSectionDto<string>(
+            value.UnreachableNodeIds.TotalCount,
+            value.UnreachableNodeIds.Items.Select(id => id.Value).ToArray(),
+            value.UnreachableNodeIds.OmittedCount),
+        new GraphReportSectionDto<ReviewFanOutHotspotDto>(
+            value.ReviewFanOutHotspots.TotalCount,
+            value.ReviewFanOutHotspots.Items.Select(item => new ReviewFanOutHotspotDto(
+                item.NodeId.Value, item.OutgoingReviewArcCount, item.IncomingReviewArcCount)).ToArray(),
+            value.ReviewFanOutHotspots.OmittedCount),
+        new GraphReportSectionDto<IsolatedClaimDto>(
+            value.SuspiciouslyIsolatedClaims.TotalCount,
+            value.SuspiciouslyIsolatedClaims.Items.Select(item => new IsolatedClaimDto(
+                item.NodeId.Value, item.Kind)).ToArray(),
+            value.SuspiciouslyIsolatedClaims.OmittedCount),
+        new GraphReportSectionDto<MissingRationaleDto>(
+            value.MissingRationales.TotalCount,
+            value.MissingRationales.Items.Select(item => new MissingRationaleDto(
+                item.EdgeId.Value, item.Source.Value, item.Target.Value, item.Relationship)).ToArray(),
+            value.MissingRationales.OmittedCount),
+        new GraphReportSectionDto<TagUsageDto>(
+            value.TagUsage.TotalCount,
+            value.TagUsage.Items.Select(item => new TagUsageDto(
+                item.Tag, item.NodeCount, item.EdgeCount, item.TotalCount)).ToArray(),
+            value.TagUsage.OmittedCount),
+        value.UntaggedNodeCount,
+        value.UntaggedEdgeCount,
+        value.WasCancelled,
         value.Omissions.Select(Omission).ToArray());
 
     public static SessionReferenceDto Reference(ChangeSessionReference value) => new(

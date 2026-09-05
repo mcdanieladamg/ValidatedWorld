@@ -20,7 +20,7 @@ internal sealed class NdjsonHost(
         "project.diff",
         "sample.list", "sample.create",
         "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.tag", "read.scope",
-        "read.neighbors", "read.dependencies", "read.path", "read.context",
+        "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report",
         "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand",
         "change.affected", "change.omission-details", "change.review", "change.validate", "change.write", "change.discard",
         "ai.status",
@@ -96,6 +96,8 @@ internal sealed class NdjsonHost(
         "read.dependencies" => (ReadDependencies(payload), false),
         "read.path" => (ReadPath(payload), false),
         "read.context" => (ReadContext(payload), false),
+        "read.health" => (ReadHealth(payload), false),
+        "read.report" => (ReadHealth(payload), false),
         "change.begin" => (ChangeBegin(payload), false),
         "change.show" => (ChangeShow(payload), false),
         "change.focus" => (ChangeFocus(payload), false),
@@ -135,7 +137,8 @@ internal sealed class NdjsonHost(
                     "scope {path,nodeId,limit?,cursor?,maxDepth?," +
                     "maxVisitedNodes?,expectedProjectId?}; neighbors|dependencies {path,entityId,limit?,cursor?," +
                     "expectedProjectId?}; path {path,sourceNodeId,targetNodeId,maxDepth?,maxVisitedNodes?," +
-                    "expectedProjectId?}; context {path,nodeIds,maxDepth?,maxVisitedNodes?,expectedProjectId?}",
+                    "expectedProjectId?}; context {path,nodeIds,maxDepth?,maxVisitedNodes?,expectedProjectId?}; " +
+                    "health|report {path,limit?,expectedProjectId?}",
                 change = "begin {path,projectId,author,intent,includeOperations?,includeProposedGraph?}; " +
                     "show {session:{projectId,sessionId},includeOperations?,includeProposedGraph?}; affected {session}; " +
                     "omission-details {reference,fingerprint,limit?,cursor?}; " +
@@ -306,6 +309,17 @@ internal sealed class NdjsonHost(
         return CliDto.Context(Queries(request.Path, request.ExpectedProjectId).GetContext(
             request.NodeIds.Select(id => new EntityId(id)),
             CliDto.Traversal(request.MaxDepth, request.MaxVisitedNodes, cancellationToken)));
+    }
+
+    private object ReadHealth(JsonElement payload)
+    {
+        var request = CliJson.Payload<GraphObservabilityRequest>(payload);
+        return CliDto.GraphObservability(Queries(request.Path, request.ExpectedProjectId)
+            .GetGraphObservability(new GraphObservabilityOptions
+            {
+                MaxItems = request.Limit,
+                CancellationToken = cancellationToken,
+            }));
     }
 
     private object ChangeBegin(JsonElement payload)
