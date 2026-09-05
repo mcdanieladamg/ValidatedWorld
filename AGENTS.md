@@ -95,6 +95,12 @@ The blueprint contains exactly one phase tagged `status:current`; `precedes`
 edges and the remaining phase nodes hold the complete ordered backlog. A human
 prompt starts each development run.
 
+Follow `precedes` edges for execution order; stable phase IDs need not be in
+numeric order. A human-authorized roadmap-only revision may add or reorder
+pending phases without implementing them or advancing the current phase.
+Completed foundation phases do not by themselves declare MVP readiness; use
+the blueprint's explicit product status and acceptance criteria.
+
 - Implement only the current phase. Do not begin or delegate the next phase.
 - Inspect and preserve existing human changes.
 - Make routine reversible implementation choices autonomously. Ask before a
@@ -108,8 +114,14 @@ prompt starts each development run.
   node's `current-phase:<id>` tag and `current-phase` edge. This delivery-state
   change is required even when the implemented requirements were already fully
   recorded, so a successful phase pull request always has a semantic database
-  diff. Report exact checks and smoke findings to the human and stop. The human
-  reviews and merges before starting another run.
+  diff. In the final response directly to the user, state the completed phase
+  and the newly current phase's ID, short description, and recorded work
+  estimate (`small`, `medium`, `large`, or `gigantic`). Read these values back
+  from the updated database; do not substitute the completed phase's estimate
+  or leave this information only in a file, link, or database update. If no phase
+  remains current, explicitly say so and omit an estimate. Report exact checks
+  and smoke findings, then stop. The human reviews and merges before starting
+  another run.
 - On failure, leave phase state unchanged, report the command/output/cause/
   repairs to the human, and stop.
 - If no phase is current, make no changes. Report the recorded state and ask the
@@ -186,7 +198,8 @@ The current phase estimate is set only after implementation, testing, and smoke
 QA are complete, while advancing the blueprint roadmap. It describes expected
 code-change volume for the newly selected phase,
 not elapsed time and not permission to split, start, or redesign that phase. Keep
-the estimate only in that header field and use the four labels consistently:
+the persisted estimate only in that header field, and repeat its value in the
+final user-facing phase handoff. Use the four labels consistently:
 
 - `small`: a localized change with a narrow test surface;
 - `medium`: several related changes within one primary subsystem;
@@ -219,7 +232,9 @@ not a Git operation.
   fan-out. Direct scope changes select descendants; a purpose change selects the
   project.
 - Keep unfinished changes and review data in process memory. Write the complete
-  reviewed graph atomically or change nothing.
+  reviewed graph atomically or change nothing. This is the current MVP scope;
+  durable drafts are deferred, not permanently prohibited or an implicit
+  prerequisite for plugin delivery.
 - Treat semantic judgment as human/optional-AI review, not deterministic proof.
   When the optional reviewer is configured and enabled, its allow/block decision
   is a required preflight gate for the exact database write attempt.
@@ -233,9 +248,12 @@ not a Git operation.
 
 ## Optional OpenAI tasks
 
-OpenAI is the only supported provider. AI prompts, tools, and responses are
-hardcoded in English. The AI features are optional at runtime, but their
-development phases have the strict prerequisites below.
+OpenAI is the only supported built-in provider. An external agent host using
+the planned MCP interface is a client, not an additional built-in provider.
+AI prompts, tools, and responses are hardcoded in English. The AI features are
+optional at runtime, but their development phases have the strict prerequisites
+below. Transport, packaging, and offline MCP tests that do not change or invoke
+a live provider do not require a product API key; live-provider work still does.
 
 Before changing code for a live-AI task, check only whether an API key is
 available through the application's effective configuration. Do not check only
