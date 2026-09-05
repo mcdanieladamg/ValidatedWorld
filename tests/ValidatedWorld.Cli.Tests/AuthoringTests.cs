@@ -18,6 +18,7 @@ public sealed class AuthoringTests
         var names = AuthoringToolHost.Definitions.Select(tool => tool.Name).ToArray();
         Assert.Contains("request_approval", names);
         Assert.Contains("write_change", names);
+        Assert.Contains("ranked_search_graph", names);
         Assert.DoesNotContain(names, name => name.Contains("sql", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(names, name => name.Contains("bypass", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain("review_change", names);

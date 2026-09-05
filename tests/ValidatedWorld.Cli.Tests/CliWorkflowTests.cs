@@ -67,6 +67,13 @@ public sealed class CliWorkflowTests
         Assert.Equal(4, searchJson["totalCount"]!.GetValue<int>());
         Assert.Equal("battery-assumption", searchJson["items"]![0]!["entityId"]!.GetValue<string>());
 
+        var rankedSearch = await Run(["read", "ranked-search", project, "battery-assumption", "--limit", "1"]);
+        Assert.Equal(CliRunner.SuccessExitCode, rankedSearch.ExitCode);
+        var rankedJson = JsonNode.Parse(rankedSearch.Output)!;
+        Assert.Equal("battery-assumption", rankedJson["items"]![0]!["entityId"]!.GetValue<string>());
+        Assert.Contains(rankedJson["items"]![0]!["matches"]!.AsArray(), match =>
+            match!["kind"]!.GetValue<string>() == "stableId");
+
         var tagged = await Run(["read", "tag", project, "artifact"]);
         Assert.Equal(CliRunner.SuccessExitCode, tagged.ExitCode);
         var taggedJson = JsonNode.Parse(tagged.Output)!;
@@ -431,6 +438,8 @@ public sealed class CliWorkflowTests
         Assert.Contains("change.patch", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
         Assert.Contains("read.tag", help["payload"]!["commands"]!.AsArray()
+            .Select(value => value!.GetValue<string>()));
+        Assert.Contains("read.ranked_search", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
         Assert.Contains("read.health", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));

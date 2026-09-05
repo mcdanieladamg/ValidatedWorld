@@ -19,7 +19,7 @@ internal sealed class NdjsonHost(
         "project.init", "project.open", "project.status", "project.verify", "project.backup", "project.export-sql",
         "project.diff",
         "sample.list", "sample.create",
-        "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.tag", "read.scope",
+        "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope",
         "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report",
         "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand",
         "change.affected", "change.omission-details", "change.review", "change.validate", "change.write", "change.discard",
@@ -90,6 +90,7 @@ internal sealed class NdjsonHost(
         "read.nodes" => (ReadNodes(payload), false),
         "read.edges" => (ReadEdges(payload), false),
         "read.search" => (ReadSearch(payload), false),
+        "read.ranked_search" => (ReadRankedSearch(payload), false),
         "read.tag" => (ReadTag(payload), false),
         "read.scope" => (ReadScope(payload), false),
         "read.neighbors" => (ReadNeighbors(payload), false),
@@ -133,6 +134,7 @@ internal sealed class NdjsonHost(
                 read = "node|edge {path,entityId,expectedProjectId?}; " +
                     "nodes|edges {path,limit?,cursor?,expectedProjectId?}; " +
                     "search {path,text,limit?,cursor?,expectedProjectId?}; " +
+                    "ranked_search {path,text,limit?,cursor?,expectedProjectId?}; " +
                     "tag {path,tag,limit?,cursor?,expectedProjectId?}; " +
                     "scope {path,nodeId,limit?,cursor?,maxDepth?," +
                     "maxVisitedNodes?,expectedProjectId?}; neighbors|dependencies {path,entityId,limit?,cursor?," +
@@ -262,6 +264,13 @@ internal sealed class NdjsonHost(
         var request = CliJson.Payload<SearchRequest>(payload);
         return CliDto.Search(Queries(request.Path, request.ExpectedProjectId)
             .Search(request.Text, CliDto.Page(request.Limit, request.Cursor)));
+    }
+
+    private object ReadRankedSearch(JsonElement payload)
+    {
+        var request = CliJson.Payload<SearchRequest>(payload);
+        return CliDto.RankedSearch(Queries(request.Path, request.ExpectedProjectId)
+            .SearchRanked(request.Text, CliDto.Page(request.Limit, request.Cursor)));
     }
 
     private object ReadTag(JsonElement payload)

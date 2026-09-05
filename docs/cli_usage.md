@@ -189,6 +189,7 @@ phase for it.
 ./ValidatedWorld.Cli.exe read nodes world.vw.db --limit 100
 ./ValidatedWorld.Cli.exe read edges world.vw.db --limit 100
 ./ValidatedWorld.Cli.exe read search world.vw.db continent --limit 25
+./ValidatedWorld.Cli.exe read ranked-search world.vw.db "golden claw" --limit 25
 ./ValidatedWorld.Cli.exe read tag world.vw.db quest:golden-claw --limit 25
 ./ValidatedWorld.Cli.exe read scope world.vw.db tamriel --limit 100 `
     --max-depth 1000 --max-nodes 10000
@@ -224,6 +225,16 @@ automatic dependency creation. The NDJSON commands are `read.health` and
 and edge IDs/labels/rationales/tags. `tag` is an exact case-sensitive lookup
 across node and edge tags. Both return the same bounded search-hit shape,
 including the complete matching node or edge.
+
+`ranked-search` is an additive lexical discovery query. It tokenizes the input,
+recognizes quoted phrases (and an unquoted multi-token phrase), and ranks exact
+stable-ID matches above exact case-sensitive tag matches, phrases, text tokens,
+and metadata tokens. Metadata includes kinds, relationships, rationales, tags,
+and attribute names and values. Results are deterministically ordered by score,
+stable ID, and entity kind; every result includes `score` and `matches` with the
+field, term, match kind, and score contribution that explain the ranking. Its
+cursor is bound to the exact ranked query and project fingerprint. The NDJSON
+equivalent is `read.ranked_search` with the same payload as `read.search`.
 
 ## Stateful shell
 

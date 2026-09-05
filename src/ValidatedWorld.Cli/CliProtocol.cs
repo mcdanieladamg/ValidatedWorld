@@ -221,6 +221,18 @@ internal sealed record QueryOmissionDto(
     int? RemainingCount,
     string Message);
 internal sealed record SearchHitDto(GraphEntityKind EntityKind, string EntityId, NodeDto? Node, EdgeDto? Edge);
+internal sealed record RankedSearchMatchDto(
+    SearchMatchKind Kind,
+    string Field,
+    string Term,
+    int ScoreContribution);
+internal sealed record RankedSearchHitDto(
+    GraphEntityKind EntityKind,
+    string EntityId,
+    NodeDto? Node,
+    EdgeDto? Edge,
+    int Score,
+    IReadOnlyList<RankedSearchMatchDto> Matches);
 internal sealed record NeighborDto(string NodeId, EdgeDto Edge, bool IsOutgoing);
 internal sealed record DependencyDto(string EdgeId, string From, string To, bool IsOutgoing);
 internal sealed record ScopeResultDto(
@@ -474,6 +486,17 @@ internal static class CliDto
             hit.EntityKind, hit.EntityId.Value,
             hit.Node is null ? null : GraphProtocol.ToDto(hit.Node),
             hit.Edge is null ? null : GraphProtocol.ToDto(hit.Edge))).ToArray(),
+        page.TotalCount, page.NextCursor, page.Omission is null ? null : Omission(page.Omission));
+
+    public static PageDto<RankedSearchHitDto> RankedSearch(QueryPage<RankedGraphSearchHit> page) => new(
+        page.Items.Select(hit => new RankedSearchHitDto(
+            hit.EntityKind,
+            hit.EntityId.Value,
+            hit.Node is null ? null : GraphProtocol.ToDto(hit.Node),
+            hit.Edge is null ? null : GraphProtocol.ToDto(hit.Edge),
+            hit.Score,
+            hit.Matches.Select(match => new RankedSearchMatchDto(
+                match.Kind, match.Field, match.Term, match.ScoreContribution)).ToArray())).ToArray(),
         page.TotalCount, page.NextCursor, page.Omission is null ? null : Omission(page.Omission));
 
     public static PageDto<NeighborDto> Neighbors(QueryPage<NeighborEntry> page) => new(
