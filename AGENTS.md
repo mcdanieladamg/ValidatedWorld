@@ -95,6 +95,12 @@ The blueprint contains exactly one phase tagged `status:current`; `precedes`
 edges and the remaining phase nodes hold the complete ordered backlog. A human
 prompt starts each development run.
 
+Follow `precedes` edges for execution order; stable phase IDs need not be in
+numeric order. A human-authorized roadmap-only revision may add or reorder
+pending phases without implementing them or advancing the current phase.
+Completed foundation phases do not by themselves declare MVP readiness; use
+the blueprint's explicit product status and acceptance criteria.
+
 - Implement only the current phase. Do not begin or delegate the next phase.
 - Inspect and preserve existing human changes.
 - Make routine reversible implementation choices autonomously. Ask before a
@@ -219,7 +225,9 @@ not a Git operation.
   fan-out. Direct scope changes select descendants; a purpose change selects the
   project.
 - Keep unfinished changes and review data in process memory. Write the complete
-  reviewed graph atomically or change nothing.
+  reviewed graph atomically or change nothing. This is the current MVP scope;
+  durable drafts are deferred, not permanently prohibited or an implicit
+  prerequisite for plugin delivery.
 - Treat semantic judgment as human/optional-AI review, not deterministic proof.
   When the optional reviewer is configured and enabled, its allow/block decision
   is a required preflight gate for the exact database write attempt.
@@ -233,9 +241,12 @@ not a Git operation.
 
 ## Optional OpenAI tasks
 
-OpenAI is the only supported provider. AI prompts, tools, and responses are
-hardcoded in English. The AI features are optional at runtime, but their
-development phases have the strict prerequisites below.
+OpenAI is the only supported built-in provider. An external agent host using
+the planned MCP interface is a client, not an additional built-in provider.
+AI prompts, tools, and responses are hardcoded in English. The AI features are
+optional at runtime, but their development phases have the strict prerequisites
+below. Transport, packaging, and offline MCP tests that do not change or invoke
+a live provider do not require a product API key; live-provider work still does.
 
 Before changing code for a live-AI task, check only whether an API key is
 available through the application's effective configuration. Do not check only
