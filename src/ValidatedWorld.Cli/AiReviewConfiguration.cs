@@ -9,13 +9,19 @@ public sealed record AiReviewConfiguration(
     string Model,
     int TimeoutSeconds,
     bool LiveTests,
-    string? ApiKey)
+    string? ApiKey,
+    int MaxRequestBytes = 1_000_000,
+    int MaxRequestItems = 20_000,
+    int MaxRequestTokens = 250_000)
 {
     public const bool DefaultEnabled = true;
     public const string DefaultProvider = "openai";
     public const string DefaultModel = "gpt-5.6-terra";
     public const int DefaultTimeoutSeconds = 1200;
     public const bool DefaultLiveTests = false;
+    public const int DefaultMaxRequestBytes = 1_000_000;
+    public const int DefaultMaxRequestItems = 20_000;
+    public const int DefaultMaxRequestTokens = 250_000;
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey) &&
         StringComparer.OrdinalIgnoreCase.Equals(Provider, DefaultProvider);
@@ -37,7 +43,10 @@ public sealed record AiReviewConfiguration(
             Text(section["Model"], DefaultModel),
             PositiveInteger(section["TimeoutSeconds"], DefaultTimeoutSeconds, "AiReview:TimeoutSeconds"),
             Boolean(section["LiveTests"], DefaultLiveTests, "AiReview:LiveTests"),
-            apiKey);
+            apiKey,
+            PositiveInteger(section["MaxRequestBytes"], DefaultMaxRequestBytes, "AiReview:MaxRequestBytes"),
+            PositiveInteger(section["MaxRequestItems"], DefaultMaxRequestItems, "AiReview:MaxRequestItems"),
+            PositiveInteger(section["MaxRequestTokens"], DefaultMaxRequestTokens, "AiReview:MaxRequestTokens"));
     }
 
     public SemanticReviewRuntimeOptions RuntimeOptions() => new(
@@ -46,7 +55,10 @@ public sealed record AiReviewConfiguration(
         Provider,
         Model,
         TimeoutSeconds,
-        LiveTests);
+        LiveTests,
+        MaxRequestBytes,
+        MaxRequestItems,
+        MaxRequestTokens);
 
     public ISemanticReviewProvider? CreateProvider(
         HttpClient httpClient,

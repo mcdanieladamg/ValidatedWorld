@@ -1,4 +1,5 @@
 using ValidatedWorld.Core;
+using ValidatedWorld.Validation;
 
 namespace ValidatedWorld.Serialization;
 
@@ -74,6 +75,19 @@ public sealed record SemanticReviewDispositionDto(
     string Disposition,
     string? Rationale);
 
+public sealed record SemanticReviewOmissionDetailDto(
+    string? SourceNodeId,
+    string? TargetNodeId,
+    string? EdgeId,
+    int? Depth,
+    string Message);
+
+public sealed record SemanticReviewOmissionGroupDto(
+    AffectedOmissionReason Reason,
+    int Count,
+    IReadOnlyList<SemanticReviewOmissionDetailDto> Sample,
+    string DetailsFingerprint);
+
 public sealed record SemanticReviewManifestDto(
     int OperationCount,
     int AffectedNodeCount,
@@ -86,7 +100,8 @@ public sealed record SemanticReviewManifestDto(
     IReadOnlyList<string> EvidenceEdgeIds,
     IReadOnlyList<string> ScopeTopologyChangeEdgeIds,
     IReadOnlyList<string> AllowedCitationIds,
-    IReadOnlyList<string> Omissions);
+    IReadOnlyList<string> Omissions,
+    IReadOnlyList<SemanticReviewOmissionGroupDto>? OmissionGroups = null);
 
 public sealed record SemanticReviewRequestDto(
     int Version,

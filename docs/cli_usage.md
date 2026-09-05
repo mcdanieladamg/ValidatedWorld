@@ -638,6 +638,28 @@ validation results, and any omissions. Directly changed nodes normally receive
 `updated`; every other affected node begins `pending`. Context-only nodes need
 presentation coverage but no disposition.
 
+Omissions are returned as compact groups rather than one response item per
+omitted traversal candidate. Each group contains a reason, total count, a
+small sample, and a fingerprint. Request the exact omitted candidates with the
+latest change reference:
+
+```json
+{
+  "version": 1,
+  "command": "change.omission-details",
+  "payload": {
+    "reference": { "projectId": "...", "sessionId": "...", "baseFingerprint": "...",
+      "operationFingerprint": "...", "proposedFingerprint": "...",
+      "affectedFingerprint": "...", "reviewFingerprint": "..." },
+    "fingerprint": "<detailsFingerprint>",
+    "limit": 100
+  }
+}
+```
+
+The returned `nextCursor` is bound to the supplied detail fingerprint and is
+opaque. A changed proposal or a cursor from another group is rejected.
+
 A review request supplies all current affected-node dispositions and every
 presented context-node ID:
 
@@ -747,6 +769,15 @@ malformed output, or provider failure leaves the database unchanged. A current
 decision is cached against all proposal/review fingerprints, so retrying the
 unchanged write does not make another paid call; changing the session invalidates
 it.
+
+Before dispatch, the application measures the serialized request in bytes,
+estimated input tokens, and bounded component-item counts. The configured
+ceilings are `AiReview:MaxRequestBytes` (default `1000000`),
+`AiReview:MaxRequestItems` (default `20000`), and
+`AiReview:MaxRequestTokens` (default `250000`). An over-budget request is
+reported as inconclusive with component counts and guidance to split or
+remodel the change, or use the explicit manual bypass. The application never
+partitions one write or makes multiple paid review calls.
 
 To use the manual-only path for one write, set `bypassAiReview` to `true`. The
 result records the bypass. It skips only the provider gate: structural

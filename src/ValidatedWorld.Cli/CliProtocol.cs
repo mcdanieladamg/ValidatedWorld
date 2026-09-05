@@ -107,6 +107,11 @@ internal sealed record SessionShowRequest(
     bool IncludeOperations = true,
     bool IncludeProposedGraph = true);
 internal sealed record SessionReferenceRequest(SessionReferenceDto Reference);
+internal sealed record OmissionDetailsRequest(
+    SessionReferenceDto Reference,
+    string Fingerprint,
+    int Limit = 100,
+    string? Cursor = null);
 internal sealed record SessionValidateRequest(
     SessionReferenceDto Reference,
     bool IncludeOperations = true,
@@ -252,6 +257,10 @@ internal sealed record ScopeContextEntryDto(
     NodeDto? ProposedNode);
 internal sealed record AffectedOmissionDto(
     AffectedOmissionReason Reason,
+    int Count,
+    IReadOnlyList<AffectedOmissionDetailDto> Sample,
+    string DetailsFingerprint);
+internal sealed record AffectedOmissionDetailDto(
     string? SourceNodeId,
     string? TargetNodeId,
     string? EdgeId,
@@ -324,7 +333,10 @@ internal sealed record AiReviewAvailabilityDto(
     string Model,
     int TimeoutSeconds,
     bool LiveTests,
-    string Message);
+    string Message,
+    int MaxRequestBytes,
+    int MaxRequestItems,
+    int MaxRequestTokens);
 internal sealed record SemanticReviewUsageDto(int InputTokens, int OutputTokens, int TotalTokens);
 internal sealed record SemanticReviewConcernResultDto(
     string Code,
@@ -344,7 +356,20 @@ internal sealed record SemanticReviewResultDto(
     double DurationMilliseconds,
     string CompletedUtc,
     bool IsCurrent,
-    string? FailureCode);
+    string? FailureCode,
+    SemanticReviewMeasurementDto? Measurement);
+internal sealed record SemanticReviewMeasurementDto(
+    int SerializedRequestBytes,
+    int EstimatedInputTokens,
+    int ItemCount,
+    IReadOnlyDictionary<string, int> ComponentCounts,
+    IReadOnlyList<string> ExceededLimits);
+internal sealed record OmissionDetailsPageDto(
+    string Fingerprint,
+    AffectedOmissionReason Reason,
+    int TotalCount,
+    IReadOnlyList<AffectedOmissionDetailDto> Items,
+    string? NextCursor);
 
 internal static class CliDto
 {
@@ -489,11 +514,14 @@ internal static class CliDto
             entry.ProposedNode is null ? null : GraphProtocol.ToDto(entry.ProposedNode))).ToArray(),
         value.Omissions.Select(omission => new AffectedOmissionDto(
             omission.Reason,
-            omission.SourceNodeId?.Value,
-            omission.TargetNodeId?.Value,
-            omission.EdgeId?.Value,
-            omission.Depth,
-            omission.Message)).ToArray());
+            omission.Count,
+            omission.Sample.Select(sample => new AffectedOmissionDetailDto(
+                sample.SourceNodeId?.Value,
+                sample.TargetNodeId?.Value,
+                sample.EdgeId?.Value,
+                sample.Depth,
+                sample.Message)).ToArray(),
+            omission.DetailsFingerprint)).ToArray());
 
     public static ReadinessDto Readiness(ReviewReadinessResult value) => new(
         value.IsReady, value.AnalysisStatus, value.ProposedValidationStatus,
@@ -513,7 +541,8 @@ internal static class CliDto
 
     public static AiReviewAvailabilityDto Availability(SemanticReviewAvailability value) => new(
         value.Enabled, value.Configured, value.Provider, value.Model,
-        value.TimeoutSeconds, value.LiveTests, value.Message);
+        value.TimeoutSeconds, value.LiveTests, value.Message,
+        value.MaxRequestBytes, value.MaxRequestItems, value.MaxRequestTokens);
 
     public static SemanticReviewResultDto SemanticReview(SemanticReviewResult value) => new(
         value.Status,
@@ -533,7 +562,25 @@ internal static class CliDto
         value.Duration.TotalMilliseconds,
         Utc(value.CompletedUtc),
         value.IsCurrent,
-        value.FailureCode);
+        value.FailureCode,
+        value.Measurement is null ? null : new SemanticReviewMeasurementDto(
+            value.Measurement.SerializedRequestBytes,
+            value.Measurement.EstimatedInputTokens,
+            value.Measurement.ItemCount,
+            value.Measurement.ComponentCounts,
+            value.Measurement.ExceededLimits));
+
+    public static OmissionDetailsPageDto OmissionDetails(AffectedOmissionPage value) => new(
+        value.Fingerprint,
+        value.Reason,
+        value.TotalCount,
+        value.Items.Select(item => new AffectedOmissionDetailDto(
+            item.SourceNodeId?.Value,
+            item.TargetNodeId?.Value,
+            item.EdgeId?.Value,
+            item.Depth,
+            item.Message)).ToArray(),
+        value.NextCursor);
 
     public static ChangeSessionLocator Locator(SessionLocatorDto value) =>
         new(new ProjectId(value.ProjectId), Required(value.SessionId, nameof(value.SessionId)));
