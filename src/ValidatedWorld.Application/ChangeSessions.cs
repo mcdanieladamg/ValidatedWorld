@@ -311,6 +311,20 @@ public sealed partial class ProjectApplication
         }
     }
 
+    public AffectedOmissionPage ReadOmissionDetails(
+        ChangeSessionReference reference,
+        string fingerprint,
+        int limit = 100,
+        string? cursor = null)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        lock (_sessionLock)
+        {
+            var state = FindAndVerify(reference);
+            return state.Affected.ReadOmissionDetails(fingerprint, limit, cursor);
+        }
+    }
+
     public ChangeSessionSnapshot ReviewChange(ChangeSessionReference reference, ChangeReviewUpdate update)
     {
         ArgumentNullException.ThrowIfNull(reference);

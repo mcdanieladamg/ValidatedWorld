@@ -180,6 +180,24 @@ public sealed class SemanticReviewTests
     }
 
     [Fact]
+    public async Task Request_budget_is_measured_before_provider_dispatch_and_reports_components()
+    {
+        var provider = new CountingProvider(SemanticReviewDecision.Allow);
+        var (application, snapshot, _) = LoreSession(provider, maxRequestBytes: 1);
+        var reviewed = ReviewEverything(application, snapshot);
+
+        var result = await application.WriteChangeAsync(reviewed.Reference);
+
+        Assert.Equal(ChangeWriteStatus.SemanticReviewBlocked, result.Status);
+        Assert.Equal("request-budget-exceeded", result.SemanticReview!.FailureCode);
+        Assert.Equal(0, provider.CallCount);
+        Assert.NotNull(result.SemanticReview.Measurement);
+        Assert.Contains("bytes", result.SemanticReview.Measurement!.ExceededLimits);
+        Assert.True(result.SemanticReview.Measurement.ComponentCounts["operations"] > 0);
+        Assert.Contains("Split or remodel", result.SemanticReview.Summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Responses_client_polls_once_parses_usage_and_never_logs_credentials()
     {
         var (_, snapshot, _) = LoreSession(provider: null);
@@ -261,7 +279,8 @@ public sealed class SemanticReviewTests
     }
 
     private static (ProjectApplication Application, ChangeSessionSnapshot Snapshot, MemoryStore Store) LoreSession(
-        ISemanticReviewProvider? provider)
+        ISemanticReviewProvider? provider,
+        int maxRequestBytes = 1_000_000)
     {
         var graph = LoreGraph();
         var store = new MemoryStore(graph);
@@ -274,7 +293,8 @@ public sealed class SemanticReviewTests
                 Enabled: provider is not null,
                 Configured: provider is not null,
                 Provider: provider?.Provider ?? "openai",
-                Model: provider?.Model ?? "gpt-5.6-terra"));
+                Model: provider?.Model ?? "gpt-5.6-terra",
+                MaxRequestBytes: maxRequestBytes));
         var begun = application.BeginChange("lore.vw.db", graph.ProjectId, "tester", "Compact T12 lore cases");
         var memberSix = new GraphNode(new EntityId("member-six"), "Fara is the sixth council member", "character");
         var operations = new GraphOperationBatch(

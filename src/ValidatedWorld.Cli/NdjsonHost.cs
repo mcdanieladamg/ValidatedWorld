@@ -22,7 +22,7 @@ internal sealed class NdjsonHost(
         "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.tag", "read.scope",
         "read.neighbors", "read.dependencies", "read.path", "read.context",
         "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand",
-        "change.affected", "change.review", "change.validate", "change.write", "change.discard",
+        "change.affected", "change.omission-details", "change.review", "change.validate", "change.write", "change.discard",
         "ai.status",
     ];
 
@@ -103,6 +103,7 @@ internal sealed class NdjsonHost(
         "change.patch" => (ChangePatch(payload), false),
         "change.expand" => (ChangeExpand(payload), false),
         "change.affected" => (ChangeAffected(payload), false),
+        "change.omission-details" => (ChangeOmissionDetails(payload), false),
         "change.review" => (ChangeReview(payload), false),
         "change.validate" => (ChangeValidate(payload), false),
         "change.discard" => (ChangeDiscard(payload), false),
@@ -137,6 +138,7 @@ internal sealed class NdjsonHost(
                     "expectedProjectId?}; context {path,nodeIds,maxDepth?,maxVisitedNodes?,expectedProjectId?}",
                 change = "begin {path,projectId,author,intent,includeOperations?,includeProposedGraph?}; " +
                     "show {session:{projectId,sessionId},includeOperations?,includeProposedGraph?}; affected {session}; " +
+                    "omission-details {reference,fingerprint,limit?,cursor?}; " +
                     "focus {reference,operations,scopeParents}; " +
                     "apply|patch {reference,operations,limits?,includeOperations?,includeProposedGraph?}; " +
                     "expand {reference,limits?,includeOperations?,includeProposedGraph?}; " +
@@ -380,6 +382,16 @@ internal sealed class NdjsonHost(
     {
         var request = CliJson.Payload<SessionLocatorRequest>(payload);
         return CliDto.Affected(application.GetAffected(CliDto.Locator(request.Session)));
+    }
+
+    private object ChangeOmissionDetails(JsonElement payload)
+    {
+        var request = CliJson.Payload<OmissionDetailsRequest>(payload);
+        return CliDto.OmissionDetails(application.ReadOmissionDetails(
+            CliDto.Reference(request.Reference),
+            request.Fingerprint,
+            request.Limit,
+            request.Cursor));
     }
 
     private object ChangeReview(JsonElement payload)

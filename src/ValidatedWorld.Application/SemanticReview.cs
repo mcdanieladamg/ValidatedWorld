@@ -59,7 +59,8 @@ public sealed record SemanticReviewResult(
     TimeSpan Duration,
     DateTimeOffset CompletedUtc,
     bool IsCurrent,
-    string? FailureCode = null)
+    string? FailureCode = null,
+    SemanticReviewRequestMeasurement? Measurement = null)
 {
     public bool AllowsWrite => Status == SemanticReviewStatus.Complete &&
         Decision == SemanticReviewDecision.Allow;
@@ -72,7 +73,20 @@ public sealed record SemanticReviewAvailability(
     string Model,
     int TimeoutSeconds,
     bool LiveTests,
-    string Message);
+    string Message,
+    int MaxRequestBytes = 1_000_000,
+    int MaxRequestItems = 20_000,
+    int MaxRequestTokens = 250_000);
+
+public sealed record SemanticReviewRequestMeasurement(
+    int SerializedRequestBytes,
+    int EstimatedInputTokens,
+    int ItemCount,
+    IReadOnlyDictionary<string, int> ComponentCounts,
+    IReadOnlyList<string> ExceededLimits)
+{
+    public bool IsWithinLimits => ExceededLimits.Count == 0;
+}
 
 public sealed record SemanticReviewRuntimeOptions(
     bool Enabled = false,
@@ -80,13 +94,19 @@ public sealed record SemanticReviewRuntimeOptions(
     string Provider = "openai",
     string Model = "gpt-5.6-terra",
     int TimeoutSeconds = 1200,
-    bool LiveTests = false)
+    bool LiveTests = false,
+    int MaxRequestBytes = 1_000_000,
+    int MaxRequestItems = 20_000,
+    int MaxRequestTokens = 250_000)
 {
     public SemanticReviewRuntimeOptions Validate()
     {
         if (string.IsNullOrWhiteSpace(Provider)) throw new ArgumentException("A provider is required.", nameof(Provider));
         if (string.IsNullOrWhiteSpace(Model)) throw new ArgumentException("A model is required.", nameof(Model));
         if (TimeoutSeconds <= 0) throw new ArgumentOutOfRangeException(nameof(TimeoutSeconds));
+        if (MaxRequestBytes <= 0) throw new ArgumentOutOfRangeException(nameof(MaxRequestBytes));
+        if (MaxRequestItems <= 0) throw new ArgumentOutOfRangeException(nameof(MaxRequestItems));
+        if (MaxRequestTokens <= 0) throw new ArgumentOutOfRangeException(nameof(MaxRequestTokens));
         return this;
     }
 }
@@ -105,6 +125,14 @@ public interface ISemanticReviewProvider
     Task<SemanticReviewProviderResult> ReviewAsync(
         SemanticReviewPlannedRequest request,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>Optional provider-specific sizing of the exact outbound request envelope.</summary>
+public interface ISemanticReviewRequestSizer
+{
+    SemanticReviewRequestMeasurement MeasureRequest(
+        SemanticReviewPlannedRequest request,
+        SemanticReviewRuntimeOptions options);
 }
 
 public static class SemanticReviewInstructions
@@ -216,6 +244,16 @@ public static class SemanticReviewPlanner
         var topologyIds = topology.Select(item => item.EdgeId).Order(StringComparer.Ordinal).ToArray();
         var allowedCitations = operationIds.Concat(affectedIds).Concat(contextIds).Concat(evidenceEdgeIds)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var omissionGroups = affected.Omissions.Select(group => new SemanticReviewOmissionGroupDto(
+            group.Reason,
+            group.Count,
+            group.Sample.Select(sample => new SemanticReviewOmissionDetailDto(
+                sample.SourceNodeId?.Value,
+                sample.TargetNodeId?.Value,
+                sample.EdgeId?.Value,
+                sample.Depth,
+                sample.Message)).ToArray(),
+            group.DetailsFingerprint)).ToArray();
         var manifest = new SemanticReviewManifestDto(
             operations.Length,
             affectedNodes.Length,
@@ -228,7 +266,10 @@ public static class SemanticReviewPlanner
             evidenceEdgeIds,
             topologyIds,
             allowedCitations,
-            affected.Omissions.Select(omission => omission.Message).ToArray());
+            affected.Omissions.Select(group =>
+                $"{group.Count} omission(s) of type '{group.Reason}' are available on demand with fingerprint '{group.DetailsFingerprint}'.")
+                .ToArray(),
+            omissionGroups);
         var binding = new SemanticReviewBindingDto(
             snapshot.Reference.BaseFingerprint,
             snapshot.Reference.OperationFingerprint,
@@ -264,6 +305,43 @@ public static class SemanticReviewPlanner
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serialized)))
             .ToLowerInvariant();
         return new SemanticReviewPlannedRequest(request, serialized, fingerprint);
+    }
+
+    public static SemanticReviewRequestMeasurement Measure(
+        SemanticReviewPlannedRequest planned,
+        SemanticReviewRuntimeOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(planned);
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
+        var bytes = Encoding.UTF8.GetByteCount(planned.SerializedRequest);
+        var manifest = planned.Request.Manifest;
+        var omissionGroups = manifest.OmissionGroups ?? [];
+        var componentCounts = new SortedDictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["operations"] = manifest.OperationCount,
+            ["affectedNodes"] = manifest.AffectedNodeCount,
+            ["evidenceEdges"] = manifest.EvidenceEdgeCount,
+            ["contextNodes"] = manifest.ContextNodeCount,
+            ["scopeTopologyChanges"] = manifest.ScopeTopologyChangeCount,
+            ["reviewDispositions"] = planned.Request.ReviewDispositions.Count,
+            ["omissionGroups"] = omissionGroups.Count,
+            ["omissionSamples"] = omissionGroups.Sum(group => group.Sample.Count),
+            ["currentValidationDiagnostics"] = planned.Request.CurrentValidation.Diagnostics.Count,
+            ["proposedValidationDiagnostics"] = planned.Request.ProposedValidation.Diagnostics.Count,
+        };
+        var items = componentCounts.Values.Sum();
+        var estimatedTokens = (bytes + 3) / 4;
+        var exceeded = new List<string>();
+        if (bytes > options.MaxRequestBytes) exceeded.Add("bytes");
+        if (items > options.MaxRequestItems) exceeded.Add("items");
+        if (estimatedTokens > options.MaxRequestTokens) exceeded.Add("tokens");
+        return new SemanticReviewRequestMeasurement(
+            bytes,
+            estimatedTokens,
+            items,
+            new ReadOnlyDictionary<string, int>(componentCounts),
+            new ReadOnlyCollection<string>(exceeded));
     }
 
     private static SemanticReviewScopeTopologyChangeDto Topology(
@@ -387,7 +465,7 @@ public static class SemanticReviewOutputValidator
     }
 }
 
-public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvider
+public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvider, ISemanticReviewRequestSizer
 {
     private static readonly JsonSerializerOptions JsonOptions = Protocol.CreateJsonOptions();
     private readonly HttpClient _httpClient;
@@ -421,6 +499,24 @@ public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvi
     public string Provider => "openai";
 
     public string Model { get; }
+
+    public SemanticReviewRequestMeasurement MeasureRequest(
+        SemanticReviewPlannedRequest request,
+        SemanticReviewRuntimeOptions options)
+    {
+        var measurement = SemanticReviewPlanner.Measure(request, options);
+        var bytes = Encoding.UTF8.GetByteCount(SerializeOutboundRequest(request));
+        var estimatedTokens = (bytes + 3) / 4;
+        var exceeded = measurement.ExceededLimits.ToList();
+        if (bytes > options.MaxRequestBytes && !exceeded.Contains("bytes")) exceeded.Add("bytes");
+        if (estimatedTokens > options.MaxRequestTokens && !exceeded.Contains("tokens")) exceeded.Add("tokens");
+        return measurement with
+        {
+            SerializedRequestBytes = bytes,
+            EstimatedInputTokens = estimatedTokens,
+            ExceededLimits = new ReadOnlyCollection<string>(exceeded),
+        };
+    }
 
     public async Task<SemanticReviewProviderResult> ReviewAsync(
         SemanticReviewPlannedRequest request,
@@ -653,7 +749,10 @@ public sealed partial class ProjectApplication
                 _semanticReviewOptions.Model,
                 _semanticReviewOptions.TimeoutSeconds,
                 _semanticReviewOptions.LiveTests,
-                message);
+                message,
+                _semanticReviewOptions.MaxRequestBytes,
+                _semanticReviewOptions.MaxRequestItems,
+                _semanticReviewOptions.MaxRequestTokens);
         }
     }
 
@@ -697,6 +796,35 @@ public sealed partial class ProjectApplication
             if (!_semanticReviewOptions.Enabled || _semanticReviewProvider is null)
                 throw new InvalidOperationException("Semantic review is not enabled for the write preflight.");
 
+            var measurement = _semanticReviewProvider is ISemanticReviewRequestSizer sizer
+                ? sizer.MeasureRequest(planned, _semanticReviewOptions)
+                : SemanticReviewPlanner.Measure(planned, _semanticReviewOptions);
+            if (!measurement.IsWithinLimits)
+            {
+                var components = string.Join(", ", measurement.ComponentCounts
+                    .Where(pair => pair.Value > 0)
+                    .Select(pair => $"{pair.Key}={pair.Value}"));
+                return AttachIfCurrent(reference, new SemanticReviewResult(
+                    SemanticReviewStatus.Inconclusive,
+                    null,
+                    _semanticReviewOptions.Provider,
+                    _semanticReviewOptions.Model,
+                    planned.RequestFingerprint,
+                    planned.Request.Binding,
+                    $"The semantic-review payload exceeds its configured {string.Join("/", measurement.ExceededLimits)} limit " +
+                    $"(bytes={measurement.SerializedRequestBytes}, estimatedInputTokens={measurement.EstimatedInputTokens}, " +
+                    $"items={measurement.ItemCount}; components: {components}). Split or remodel the change, or use " +
+                    "the explicit manual bypass; the write was not partitioned and no provider call was made.",
+                    [],
+                    null,
+                    null,
+                    TimeSpan.Zero,
+                    UtcNow(),
+                    true,
+                    "request-budget-exceeded",
+                    measurement));
+            }
+
             var provider = await _semanticReviewProvider.ReviewAsync(planned, cancellationToken);
             var result = new SemanticReviewResult(
                 provider.Status,
@@ -712,7 +840,8 @@ public sealed partial class ProjectApplication
                 provider.Duration,
                 UtcNow(),
                 true,
-                provider.FailureCode);
+                provider.FailureCode,
+                measurement);
             return AttachIfCurrent(reference, result);
         }
         finally

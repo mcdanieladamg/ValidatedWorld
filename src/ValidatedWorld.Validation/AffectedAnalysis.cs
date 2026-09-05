@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Security.Cryptography;
+using System.Text;
 using ValidatedWorld.Core;
 
 namespace ValidatedWorld.Validation;
@@ -24,6 +26,46 @@ public sealed record AffectedOmission(
     EntityId? EdgeId,
     int? Depth,
     string Message);
+
+public sealed class AffectedOmissionGroup
+{
+    internal AffectedOmissionGroup(
+        AffectedOmissionReason reason,
+        int count,
+        IEnumerable<AffectedOmission> sample,
+        string detailsFingerprint)
+    {
+        Reason = reason;
+        Count = count;
+        Sample = new ReadOnlyCollection<AffectedOmission>(sample.ToArray());
+        DetailsFingerprint = detailsFingerprint;
+    }
+
+    public AffectedOmissionReason Reason { get; }
+
+    public int Count { get; }
+
+    /// <summary>A small deterministic sample of the exact omitted candidates.</summary>
+    public IReadOnlyList<AffectedOmission> Sample { get; }
+
+    /// <summary>Use this fingerprint with <see cref="AffectedAnalysis.ReadOmissionDetails"/>.</summary>
+    public string DetailsFingerprint { get; }
+
+    // Compatibility accessors retain useful single-item diagnostics without
+    // making the normal response proportional to the number of omissions.
+    public EntityId? SourceNodeId => Sample.FirstOrDefault(item => item.SourceNodeId is not null)?.SourceNodeId;
+    public EntityId? TargetNodeId => Sample.FirstOrDefault(item => item.TargetNodeId is not null)?.TargetNodeId;
+    public EntityId? EdgeId => Sample.FirstOrDefault(item => item.EdgeId is not null)?.EdgeId;
+    public int? Depth => Sample.FirstOrDefault(item => item.Depth is not null)?.Depth;
+    public string Message => $"{Count} omission(s) of type '{Reason}'.";
+}
+
+public sealed record AffectedOmissionPage(
+    string Fingerprint,
+    AffectedOmissionReason Reason,
+    int TotalCount,
+    IReadOnlyList<AffectedOmission> Items,
+    string? NextCursor);
 
 public sealed class AffectedAnalysisOptions
 {
@@ -196,12 +238,23 @@ public sealed class AffectedAnalysis
         AffectedNodes = new ReadOnlyCollection<AffectedNode>(affectedNodes.OrderBy(node => node.NodeId).ToArray());
         EdgeChanges = new ReadOnlyCollection<AffectedEdgeChange>(edgeChanges.OrderBy(change => change.EdgeId).ToArray());
         ScopeContext = new ReadOnlyCollection<ScopeContextEntry>(scopeContext.OrderBy(entry => entry.NodeId).ToArray());
-        Omissions = new ReadOnlyCollection<AffectedOmission>(omissions
+        var details = omissions
             .OrderBy(omission => omission.Reason)
             .ThenBy(omission => omission.SourceNodeId)
             .ThenBy(omission => omission.TargetNodeId)
             .ThenBy(omission => omission.EdgeId)
             .ThenBy(omission => omission.Depth)
+            .ThenBy(omission => omission.Message, StringComparer.Ordinal)
+            .ToArray();
+        OmissionDetails = new ReadOnlyCollection<AffectedOmission>(details);
+        Omissions = new ReadOnlyCollection<AffectedOmissionGroup>(details
+            .GroupBy(omission => omission.Reason)
+            .OrderBy(group => group.Key)
+            .Select(group => new AffectedOmissionGroup(
+                group.Key,
+                group.Count(),
+                group.Take(AffectedAnalysis.OmissionSampleSize),
+                FingerprintOmissions(group)))
             .ToArray());
     }
 
@@ -228,16 +281,79 @@ public sealed class AffectedAnalysis
     /// <summary>Only ancestors not already in AffectedNodes require coverage.</summary>
     public IReadOnlyList<ScopeContextEntry> ScopeContext { get; }
 
-    public IReadOnlyList<AffectedOmission> Omissions { get; }
+    public const int OmissionSampleSize = 3;
+
+    /// <summary>Compact, bounded omission summaries for normal result payloads.</summary>
+    public IReadOnlyList<AffectedOmissionGroup> Omissions { get; }
+
+    private IReadOnlyList<AffectedOmission> OmissionDetails { get; }
 
     public bool IsComplete => Status == AffectedAnalysisStatus.Complete;
 
     public bool IsInconclusive => Status == AffectedAnalysisStatus.Inconclusive;
 
+    public AffectedOmissionPage ReadOmissionDetails(
+        string fingerprint,
+        int limit = 100,
+        string? cursor = null)
+    {
+        if (string.IsNullOrWhiteSpace(fingerprint))
+            throw new ArgumentException("A detail fingerprint is required.", nameof(fingerprint));
+        if (limit is < 1 or > 1_000)
+            throw new ArgumentOutOfRangeException(nameof(limit), "The detail-page limit must be between 1 and 1,000.");
+
+        var group = Omissions.SingleOrDefault(item => item.DetailsFingerprint == fingerprint)
+            ?? throw new ArgumentException("The omission fingerprint is not current for this analysis.", nameof(fingerprint));
+        var details = OmissionDetails.Where(item => item.Reason == group.Reason).ToArray();
+        var offset = ParseCursor(cursor, fingerprint);
+        var page = details.Skip(offset).Take(limit).ToArray();
+        var next = offset + page.Length < details.Length
+            ? Convert.ToBase64String(Encoding.UTF8.GetBytes($"{fingerprint}:{offset + page.Length}"))
+            : null;
+        return new AffectedOmissionPage(fingerprint, group.Reason, details.Length,
+            new ReadOnlyCollection<AffectedOmission>(page), next);
+    }
+
     public AffectedReviewSession CreateReviewSession() => new(this);
 
     private static IReadOnlyList<EntityId> Sorted(IEnumerable<EntityId> ids) =>
         new ReadOnlyCollection<EntityId>(ids.Distinct().OrderBy(id => id).ToArray());
+
+    private static int ParseCursor(string? cursor, string fingerprint)
+    {
+        if (cursor is null) return 0;
+        try
+        {
+            var value = Encoding.UTF8.GetString(Convert.FromBase64String(cursor));
+            var prefix = fingerprint + ":";
+            if (!value.StartsWith(prefix, StringComparison.Ordinal) ||
+                !int.TryParse(value[prefix.Length..], out var offset) || offset < 0)
+                throw new FormatException();
+            return offset;
+        }
+        catch (FormatException)
+        {
+            throw new ArgumentException("The omission detail cursor is invalid or belongs to another fingerprint.", nameof(cursor));
+        }
+    }
+
+    private static string FingerprintOmissions(IEnumerable<AffectedOmission> omissions)
+    {
+        var builder = new StringBuilder("omissions");
+        foreach (var omission in omissions)
+        {
+            Append(builder, ((int)omission.Reason).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Append(builder, omission.SourceNodeId?.Value);
+            Append(builder, omission.TargetNodeId?.Value);
+            Append(builder, omission.EdgeId?.Value);
+            Append(builder, omission.Depth?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Append(builder, omission.Message);
+        }
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()))).ToLowerInvariant();
+    }
+
+    private static void Append(StringBuilder builder, string? value) =>
+        builder.Append('|').Append(value?.Length ?? -1).Append(':').Append(value);
 }
 
 public sealed class AffectedAnalyzer

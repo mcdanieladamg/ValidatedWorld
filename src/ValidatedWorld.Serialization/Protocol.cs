@@ -231,7 +231,10 @@ public static class GraphFingerprints
         foreach (var id in a.SeedNodeIds) e.String(id.Value);
         foreach (var n in a.AffectedNodes) { e.String(n.NodeId.Value); e.Bool(n.IsDirectChange); e.Int(n.Distance); EncodePath(e, n.Explanation); }
         foreach (var c in a.ScopeContext) { e.String(c.NodeId.Value); foreach (var l in c.Lineages) { e.String(l.AffectedNodeId.Value); EncodeIds(e, l.CurrentPath); EncodeIds(e, l.ProposedPath); } }
-        foreach (var o in a.Omissions) { e.Int((int)o.Reason); e.Nullable(o.SourceNodeId?.Value); e.Nullable(o.TargetNodeId?.Value); e.Nullable(o.EdgeId?.Value); e.Nullable(o.Depth); e.String(o.Message); }
+        foreach (var group in a.Omissions)
+        {
+            e.Int((int)group.Reason); e.Int(group.Count); e.String(group.DetailsFingerprint);
+        }
         return e.ToArray();
     }
 

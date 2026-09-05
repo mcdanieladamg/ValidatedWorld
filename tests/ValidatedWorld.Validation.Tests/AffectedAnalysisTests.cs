@@ -291,6 +291,40 @@ public sealed class AffectedAnalysisTests
     }
 
     [Fact]
+    public void Omission_metadata_is_grouped_and_detail_pages_are_fingerprint_bound()
+    {
+        var graph = ValidationGraphBuilder.CreateTechnicalProject();
+        var proposal = new GraphProjector().Project(
+            graph,
+            [GraphOperation.ReplaceNode(Node("purpose", "A revised purpose"))]);
+
+        var analysis = new AffectedAnalyzer().Analyze(
+            graph,
+            proposal,
+            new AffectedAnalysisOptions { MaxOutputItems = 1 });
+
+        Assert.NotEmpty(analysis.Omissions);
+        Assert.All(analysis.Omissions, group =>
+        {
+            Assert.True(group.Count >= group.Sample.Count);
+            Assert.InRange(group.Sample.Count, 0, AffectedAnalysis.OmissionSampleSize);
+            Assert.False(string.IsNullOrWhiteSpace(group.DetailsFingerprint));
+        });
+        Assert.True(analysis.Omissions.Sum(group => group.Count) > analysis.Omissions.Count);
+
+        var group = analysis.Omissions[0];
+        var page = analysis.ReadOmissionDetails(group.DetailsFingerprint, 1);
+        Assert.Equal(group.DetailsFingerprint, page.Fingerprint);
+        Assert.Equal(group.Count, page.TotalCount);
+        Assert.Single(page.Items);
+        Assert.Throws<ArgumentException>(() => analysis.ReadOmissionDetails("wrong", 1));
+        Assert.Throws<ArgumentException>(() => analysis.ReadOmissionDetails(
+            group.DetailsFingerprint,
+            1,
+            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("wrong:1"))));
+    }
+
+    [Fact]
     public void Public_api_smoke_completes_a_realistic_manual_review()
     {
         var graph = ValidationGraphBuilder.CreateTechnicalProject();
