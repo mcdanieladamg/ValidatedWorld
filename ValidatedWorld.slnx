@@ -6,6 +6,7 @@
     <Project Path="src/ValidatedWorld.Persistence.Sqlite/ValidatedWorld.Persistence.Sqlite.csproj" />
     <Project Path="src/ValidatedWorld.Serialization/ValidatedWorld.Serialization.csproj" />
     <Project Path="src/ValidatedWorld.Validation/ValidatedWorld.Validation.csproj" />
+    <Project Path="src/ValidatedWorld.Mcp/ValidatedWorld.Mcp.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ValidatedWorld.Application.Tests/ValidatedWorld.Application.Tests.csproj" />
