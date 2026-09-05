@@ -97,6 +97,20 @@ public sealed class CliWorkflowTests
             "read", "context", project, "battery-assumption,retention-policy",
         ])).Output)!["contextNodes"]!.AsArray(), node => node!["id"]!.GetValue<string>() == "purpose");
 
+        var health = await Run(["read", "health", project, "--limit", "1"]);
+        Assert.Equal(CliRunner.SuccessExitCode, health.ExitCode);
+        var healthJson = JsonNode.Parse(health.Output)!;
+        Assert.Equal(13, healthJson["scopeCoverage"]!["totalNodeCount"]!.GetValue<int>());
+        Assert.Equal(13, healthJson["scopeCoverage"]!["nodesReachingPurpose"]!.GetValue<int>());
+        Assert.Single(healthJson["reviewFanOutHotspots"]!["items"]!.AsArray());
+        Assert.Equal(3, healthJson["reviewFanOutHotspots"]!["totalCount"]!.GetValue<int>());
+        Assert.Equal(3, healthJson["reviewFanOutHotspots"]!["omittedCount"]!.GetValue<int>() +
+            healthJson["reviewFanOutHotspots"]!["items"]!.AsArray().Count);
+        Assert.Equal("battery-assumption",
+            healthJson["reviewFanOutHotspots"]!["items"]![0]!["nodeId"]!.GetValue<string>());
+        var reportAlias = await Run(["read", "report", project, "--limit", "1"]);
+        Assert.Equal(health.Output, reportAlias.Output);
+
         var backedUp = await Run(["project", "backup", project, backup]);
         Assert.Equal(CliRunner.SuccessExitCode, backedUp.ExitCode);
         var verified = await Run(["project", "verify", backup]);
@@ -418,6 +432,8 @@ public sealed class CliWorkflowTests
             .Select(value => value!.GetValue<string>()));
         Assert.Contains("read.tag", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
+        Assert.Contains("read.health", help["payload"]!["commands"]!.AsArray()
+            .Select(value => value!.GetValue<string>()));
         Assert.DoesNotContain("ai.review", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
         var aiStatus = await host.Send("ai.status", new { });
@@ -426,6 +442,10 @@ public sealed class CliWorkflowTests
 
         var tagged = await host.Send("read.tag", new { path = project, tag = "artifact" });
         Assert.Equal(2, tagged["payload"]!["totalCount"]!.GetValue<int>());
+        var health = await host.Send("read.health", new { path = project, limit = 1 });
+        Assert.Equal(13, health["payload"]!["nodeCount"]!.GetValue<int>());
+        Assert.Equal("battery-assumption",
+            health["payload"]!["reviewFanOutHotspots"]!["items"]![0]!["nodeId"]!.GetValue<string>());
 
         var begin = await host.Send("change.begin", new
         {

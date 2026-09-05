@@ -141,6 +141,61 @@ public sealed class ApplicationQueryAndSessionTests
     }
 
     [Fact]
+    public void Graph_observability_reports_scope_quality_dependencies_rationale_and_tag_use()
+    {
+        using var workspace = new TestWorkspace();
+        var application = CreateApplication(workspace, out var path);
+
+        var report = application.Queries(path).GetGraphObservability(new GraphObservabilityOptions
+        {
+            MaxItems = 1,
+        });
+
+        Assert.Equal(13, report.NodeCount);
+        Assert.Equal(17, report.EdgeCount);
+        Assert.Equal(5, report.SemanticReviewArcCount);
+        Assert.Equal(13, report.ScopeCoverage.TotalNodeCount);
+        Assert.Equal(12, report.ScopeCoverage.ScopeParentEdgeCount);
+        Assert.Equal(12, report.ScopeCoverage.NodesWithExactlyOneScopeParent);
+        Assert.Equal(13, report.ScopeCoverage.NodesReachingPurpose);
+        Assert.Equal(100, report.ScopeCoverage.CoveragePercent);
+        Assert.Equal(0, report.UnreachableNodeIds.TotalCount);
+        Assert.Equal(3, report.ReviewFanOutHotspots.TotalCount);
+        Assert.Equal("battery-assumption", report.ReviewFanOutHotspots.Items[0].NodeId.Value);
+        Assert.Equal(3, report.ReviewFanOutHotspots.OmittedCount + report.ReviewFanOutHotspots.Items.Count);
+        Assert.Equal(1, report.SuspiciouslyIsolatedClaims.TotalCount);
+        Assert.Equal("accessibility-acceptance", report.SuspiciouslyIsolatedClaims.Items[0].NodeId.Value);
+        Assert.Equal(5, report.MissingRationales.TotalCount);
+        Assert.Single(report.MissingRationales.Items);
+        Assert.Equal(1, report.TagUsage.TotalCount);
+        Assert.Equal("artifact", report.TagUsage.Items[0].Tag);
+        Assert.Equal(2, report.TagUsage.Items[0].NodeCount);
+        Assert.Equal(11, report.UntaggedNodeCount);
+        Assert.Equal(17, report.UntaggedEdgeCount);
+    }
+
+    [Fact]
+    public void Graph_observability_flags_an_orphan_claim_and_never_creates_edges()
+    {
+        var graph = SampleProjectCatalog.Create(SampleProjectCatalog.TechnicalProject);
+        var orphan = new GraphNode(new EntityId("orphan-claim"), "An orphan claim", "claim");
+        var orphanGraph = new ProjectGraph(
+            graph.ProjectId,
+            graph.Title,
+            graph.PurposeNodeId,
+            graph.Nodes.Append(orphan),
+            graph.Edges);
+        var application = new ProjectApplication(new MutableStore(orphanGraph));
+
+        var report = application.Queries("memory.vw.db").GetGraphObservability();
+
+        Assert.Contains(new EntityId("orphan-claim"), report.UnreachableNodeIds.Items);
+        Assert.Contains(report.SuspiciouslyIsolatedClaims.Items,
+            item => item.NodeId == new EntityId("orphan-claim") && item.Kind == "claim");
+        Assert.Equal(17, report.EdgeCount);
+    }
+
+    [Fact]
     public void Realistic_change_review_is_process_local_fingerprint_guarded_and_never_writes_sqlite()
     {
         using var workspace = new TestWorkspace();

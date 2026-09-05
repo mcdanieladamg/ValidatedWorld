@@ -198,6 +198,7 @@ phase for it.
     --max-depth 1000 --max-nodes 10000
 ./ValidatedWorld.Cli.exe read context world.vw.db skyrim,high-hrothgar `
     --max-depth 1000 --max-nodes 10000
+./ValidatedWorld.Cli.exe read health world.vw.db --limit 25
 ```
 
 Paged results contain `nextCursor` and an explicit omission while more results
@@ -209,6 +210,15 @@ review arcs. `path` follows review arcs, not the scope tree. `scope` returns the
 selected node, its upstream scope, and paged descendants. `context` returns the
 combined scope-upstream context for the requested node IDs without sibling
 fan-out.
+
+`health` (also available as `report`) returns a bounded deterministic graph
+observability report. It includes scope coverage, nodes whose scope lineage
+does not reach the purpose, review-arc fan-out sources, suspiciously isolated
+non-structural nodes, semantic edges without rationale, tag frequencies, and
+untagged node/edge counts. Each report section has its own `totalCount` and
+`omittedCount`; these are author diagnostics and heuristics, not proof or
+automatic dependency creation. The NDJSON commands are `read.health` and
+`read.report` with payload `{path,limit?,expectedProjectId?}`.
 
 `search` is case-insensitive substring discovery across node IDs/text/kinds/tags
 and edge IDs/labels/rationales/tags. `tag` is an exact case-sensitive lookup

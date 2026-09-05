@@ -171,7 +171,7 @@ public sealed class ScopeContextResult
 }
 
 /// <summary>Bounded deterministic reads over one verified immutable project snapshot.</summary>
-public sealed class ProjectQueries
+public sealed partial class ProjectQueries
 {
     private readonly GraphIndex _index;
 

@@ -260,6 +260,12 @@ public static class CliRunner
             "context" => CliDto.Context(queries.GetContext(
                 arguments[3].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(id => new EntityId(id)),
                 traversal)),
+            "health" or "report" => CliDto.GraphObservability(queries.GetGraphObservability(
+                new GraphObservabilityOptions
+                {
+                    MaxItems = options.Limit,
+                    CancellationToken = cancellationToken,
+                })),
             _ => throw new CliUsageException($"Unknown read command '{arguments[1]}'."),
         };
         await WriteJson(output, result);
@@ -270,6 +276,7 @@ public static class CliRunner
     {
         "nodes" or "edges" => 3,
         "node" or "edge" or "search" or "tag" or "scope" or "neighbors" or "dependencies" or "context" => 4,
+        "health" or "report" => 3,
         "path" => 5,
         _ => throw new CliUsageException($"Unknown read command '{command}'."),
     };
@@ -395,6 +402,7 @@ public static class CliRunner
             "  read scope|neighbors|dependencies <database> <node-id> [page/traversal options]");
         await output.WriteLineAsync("  read path <database> <source-node-id> <target-node-id> [traversal options]");
         await output.WriteLineAsync("  read context <database> <node-id[,node-id...]> [traversal options]");
+        await output.WriteLineAsync("  read health|report <database> [--limit N]");
         await output.WriteLineAsync();
         await output.WriteLineAsync("Page options: --limit N --cursor TOKEN");
         await output.WriteLineAsync("Traversal options: --max-depth N --max-nodes N");

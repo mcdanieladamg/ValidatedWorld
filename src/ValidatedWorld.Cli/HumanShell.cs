@@ -116,6 +116,9 @@ internal sealed class HumanShell(
             case "context":
                 await Context(tokens);
                 return false;
+            case "health" or "report":
+                await Health(Flags(tokens, 1));
+                return false;
             case "validate":
                 NoArguments(tokens, 1);
                 await Validate();
@@ -155,7 +158,7 @@ internal sealed class HumanShell(
             await output.WriteLineAsync("            node ... | edge ...");
             await output.WriteLineAsync("Change: begin --author NAME --intent TEXT | changes | affected | review ... | context mark ...");
             await output.WriteLineAsync("Finish: validate | commit [--bypass-ai-review] | discard | exit");
-            await output.WriteLineAsync("Other: ai status | help navigation | help node | help edge | help review");
+            await output.WriteLineAsync("Other: health [--limit N] | ai status | help navigation | help node | help edge | help review");
             return;
         }
 
@@ -192,6 +195,10 @@ internal sealed class HumanShell(
                 await output.WriteLineAsync("review [--id ID] --as updated|reviewed-no-change|not-applicable|pending [--rationale TEXT]");
                 await output.WriteLineAsync("context mark --id ID");
                 break;
+            case "health" or "report":
+                await output.WriteLineAsync("health|report [--limit N]");
+                await output.WriteLineAsync("Shows bounded deterministic graph-quality diagnostics.");
+                break;
             default:
                 throw new ArgumentException($"Unknown help topic '{topic}'.");
         }
@@ -208,6 +215,43 @@ internal sealed class HumanShell(
               $"{_session.Readiness.PendingNodeIds.Count} pending reviews; ready={_session.Readiness.IsReady.ToString().ToLowerInvariant()}.");
         if (_selectedNode is { } node) await output.WriteLineAsync($"Selected node: {node.Value}");
         if (_selectedEdge is { } edge) await output.WriteLineAsync($"Selected edge: {edge.Value}");
+    }
+
+    private async Task Health(ShellFlags flags)
+    {
+        flags.Allow("limit");
+        var limit = flags.PositiveInt("limit", 20, QueryPageRequest.MaximumLimit);
+        var report = application.Queries(path).GetGraphObservability(new GraphObservabilityOptions
+        {
+            MaxItems = limit,
+            CancellationToken = cancellationToken,
+        });
+        var scope = report.ScopeCoverage;
+        await output.WriteLineAsync(
+            $"Graph health: {report.NodeCount} nodes, {report.EdgeCount} edges, " +
+            $"{report.SemanticReviewArcCount} review arcs.");
+        await output.WriteLineAsync(
+            $"Scope coverage: {scope.NodesReachingPurpose}/{scope.TotalNodeCount} nodes " +
+            $"({scope.CoveragePercent.ToString("0.##", CultureInfo.InvariantCulture)}%); " +
+            $"{scope.NodesWithExactlyOneScopeParent} have exactly one scope parent.");
+        await output.WriteLineAsync(
+            $"Unreachable nodes: {report.UnreachableNodeIds.TotalCount}; " +
+            $"fan-out sources: {report.ReviewFanOutHotspots.TotalCount}; " +
+            $"isolated claims: {report.SuspiciouslyIsolatedClaims.TotalCount}; " +
+            $"missing rationales: {report.MissingRationales.TotalCount}.");
+        await output.WriteLineAsync(
+            $"Tags: {report.TagUsage.TotalCount} distinct; " +
+            $"untagged nodes={report.UntaggedNodeCount}, edges={report.UntaggedEdgeCount}.");
+        if (report.UnreachableNodeIds.Items.Count > 0)
+            await output.WriteLineAsync($"  unreachable: {string.Join(", ", report.UnreachableNodeIds.Items)}");
+        if (report.SuspiciouslyIsolatedClaims.Items.Count > 0)
+            await output.WriteLineAsync($"  isolated: {string.Join(", ", report.SuspiciouslyIsolatedClaims.Items.Select(item => item.NodeId))}");
+        if (report.MissingRationales.Items.Count > 0)
+            await output.WriteLineAsync($"  missing rationale: {string.Join(", ", report.MissingRationales.Items.Select(item => item.EdgeId))}");
+        if (report.ReviewFanOutHotspots.Items.Count > 0)
+            await output.WriteLineAsync($"  fan-out: {string.Join(", ", report.ReviewFanOutHotspots.Items.Select(item => $"{item.NodeId}={item.OutgoingReviewArcCount}"))}");
+        if (report.TagUsage.Items.Count > 0)
+            await output.WriteLineAsync($"  tags: {string.Join(", ", report.TagUsage.Items.Select(item => $"{item.Tag}={item.TotalCount}"))}");
     }
 
     private async Task PrintWorkingNode()

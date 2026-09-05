@@ -60,6 +60,7 @@ public sealed class AuthoringToolHost
                 "read_node" => Result(ReadNode(arguments)),
                 "read_edge" => Result(ReadEdge(arguments)),
                 "read_scope" => Result(ReadScope(arguments, cancellationToken)),
+                "graph_health" => Result(GraphHealth(arguments, cancellationToken)),
                 "begin_change" => Result(BeginChange(arguments)),
                 "put_node" => Result(PutNode(arguments, cancellationToken)),
                 "put_edge" => Result(PutEdge(arguments, cancellationToken)),
@@ -296,6 +297,13 @@ public sealed class AuthoringToolHost
             new QueryPageRequest(Integer(arguments, "limit", 1, MaximumSearchResults)),
             new QueryTraversalOptions { MaxDepth = 1_000, MaxVisitedNodes = 10_000, CancellationToken = cancellationToken }));
 
+    private object GraphHealth(JsonElement arguments, CancellationToken cancellationToken) =>
+        CliDto.GraphObservability(Queries().GetGraphObservability(new GraphObservabilityOptions
+        {
+            MaxItems = Integer(arguments, "limit", 1, MaximumSearchResults),
+            CancellationToken = cancellationToken,
+        }));
+
     private object BeginChange(JsonElement arguments)
     {
         if (_session is not null) throw new InvalidOperationException("This conversation already has an active change.");
@@ -522,6 +530,7 @@ public sealed class AuthoringToolHost
             new("read_node", "Read one node by stable ID.", Schema("""{"type":"object","properties":{"node_id":{"type":"string"}},"required":["node_id"],"additionalProperties":false}""")),
             new("read_edge", "Read one edge by stable ID.", Schema("""{"type":"object","properties":{"edge_id":{"type":"string"}},"required":["edge_id"],"additionalProperties":false}""")),
             new("read_scope", "Read one node's complete upstream scope path and bounded descendants.", Schema("""{"type":"object","properties":{"node_id":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["node_id","limit"],"additionalProperties":false}""")),
+            new("graph_health", "Read bounded graph-quality diagnostics: scope coverage, unreachable nodes, review fan-out, isolated claims, missing rationales, and tag use.", Schema("""{"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["limit"],"additionalProperties":false}""")),
             new("begin_change", "Begin the one process-local incremental change session.", Schema("""{"type":"object","properties":{"intent":{"type":"string"}},"required":["intent"],"additionalProperties":false}""")),
             new("put_node", "Add or replace one complete node. Adding is rejected until search_graph has run.",
                 Schema("""{"type":"object","properties":{"mode":{"type":"string","enum":["add","replace"]},"id":{"type":"string"},"text":{"type":"string"},"kind":{"type":["string","null"]},"tags":{"type":"array","items":{"type":"string"}},"attributes":ATTRIBUTES},"required":["mode","id","text","kind","tags","attributes"],"additionalProperties":false}""".Replace("ATTRIBUTES", attribute, StringComparison.Ordinal))),
