@@ -48,6 +48,47 @@ to update this repository's graph; the coding agent is already the author. Use
 the optional independent reviewer only when the task and configured cost
 boundary warrant it.
 
+## Repository synchronization contract
+
+ValidatedWorld provides soft semantic validation: it standardizes evidence and
+review but does not prove that project claims are true. Treat the last verified
+`.vw.db` version accepted into version control as a previously reviewed semantic
+baseline. Do not re-review the entire graph for every task. `project verify`
+establishes file and structural validity only; an uncommitted database edit is a
+candidate delta, and an abandoned in-memory change session was never part of the
+database.
+
+An independent project may build a deterministic publisher that consumes the
+public graph and generates its own artifacts. Treat that as external project
+tooling, not a ValidatedWorld plugin contract, bundled feature, or roadmap
+requirement. The default repository workflow is one cohesive change unit:
+
+- Every meaningful pull request that changes tracked project artifacts normally
+  includes a `.vw.db` delta in the same change.
+- When intended behavior, content, architecture, or design changes, update the
+  corresponding graph meaning. When already-planned work is implemented, update
+  its explicit phase, status, or progress nodes, tags, and edges to record
+  delivery rather than restating the requirement.
+- Review the bounded semantic `project diff` beside the Git/source diff. Use
+  bounded tag, search, dependency, affected, and context queries when needed to
+  compare the implementation with its graph claims.
+- Merge the database and matching artifacts together so the accepted result is
+  the next trusted baseline.
+- A fix, refactor, formatting change, or test improvement that only brings the
+  project into agreement with already-correct graph meaning and changes no
+  recorded delivery state may omit a database edit. Treat this as a narrow
+  exception, state the reason in the human report, and update the graph if the
+  work exposes a missing or incorrect contract.
+- The graph may lead implementation when explicit phase/status metadata clearly
+  distinguishes planned, current, and implemented work. When planned work is
+  delivered, change its implementation markers in the same change unit as the
+  code or other artifacts.
+
+This protocol is a review obligation, not currently an automatic Git invariant.
+Phase and status tags are project-defined vocabulary rather than hidden engine
+semantics, but they are explicit, queryable, and reviewable. External artifact
+drift detection remains optional integration work.
+
 ## One-phase development loop
 
 The blueprint contains exactly one phase tagged `status:current`; `precedes`
@@ -64,9 +105,11 @@ prompt starts each development run.
   with `status:complete` on the finished phase, replace `status:pending` with
   `status:current` on the next phase, move its
   `estimate:small|medium|large|gigantic` tag, and update the `project:status`
-  node's `current-phase:<id>` tag and `current-phase` edge. Report exact checks
-  and smoke findings to the human and stop. The human reviews and merges before
-  starting another run.
+  node's `current-phase:<id>` tag and `current-phase` edge. This delivery-state
+  change is required even when the implemented requirements were already fully
+  recorded, so a successful phase pull request always has a semantic database
+  diff. Report exact checks and smoke findings to the human and stop. The human
+  reviews and merges before starting another run.
 - On failure, leave phase state unchanged, report the command/output/cause/
   repairs to the human, and stop.
 - If no phase is current, make no changes. Report the recorded state and ask the
