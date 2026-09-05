@@ -114,8 +114,14 @@ the blueprint's explicit product status and acceptance criteria.
   node's `current-phase:<id>` tag and `current-phase` edge. This delivery-state
   change is required even when the implemented requirements were already fully
   recorded, so a successful phase pull request always has a semantic database
-  diff. Report exact checks and smoke findings to the human and stop. The human
-  reviews and merges before starting another run.
+  diff. In the final response directly to the user, state the completed phase
+  and the newly current phase's ID, short description, and recorded work
+  estimate (`small`, `medium`, `large`, or `gigantic`). Read these values back
+  from the updated database; do not substitute the completed phase's estimate
+  or leave this information only in a file, link, or database update. If no phase
+  remains current, explicitly say so and omit an estimate. Report exact checks
+  and smoke findings, then stop. The human reviews and merges before starting
+  another run.
 - On failure, leave phase state unchanged, report the command/output/cause/
   repairs to the human, and stop.
 - If no phase is current, make no changes. Report the recorded state and ask the
@@ -192,7 +198,8 @@ The current phase estimate is set only after implementation, testing, and smoke
 QA are complete, while advancing the blueprint roadmap. It describes expected
 code-change volume for the newly selected phase,
 not elapsed time and not permission to split, start, or redesign that phase. Keep
-the estimate only in that header field and use the four labels consistently:
+the persisted estimate only in that header field, and repeat its value in the
+final user-facing phase handoff. Use the four labels consistently:
 
 - `small`: a localized change with a narrow test surface;
 - `medium`: several related changes within one primary subsystem;
