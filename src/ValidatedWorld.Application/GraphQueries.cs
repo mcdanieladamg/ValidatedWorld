@@ -101,6 +101,29 @@ public sealed class QueryPage<T>
 
 public sealed record GraphSearchHit(GraphEntityKind EntityKind, EntityId EntityId, GraphNode? Node, GraphEdge? Edge);
 
+public enum SearchMatchKind
+{
+    StableId,
+    ExactTag,
+    Phrase,
+    Token,
+    Metadata,
+}
+
+public sealed record RankedSearchMatch(
+    SearchMatchKind Kind,
+    string Field,
+    string Term,
+    int ScoreContribution);
+
+public sealed record RankedGraphSearchHit(
+    GraphEntityKind EntityKind,
+    EntityId EntityId,
+    GraphNode? Node,
+    GraphEdge? Edge,
+    int Score,
+    IReadOnlyList<RankedSearchMatch> Matches);
+
 public sealed record NeighborEntry(EntityId NodeId, GraphEdge Edge, bool IsOutgoing);
 
 public sealed record DependencyEntry(ReviewArc Arc, bool IsOutgoing);
@@ -203,17 +226,7 @@ public sealed partial class ProjectQueries
 
     public QueryPage<GraphSearchHit> Search(string text, QueryPageRequest? request = null)
     {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            throw new ArgumentException("Search text cannot be empty or whitespace-only.", nameof(text));
-        }
-
-        if (text.Length > GraphLimits.TextMaxLength)
-        {
-            throw new ArgumentException(
-                $"Search text cannot exceed {GraphLimits.TextMaxLength} characters.",
-                nameof(text));
-        }
+        ValidateSearchText(text);
 
         var hits = Project.Graph.Nodes
             .Where(node => Matches(node.Id.Value, text) || Matches(node.Text, text) ||
@@ -227,6 +240,27 @@ public sealed partial class ProjectQueries
             .ThenBy(hit => hit.EntityKind)
             .ToArray();
         return Page(hits, Signature("search", Project.StateFingerprint + text), request);
+    }
+
+    /// <summary>
+    /// Searches all human-readable and metadata fields using deterministic
+    /// lexical ranking. The original substring search remains available as
+    /// <see cref="Search"/>; each ranked hit includes its score contributions.
+    /// </summary>
+    public QueryPage<RankedGraphSearchHit> SearchRanked(string text, QueryPageRequest? request = null)
+    {
+        ValidateSearchText(text);
+        var terms = RankedSearchTerms.Parse(text);
+        var hits = Project.Graph.Nodes
+            .Select(node => RankNode(node, terms))
+            .Concat(Project.Graph.Edges.Select(edge => RankEdge(edge, terms)))
+            .Where(hit => hit is not null)
+            .Select(hit => hit!)
+            .OrderByDescending(hit => hit.Score)
+            .ThenBy(hit => hit.EntityId)
+            .ThenBy(hit => hit.EntityKind)
+            .ToArray();
+        return Page(hits, Signature("ranked-search", Project.StateFingerprint + text), request);
     }
 
     public QueryPage<GraphSearchHit> SearchByTag(string tag, QueryPageRequest? request = null)
@@ -494,6 +528,282 @@ public sealed partial class ProjectQueries
 
     private static bool Matches(string? value, string text) =>
         value?.Contains(text, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static void ValidateSearchText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw new ArgumentException("Search text cannot be empty or whitespace-only.", nameof(text));
+        }
+
+        if (text.Length > GraphLimits.TextMaxLength)
+        {
+            throw new ArgumentException(
+                $"Search text cannot exceed {GraphLimits.TextMaxLength} characters.",
+                nameof(text));
+        }
+    }
+
+    private static RankedGraphSearchHit? RankNode(GraphNode node, RankedSearchTerms terms)
+    {
+        var matches = new List<RankedSearchMatch>();
+        AddStableIdMatch(matches, node.Id.Value, terms);
+
+        var exactTags = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var candidate in terms.ExactCandidates)
+        {
+            foreach (var tag in node.Tags.Where(tag => StringComparer.Ordinal.Equals(tag, candidate)))
+            {
+                AddMatch(matches, SearchMatchKind.ExactTag, "tag", tag, ExactTagScore);
+                exactTags.Add(tag);
+            }
+        }
+
+        var fields = new List<RankedSearchField>
+        {
+            new("id", node.Id.Value, true),
+            new("text", node.Text, false),
+        };
+        if (node.Kind is not null) fields.Add(new("kind", node.Kind, true));
+        fields.AddRange(node.Tags.Select(tag => new RankedSearchField("tag", tag, true)));
+        foreach (var attribute in node.Attributes)
+        {
+            fields.Add(new($"attribute:{attribute.Name}", attribute.Name, true));
+            fields.Add(new($"attribute:{attribute.Name}", attribute.Value.ToString(), true));
+        }
+
+        AddLexicalMatches(matches, fields, terms, exactTags);
+        return CreateRankedHit(GraphEntityKind.Node, node.Id, node, null, matches);
+    }
+
+    private static RankedGraphSearchHit? RankEdge(GraphEdge edge, RankedSearchTerms terms)
+    {
+        var matches = new List<RankedSearchMatch>();
+        AddStableIdMatch(matches, edge.Id.Value, terms);
+
+        var exactTags = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var candidate in terms.ExactCandidates)
+        {
+            foreach (var tag in edge.Tags.Where(tag => StringComparer.Ordinal.Equals(tag, candidate)))
+            {
+                AddMatch(matches, SearchMatchKind.ExactTag, "tag", tag, ExactTagScore);
+                exactTags.Add(tag);
+            }
+        }
+
+        var fields = new List<RankedSearchField>
+        {
+            new("id", edge.Id.Value, true),
+            new("relationship", edge.Relationship, true),
+        };
+        if (edge.Rationale is not null) fields.Add(new("rationale", edge.Rationale, true));
+        fields.AddRange(edge.Tags.Select(tag => new RankedSearchField("tag", tag, true)));
+        foreach (var attribute in edge.Attributes)
+        {
+            fields.Add(new($"attribute:{attribute.Name}", attribute.Name, true));
+            fields.Add(new($"attribute:{attribute.Name}", attribute.Value.ToString(), true));
+        }
+
+        AddLexicalMatches(matches, fields, terms, exactTags);
+        return CreateRankedHit(GraphEntityKind.Edge, edge.Id, null, edge, matches);
+    }
+
+    private static RankedGraphSearchHit? CreateRankedHit(
+        GraphEntityKind entityKind,
+        EntityId entityId,
+        GraphNode? node,
+        GraphEdge? edge,
+        List<RankedSearchMatch> matches)
+    {
+        if (matches.Count == 0) return null;
+        var ordered = matches
+            .OrderByDescending(match => match.ScoreContribution)
+            .ThenBy(match => match.Kind)
+            .ThenBy(match => match.Field, StringComparer.Ordinal)
+            .ThenBy(match => match.Term, StringComparer.Ordinal)
+            .ToArray();
+        return new RankedGraphSearchHit(
+            entityKind,
+            entityId,
+            node,
+            edge,
+            ordered.Sum(match => match.ScoreContribution),
+            new ReadOnlyCollection<RankedSearchMatch>(ordered));
+    }
+
+    private static void AddStableIdMatch(
+        List<RankedSearchMatch> matches,
+        string id,
+        RankedSearchTerms terms)
+    {
+        if (terms.ExactCandidates.Any(candidate =>
+                StringComparer.OrdinalIgnoreCase.Equals(candidate, id)))
+        {
+            matches.Add(new RankedSearchMatch(
+                SearchMatchKind.StableId, "id", id, StableIdScore));
+        }
+    }
+
+    private static void AddLexicalMatches(
+        List<RankedSearchMatch> matches,
+        IReadOnlyList<RankedSearchField> fields,
+        RankedSearchTerms terms,
+        IReadOnlySet<string> exactTags)
+    {
+        foreach (var phrase in terms.Phrases)
+        {
+            foreach (var field in fields.Where(field => Matches(field.Value, phrase)))
+            {
+                matches.Add(new RankedSearchMatch(
+                    SearchMatchKind.Phrase,
+                    field.Name,
+                    phrase,
+                    field.IsMetadata ? MetadataPhraseScore : TextPhraseScore));
+            }
+        }
+
+        foreach (var token in terms.Tokens)
+        {
+            foreach (var field in fields.Where(field => ContainsToken(field.Value, token)))
+            {
+                if (field.Name == "tag" && exactTags.Contains(field.Value)) continue;
+                matches.Add(new RankedSearchMatch(
+                    field.IsMetadata ? SearchMatchKind.Metadata : SearchMatchKind.Token,
+                    field.Name,
+                    token,
+                    field.IsMetadata ? MetadataTokenScore : TextTokenScore));
+            }
+        }
+    }
+
+    private static void AddMatch(
+        List<RankedSearchMatch> matches,
+        SearchMatchKind kind,
+        string field,
+        string term,
+        int contribution) => matches.Add(new RankedSearchMatch(kind, field, term, contribution));
+
+    private static bool ContainsToken(string value, string token) =>
+        RankedSearchTerms.Tokenize(value).Any(candidate =>
+            StringComparer.OrdinalIgnoreCase.Equals(candidate, token));
+
+    private const int StableIdScore = 1_000;
+    private const int ExactTagScore = 800;
+    private const int TextPhraseScore = 300;
+    private const int MetadataPhraseScore = 150;
+    private const int TextTokenScore = 100;
+    private const int MetadataTokenScore = 25;
+
+    private sealed record RankedSearchField(string Name, string Value, bool IsMetadata);
+
+    private sealed class RankedSearchTerms
+    {
+        private RankedSearchTerms(
+            string normalizedText,
+            IReadOnlyList<string> exactCandidates,
+            IReadOnlyList<string> phrases,
+            IReadOnlyList<string> tokens)
+        {
+            NormalizedText = normalizedText;
+            ExactCandidates = exactCandidates;
+            Phrases = phrases;
+            Tokens = tokens;
+        }
+
+        public string NormalizedText { get; }
+        public IReadOnlyList<string> ExactCandidates { get; }
+        public IReadOnlyList<string> Phrases { get; }
+        public IReadOnlyList<string> Tokens { get; }
+
+        public static RankedSearchTerms Parse(string text)
+        {
+            var normalized = new StringBuilder();
+            var phrases = new List<string>();
+            var tokens = new List<string>();
+            var current = new StringBuilder();
+            var phraseText = new StringBuilder();
+            var quoted = false;
+
+            void FlushToken()
+            {
+                if (current.Length == 0) return;
+                var token = current.ToString();
+                if (!tokens.Contains(token, StringComparer.OrdinalIgnoreCase)) tokens.Add(token);
+                current.Clear();
+            }
+
+            for (var index = 0; index < text.Length; index++)
+            {
+                var character = text[index];
+                if (character == '"')
+                {
+                    if (quoted)
+                    {
+                        FlushToken();
+                        var phrase = phraseText.ToString().Trim();
+                        if (phrase.Length == 0)
+                            throw new ArgumentException("Quoted search phrases cannot be empty.", nameof(text));
+                        phrases.Add(phrase);
+                        phraseText.Clear();
+                    }
+                    else
+                    {
+                        FlushToken();
+                        phraseText.Clear();
+                    }
+                    quoted = !quoted;
+                    if (normalized.Length > 0 && normalized[^1] != ' ') normalized.Append(' ');
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(character))
+                {
+                    FlushToken();
+                    if (normalized.Length > 0 && normalized[^1] != ' ') normalized.Append(' ');
+                    continue;
+                }
+
+                normalized.Append(character);
+                if (quoted) phraseText.Append(character);
+                if (char.IsLetterOrDigit(character)) current.Append(char.ToLowerInvariant(character));
+                else FlushToken();
+            }
+
+            if (quoted) throw new ArgumentException("Search phrases must have closing quotes.", nameof(text));
+            FlushToken();
+
+            var normalizedText = normalized.ToString().Trim();
+            if (tokens.Count > 1 && !phrases.Contains(normalizedText, StringComparer.OrdinalIgnoreCase))
+                phrases.Insert(0, normalizedText);
+
+            var exactCandidates = new[] { normalizedText }
+                .Concat(tokens)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return new RankedSearchTerms(normalizedText, exactCandidates, phrases, tokens);
+        }
+
+        public static IReadOnlyList<string> Tokenize(string value)
+        {
+            var tokens = new List<string>();
+            var current = new StringBuilder();
+            foreach (var character in value)
+            {
+                if (char.IsLetterOrDigit(character))
+                {
+                    current.Append(char.ToLowerInvariant(character));
+                }
+                else if (current.Length > 0)
+                {
+                    tokens.Add(current.ToString());
+                    current.Clear();
+                }
+            }
+
+            if (current.Length > 0) tokens.Add(current.ToString());
+            return tokens;
+        }
+    }
 
     private static string Signature(string kind, string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{kind.Length}:{kind}{value.Length}:{value}")))

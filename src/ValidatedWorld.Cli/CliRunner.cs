@@ -251,6 +251,7 @@ public static class CliRunner
             "nodes" => CliDto.Nodes(queries.ListNodes(page)),
             "edges" => CliDto.Edges(queries.ListEdges(page)),
             "search" => CliDto.Search(queries.Search(arguments[3], page)),
+            "ranked-search" => CliDto.RankedSearch(queries.SearchRanked(arguments[3], page)),
             "tag" => CliDto.Search(queries.SearchByTag(arguments[3], page)),
             "scope" => CliDto.Scope(queries.GetScope(new EntityId(arguments[3]), page, traversal)),
             "neighbors" => CliDto.Neighbors(queries.GetNeighbors(new EntityId(arguments[3]), page)),
@@ -275,7 +276,7 @@ public static class CliRunner
     private static int RequiredPositionals(string command) => command switch
     {
         "nodes" or "edges" => 3,
-        "node" or "edge" or "search" or "tag" or "scope" or "neighbors" or "dependencies" or "context" => 4,
+        "node" or "edge" or "search" or "ranked-search" or "tag" or "scope" or "neighbors" or "dependencies" or "context" => 4,
         "health" or "report" => 3,
         "path" => 5,
         _ => throw new CliUsageException($"Unknown read command '{command}'."),
@@ -397,6 +398,7 @@ public static class CliRunner
         await output.WriteLineAsync("  read edge <database> <edge-id>");
         await output.WriteLineAsync("  read nodes|edges <database> [--limit N] [--cursor TOKEN]");
         await output.WriteLineAsync("  read search <database> <text> [--limit N] [--cursor TOKEN]");
+        await output.WriteLineAsync("  read ranked-search <database> <text> [--limit N] [--cursor TOKEN]");
         await output.WriteLineAsync("  read tag <database> <exact-tag> [--limit N] [--cursor TOKEN]");
         await output.WriteLineAsync(
             "  read scope|neighbors|dependencies <database> <node-id> [page/traversal options]");

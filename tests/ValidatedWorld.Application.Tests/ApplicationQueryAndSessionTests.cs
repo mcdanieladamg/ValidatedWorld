@@ -1,12 +1,18 @@
+using System.Diagnostics;
 using ValidatedWorld.Core;
 using ValidatedWorld.Persistence.Sqlite;
 using ValidatedWorld.Serialization;
 using ValidatedWorld.Validation;
+using Xunit.Abstractions;
 
 namespace ValidatedWorld.Application.Tests;
 
 public sealed class ApplicationQueryAndSessionTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public ApplicationQueryAndSessionTests(ITestOutputHelper output) => _output = output;
+
     private static readonly DateTimeOffset FixedUtc =
         new(2026, 8, 26, 16, 30, 0, TimeSpan.Zero);
 
@@ -89,6 +95,117 @@ public sealed class ApplicationQueryAndSessionTests
             Assert.Throws<ProjectQueryException>(() =>
                 queries.Search("artifact", new QueryPageRequest(2, first.NextCursor))).Code);
         Assert.Throws<ArgumentException>(() => queries.SearchByTag("  "));
+    }
+
+    [Fact]
+    public void Ranked_search_explains_exact_ids_tags_phrases_tokens_and_metadata()
+    {
+        var graph = SampleProjectCatalog.Create(SampleProjectCatalog.TechnicalProject);
+        var node = new GraphNode(
+            new EntityId("maintenance-note"),
+            "Inspect the power enclosure before maintenance",
+            "note",
+            ["operations"],
+            [new KeyValuePair<string, GraphValue>("owner", GraphValue.FromText("Power Team"))]);
+        var expanded = new ProjectGraph(
+            graph.ProjectId,
+            graph.Title,
+            graph.PurposeNodeId,
+            graph.Nodes.Append(node),
+            graph.Edges.Append(new GraphEdge(
+                new EntityId("maintenance-note-parent"),
+                node.Id,
+                new EntityId("scope-power"),
+                "scope-parent",
+                ReviewDirection.None)));
+        var application = new ProjectApplication(new MutableStore(expanded));
+        var queries = application.Queries("memory.vw.db");
+
+        var exactId = queries.SearchRanked("maintenance-note");
+        Assert.Equal(node.Id, exactId.Items[0].EntityId);
+        Assert.Contains(exactId.Items[0].Matches, match =>
+            match.Kind == SearchMatchKind.StableId && match.Field == "id");
+
+        var exactTag = queries.SearchRanked("operations");
+        Assert.Equal(node.Id, exactTag.Items[0].EntityId);
+        Assert.Contains(exactTag.Items[0].Matches, match =>
+            match.Kind == SearchMatchKind.ExactTag && match.Field == "tag");
+
+        var phrase = queries.SearchRanked("\"power enclosure\"");
+        Assert.Equal(node.Id, phrase.Items[0].EntityId);
+        Assert.Contains(phrase.Items[0].Matches, match =>
+            match.Kind == SearchMatchKind.Phrase && match.Field == "text" &&
+            match.Term == "power enclosure");
+
+        var metadata = queries.SearchRanked("Power Team");
+        Assert.Equal(node.Id, metadata.Items[0].EntityId);
+        Assert.Contains(metadata.Items[0].Matches, match =>
+            match.Kind == SearchMatchKind.Metadata && match.Field == "attribute:owner");
+
+        Assert.Throws<ArgumentException>(() => queries.SearchRanked("\"unclosed"));
+    }
+
+    [Fact]
+    public void Ranked_search_is_cursor_bound_and_literal_search_contract_is_preserved()
+    {
+        using var workspace = new TestWorkspace();
+        var application = CreateApplication(workspace, out var path);
+        var queries = application.Queries(path);
+
+        var ranked = queries.SearchRanked("power", new QueryPageRequest(2));
+        Assert.NotNull(ranked.NextCursor);
+        Assert.Equal(ranked.Items.Select(hit => hit.EntityId),
+            ranked.Items.OrderByDescending(hit => hit.Score).ThenBy(hit => hit.EntityId)
+                .Select(hit => hit.EntityId));
+        Assert.Equal(
+            new[]
+            {
+                "battery-informs-power-anchor", "power-anchor-scope-parent", "power-design-anchor",
+                "scope-power", "scope-power-parent",
+            },
+            queries.Search("POWER", new QueryPageRequest(10)).Items.Select(hit => hit.EntityId.Value));
+        Assert.Equal(
+            ProjectQueryErrorCode.InvalidCursor,
+            Assert.Throws<ProjectQueryException>(() =>
+                queries.SearchRanked("other", new QueryPageRequest(2, ranked.NextCursor))).Code);
+    }
+
+    [Fact]
+    public void Ranked_search_mechanical_probe_covers_a_larger_realistic_corpus()
+    {
+        var purpose = new GraphNode(new EntityId("purpose"), "An offline sensor project", "purpose");
+        var nodes = Enumerable.Range(1, 5_000)
+            .Select(index => new GraphNode(
+                new EntityId($"requirement-{index:D4}"),
+                $"Subsystem {index % 100:D2} requirement covers the offline sensor retention workflow",
+                index % 2 == 0 ? "requirement" : "verification",
+                [$"domain:{index % 10:D2}", index % 3 == 0 ? "reviewed" : "planned"],
+                [new KeyValuePair<string, GraphValue>("priority", GraphValue.FromInteger(index % 5 + 1))]))
+            .ToArray();
+        var edges = nodes.Select(node => new GraphEdge(
+            new EntityId($"{node.Id.Value}-parent"),
+            node.Id,
+            purpose.Id,
+            "scope-parent",
+            ReviewDirection.None)).ToArray();
+        var graph = new ProjectGraph(
+            new ProjectId("benchmark-project"),
+            "Benchmark Project",
+            purpose.Id,
+            nodes.Prepend(purpose),
+            edges);
+        var application = new ProjectApplication(new MutableStore(graph));
+        var stopwatch = Stopwatch.StartNew();
+        var page = application.Queries("memory.vw.db").SearchRanked(
+            "offline sensor retention", new QueryPageRequest(25));
+        stopwatch.Stop();
+
+        Assert.Equal(5_001, page.TotalCount);
+        Assert.Equal(25, page.Items.Count);
+        Assert.All(page.Items, hit => Assert.NotEmpty(hit.Matches));
+        _output.WriteLine(
+            $"ranked-search corpus nodes={graph.Nodes.Count} edges={graph.Edges.Count} " +
+            $"results={page.TotalCount} elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}");
     }
 
     [Fact]

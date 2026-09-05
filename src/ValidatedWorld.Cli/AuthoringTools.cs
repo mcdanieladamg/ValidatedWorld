@@ -57,6 +57,7 @@ public sealed class AuthoringToolHost
                 "project_status" => Result(ProjectStatus(arguments)),
                 "initialize_project" => InitializeProject(arguments),
                 "search_graph" => Result(Search(arguments)),
+                "ranked_search_graph" => Result(RankedSearch(arguments)),
                 "read_node" => Result(ReadNode(arguments)),
                 "read_edge" => Result(ReadEdge(arguments)),
                 "read_scope" => Result(ReadScope(arguments, cancellationToken)),
@@ -283,6 +284,14 @@ public sealed class AuthoringToolHost
         return text is not null
             ? CliDto.Search(queries.Search(text, new QueryPageRequest(limit)))
             : CliDto.Search(queries.SearchByTag(tag!, new QueryPageRequest(limit)));
+    }
+
+    private object RankedSearch(JsonElement arguments)
+    {
+        var text = Required(arguments, "text");
+        var limit = Integer(arguments, "limit", 1, MaximumSearchResults);
+        _searched = true;
+        return CliDto.RankedSearch(Queries().SearchRanked(text, new QueryPageRequest(limit)));
     }
 
     private object ReadNode(JsonElement arguments) =>
@@ -527,6 +536,8 @@ public sealed class AuthoringToolHost
                 Schema("""{"type":"object","properties":{"project_id":{"type":"string"},"title":{"type":"string"},"purpose_id":{"type":"string"},"purpose_text":{"type":"string"}},"required":["project_id","title","purpose_id","purpose_text"],"additionalProperties":false}""")),
             new("search_graph", "Bounded text or exact-tag search. Search before creating and before changing closed-world claims.",
                 Schema("""{"type":"object","properties":{"text":{"type":["string","null"]},"tag":{"type":["string","null"]},"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["text","tag","limit"],"additionalProperties":false}""")),
+            new("ranked_search_graph", "Bounded deterministic lexical search with explainable ranking for stable IDs, exact tags, phrases, tokens, and metadata.",
+                Schema("""{"type":"object","properties":{"text":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["text","limit"],"additionalProperties":false}""")),
             new("read_node", "Read one node by stable ID.", Schema("""{"type":"object","properties":{"node_id":{"type":"string"}},"required":["node_id"],"additionalProperties":false}""")),
             new("read_edge", "Read one edge by stable ID.", Schema("""{"type":"object","properties":{"edge_id":{"type":"string"}},"required":["edge_id"],"additionalProperties":false}""")),
             new("read_scope", "Read one node's complete upstream scope path and bounded descendants.", Schema("""{"type":"object","properties":{"node_id":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["node_id","limit"],"additionalProperties":false}""")),
