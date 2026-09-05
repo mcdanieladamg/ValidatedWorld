@@ -81,7 +81,12 @@ public sealed class AuthoringToolHost
     {
         if (_pendingProject is not null)
         {
-            var stored = _application.Initialize(_path, _pendingProject);
+            var stored = _application.Initialize(
+                _path,
+                _pendingProject.ProjectId,
+                _pendingProject.Title,
+                _pendingProject.PurposeNodeId,
+                _pendingProject.Nodes.Single().Text);
             _projectId = stored.Graph.ProjectId;
             _pendingProject = null;
             return new

@@ -128,11 +128,37 @@ public sealed partial class ProjectApplication
         _semanticReviewOptions = (semanticReviewOptions ?? new SemanticReviewRuntimeOptions()).Validate();
     }
 
+    /// <summary>
+    /// Creates a new authored project containing only its purpose node.
+    /// Subsequent graph content must be added through a reviewed change session.
+    /// </summary>
+    public StoredProject Initialize(
+        string path,
+        ProjectId projectId,
+        string title,
+        EntityId purposeNodeId,
+        string purposeText)
+    {
+        var purpose = new GraphNode(purposeNodeId, purposeText, "purpose");
+        return InitializePurposeOnly(path, new ProjectGraph(
+            projectId, title, purpose.Id, [purpose], []));
+    }
+
+    /// <summary>
+    /// Compatibility overload for callers that already have a graph-shaped
+    /// request. Public initialization still accepts only a purpose-only graph.
+    /// </summary>
     public StoredProject Initialize(string path, ProjectGraph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
-        EnsureValidGraph(graph);
-        return _store.Initialize(path, graph);
+        if (graph.Nodes.Count != 1 || graph.Edges.Count != 0)
+        {
+            throw new ProjectStorageException(
+                ProjectStorageErrorCode.InvalidGraph,
+                "Public project initialization accepts only project metadata and one purpose node; add other graph content through a reviewed change session.");
+        }
+
+        return InitializePurposeOnly(path, graph);
     }
 
     public StoredProject Load(string path) => _store.Load(path);
@@ -160,7 +186,19 @@ public sealed partial class ProjectApplication
     }
 
     public StoredProject CreateSample(string sampleName, string path) =>
-        Initialize(path, SampleProjectCatalog.Create(sampleName));
+        InitializeFixture(path, SampleProjectCatalog.Create(sampleName));
+
+    private StoredProject InitializePurposeOnly(string path, ProjectGraph graph)
+    {
+        EnsureValidGraph(graph);
+        return _store.Initialize(path, graph);
+    }
+
+    private StoredProject InitializeFixture(string path, ProjectGraph graph)
+    {
+        EnsureValidGraph(graph);
+        return _store.Initialize(path, graph);
+    }
 
     private void EnsureValidGraph(ProjectGraph graph)
     {
