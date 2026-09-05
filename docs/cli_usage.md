@@ -142,6 +142,45 @@ Use a `project backup` made before editing as the base, then diff it against the
 result. A Git revision materialized as a `.vw.db` file is equally valid. Diff
 output is not stored in either database.
 
+### Repository review procedure
+
+For a repository-backed project, treat a graph change and its matching source,
+document, or content edits as one review unit. Back up the last accepted graph
+outside the repository, make the reviewed graph change, and place its semantic
+diff beside the ordinary source diff:
+
+```powershell
+./ValidatedWorld.Cli.exe project backup world.vw.db `
+    $env:TEMP/world-before.vw.db
+./ValidatedWorld.Cli.exe project diff $env:TEMP/world-before.vw.db `
+    world.vw.db --limit 100
+```
+
+Continue `project diff` until `nextCursor` is null. The diff identifies exact
+database changes; bounded `read search`, `read tag`, `read dependencies`,
+`affected`, and `context` queries supply the surrounding meaning needed to
+compare them with external artifacts. Review and merge both sides together.
+
+The accepted, structurally verified database is then the trusted baseline for
+the next delta; that trust is inherited from prior human or agent review, not
+from a claim that validation proved its contents true. Semantic or design
+changes require both graph and artifact changes. Meaningful artifact work also
+normally carries a graph delta when its semantics were already planned: update
+the relevant phase, status, or progress entities to record delivery. A graph may
+describe future work ahead of implementation only when that boundary is
+explicit and searchable.
+
+Only corrective or non-semantic maintenance that changes neither intended
+meaning nor recorded delivery state may omit the graph edit. The review should
+state why the accepted graph already covers the work. Phase and status tags are
+project-defined vocabulary, not hidden engine behavior, but their persisted
+changes are still visible to semantic diff and bounded queries.
+
+An independent project can build a publisher that reads the public graph and
+generates final artifacts. That publisher is external project tooling; this
+guide does not define a plugin contract or imply a ValidatedWorld development
+phase for it.
+
 ## Bounded reads
 
 ```powershell

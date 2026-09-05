@@ -5,6 +5,12 @@ projects. It stores human-readable project knowledge as a graph, finds the parts
 that a proposed change may invalidate, and requires those parts to be reviewed
 before committing the new state.
 
+This is a soft validation system, not a truth machine. Its value is a repeatable
+procedure: keep important meaning and dependencies explicit, inspect a bounded
+delta and its likely consequences, and preserve the reviewed result as the next
+trusted baseline. The aim is to be more dependable than relying on one expert's
+memory or giving a human or model an undifferentiated dump of the whole project.
+
 The same model can represent software architecture, requirements, research,
 patent outlines, novels, game lore, campaigns, or any other project whose facts
 and decisions depend on one another.
@@ -92,8 +98,9 @@ dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
 ```
 
 Inside the shell, use `help`, navigate with `pwd`, `ls`, `cd`, and `root`, and
-inspect the pending change with `preview`. The shell keeps the selected node,
-proposal, review coverage, and fingerprints in memory until commit or discard.
+inspect the pending change with `changes`, `affected`, and `validate`. The shell
+keeps the selected node, proposal, review coverage, and fingerprints in memory
+until commit or discard.
 
 Create a project with a purpose root:
 
@@ -141,6 +148,49 @@ The result includes both fingerprints, project metadata changes, summary counts,
 and stable-ID node and edge additions, replacements, and removals. Replacements
 show old and new values plus the changed field names. Large results can be read
 page by page with the returned cursor.
+
+## Keeping the graph and project in sync
+
+An independent project may choose to build a publisher that reads its reviewed
+graph and deterministically generates final artifacts. That is an external use
+of ValidatedWorld's public data, not a built-in feature, plugin contract, or
+roadmap commitment. The publishing tool and its safety and correctness belong
+to that project.
+
+The normal repository workflow is paired change control:
+
+1. Start from the last accepted `.vw.db` file and make a backup outside the
+   repository.
+2. Make one small, coherent graph change and the corresponding source,
+   document, or content changes in the same branch and pull request.
+3. Review `project diff` from the backup to the candidate database beside the
+   ordinary source diff. Use bounded search, phase tags, dependencies, affected
+   evidence, and scope context when the diff alone does not show enough meaning.
+4. Accept and merge the database and external artifacts together. The resulting
+   verified database becomes the trusted semantic baseline for later deltas.
+
+Every meaningful pull request that changes tracked project artifacts is expected
+to carry a `.vw.db` delta. If intended behavior, content, architecture, or design
+changes, the delta updates that meaning. If a pull request implements work that
+was already fully described, the delta records delivery by advancing the
+relevant phase, status, or progress nodes, tags, and edges. The graph may lead
+implementation only while those markers clearly distinguish planned, current,
+and implemented work.
+
+The narrow exception is corrective or non-semantic maintenance that changes
+neither intended meaning nor any recorded delivery state—for example, repairing
+an implementation so it finally conforms to an already-complete graph contract.
+Such a pull request should say why the accepted graph already covers it instead
+of manufacturing a meaningless database edit. Phase and status tags are a
+project convention rather than hidden engine semantics, but they remain explicit,
+queryable, and reviewable graph state.
+
+Trusting the baseline means accepting its previously reviewed semantics without
+re-litigating the entire project on every edit. `project verify` still checks
+file identity, schema, integrity, and graph structure; it does not prove that the
+stored claims are true. Pending proposals remain process-local, and an
+unreviewed or uncommitted database edit is a candidate delta rather than a new
+trusted baseline.
 
 ## Modeling guidance
 
@@ -234,7 +284,9 @@ write with `commit --bypass-ai-review`.
   engine does not infer every unstated relationship from prose.
 - The database represents current project knowledge, not commit history.
 - ValidatedWorld identifies external artifacts that may be stale; it does not
-  rewrite, render, publish, or certify novels, papers, source trees, or media.
+  rewrite, render, publish, or certify novels, papers, source trees, or media by
+  itself. Independent project tooling may consume the public graph and generate
+  artifacts, but that tooling is outside ValidatedWorld's product contract.
 - Optional profiles may add domain vocabulary and deterministic checks without
   changing the plain node-and-edge model.
 
@@ -242,9 +294,10 @@ write with `commit --bypass-ai-review`.
 
 This repository uses
 [ValidatedWorld.Blueprint.vw.db](ValidatedWorld.Blueprint.vw.db) as its detailed
-product design, implementation contract, current state, and ordered roadmap. The
-repository therefore exercises the same workflow intended for other large
-projects.
+product design, implementation contract, accepted semantic baseline, and ordered
+roadmap. Planned work may appear before its implementation, but phase and status
+metadata must make that distinction explicit. The repository therefore exercises
+the same paired-change workflow intended for other large projects.
 
 Begin a development run with bounded reads:
 
@@ -280,7 +333,11 @@ node, and current-phase edge. On failure, leave phase state unchanged. Do not
 edit the SQLite database directly.
 
 Use `project backup` before a blueprint change and `project diff` afterward to
-review its semantic changes alongside the source diff.
+review its semantic changes alongside the source diff. Every successful phase
+implementation therefore includes a blueprint delta even when its requirements
+were already complete: the reviewed transaction records delivery and advances
+the phase state. Only work that changes neither recorded meaning nor delivery
+state may omit the database, and the review should explain that exception.
 
 ## Repository reference
 
