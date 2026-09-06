@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
 using ValidatedWorld.Application;
 using ValidatedWorld.Core;
@@ -17,6 +18,11 @@ public static class CliRunner
     public const int BrokenPipeExitCode = 4;
     public const int CancelledExitCode = 130;
 
+    public static string ProductVersion =>
+        typeof(CliRunner).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(CliRunner).Assembly.GetName().Version?.ToString()
+        ?? "unknown";
+
     public static async Task<int> RunAsync(
         string[] arguments,
         TextReader input,
@@ -28,6 +34,22 @@ public static class CliRunner
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(error);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            await TryWriteError(error, "error[cancelled]: The operation was cancelled.");
+            return CancelledExitCode;
+        }
+        if (arguments.Length == 0 || IsHelp(arguments[0]))
+        {
+            await PrintHelp(output);
+            return SuccessExitCode;
+        }
+        if (arguments.Length == 1 && IsVersion(arguments[0]))
+        {
+            await output.WriteLineAsync($"ValidatedWorld.Cli {ProductVersion}");
+            return SuccessExitCode;
+        }
+
         using var httpClient = new HttpClient { BaseAddress = new Uri("https://api.openai.com/") };
         try
         {
@@ -45,13 +67,6 @@ public static class CliRunner
                 httpClient,
                 Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "ai-authoring-live-request.json"),
                 Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "ai-authoring-live-response.json"));
-            cancellationToken.ThrowIfCancellationRequested();
-            if (arguments.Length == 0 || IsHelp(arguments[0]))
-            {
-                await PrintHelp(output);
-                return SuccessExitCode;
-            }
-
             return arguments[0] switch
             {
                 "project" => await RunProject(application, arguments, output),
@@ -336,9 +351,12 @@ public static class CliRunner
 
     private static bool IsHelp(string value) => value is "help" or "--help" or "-h";
 
+    private static bool IsVersion(string value) => value is "version" or "--version" or "-v";
+
     private static async Task PrintHelp(TextWriter output)
     {
         await output.WriteLineAsync("ValidatedWorld - local semantic graph change control");
+        await output.WriteLineAsync($"Version {ProductVersion}");
         await output.WriteLineAsync();
         await output.WriteLineAsync("Commands:");
         await output.WriteLineAsync("  project   Initialize, inspect, compare, verify, back up, or export a project");

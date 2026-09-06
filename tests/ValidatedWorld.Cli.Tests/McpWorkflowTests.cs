@@ -29,6 +29,7 @@ public sealed class McpWorkflowTests
 
         var tools = await host.Request("tools/list", new { });
         var toolItems = tools["result"]!["tools"]!.AsArray();
+        Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "host_status");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "select_project");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "initialize_project");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "read_context");
@@ -37,6 +38,13 @@ public sealed class McpWorkflowTests
         Assert.DoesNotContain(toolItems, tool => tool!["name"]!.GetValue<string>().Contains("bypass", StringComparison.OrdinalIgnoreCase));
         var listNodesTool = toolItems.Single(tool => tool!["name"]!.GetValue<string>() == "list_nodes");
         Assert.Equal("integer", listNodesTool!["inputSchema"]!["properties"]!["limit"]!["type"]!.GetValue<string>());
+
+        var hostStatus = await host.Call("host_status", new { });
+        Assert.Equal(McpAssembly.ProductVersion, hostStatus["productVersion"]!.GetValue<string>());
+        Assert.Equal("local-only", hostStatus["hostSupport"]!.GetValue<string>());
+        Assert.Equal("stdio", hostStatus["transport"]!.GetValue<string>());
+        Assert.False(hostStatus["semanticReview"]!["effective"]!.GetValue<bool>());
+        Assert.Null(hostStatus["semanticReview"]!["apiKey"]);
 
         var status = await host.Call("project_status", new { });
         Assert.Equal("technical-project", status["projectId"]!.GetValue<string>());

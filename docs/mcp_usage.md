@@ -1,13 +1,14 @@
 # ValidatedWorld MCP host
 
 `ValidatedWorld.Mcp` is a local, stdio-only MCP server over the existing
-Application and SQLite use cases. It does not add a second graph engine or
-make provider calls for reads. Graph edits remain process-local until the
-complete proposal has been reviewed and written atomically through Application.
+Application and SQLite use cases. Read tools are provider-free. Graph edits
+remain process-local until the complete proposal has been reviewed and written
+atomically through Application.
 When `AiReview:Enabled` and the shared OpenAI review key are effectively
 configured through .NET User Secrets or the `VW_` environment variables, MCP
 writes use the same independent semantic reviewer as the CLI. The MCP host
-does not expose credentials or an AI-review bypass tool.
+keeps credential values outside tool results and applies the configured review
+requirements to every write.
 
 Build and run it from the repository root:
 
@@ -25,13 +26,18 @@ project is held by the stdio session; read tools do not accept arbitrary paths
 and therefore cannot silently switch projects.
 
 The server advertises the following read tools in addition to
-`select_project`, `project_status`, and `initialize_project`: `read_node`,
+`host_status`, `select_project`, `project_status`, and `initialize_project`: `read_node`,
 `read_edge`, `list_nodes`, `list_edges`, `search`, `ranked_search`,
 `read_tag`, `read_scope`, `read_neighbors`, `read_dependencies`, `read_path`,
 `read_context`, `read_health`, and `read_report`. Page limits and traversal
 limits are enforced by Application. Results include cursors and omission
 metadata where a query is incomplete; the host also applies a 512 KiB encoded
 result bound.
+
+`host_status` requires no selected project and reports the product version,
+local-only stdio support, operating system/process architecture, .NET runtime,
+installation directory, and effective optional semantic-review configuration.
+Credential status is reported as a boolean without returning the credential.
 
 Editing uses one sequential in-memory session per MCP process:
 
@@ -63,3 +69,7 @@ For a local agent host, configure one stdio server process with the executable
 or `dotnet` plus the published `ValidatedWorld.Mcp.dll`, and pass the selected
 database as the `--project` argument. The server writes protocol messages to
 stdout and diagnostics to stderr.
+
+For the self-contained Windows x64 plugin and executable release layout,
+installation, upgrade, uninstall, checksums, and local-only compatibility, see
+[release and local plugin distribution](release_distribution.md).

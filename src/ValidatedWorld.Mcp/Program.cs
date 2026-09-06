@@ -7,6 +7,11 @@ using ValidatedWorld.Persistence.Sqlite;
 using ValidatedWorld.Mcp;
 
 var options = McpHostOptions.Parse(args);
+if (options.ShowVersion)
+{
+    await Console.Out.WriteLineAsync($"ValidatedWorld.Mcp {McpAssembly.ProductVersion}");
+    return 0;
+}
 if (options.ShowHelp)
 {
     await Console.Error.WriteLineAsync(McpHostOptions.HelpText);
@@ -24,8 +29,9 @@ builder.Logging.AddConsole(consoleLogOptions =>
 builder.Services.AddSingleton<SqliteProjectStore>();
 builder.Services.AddSingleton<ValidatedWorld.Application.IProjectStore>(serviceProvider =>
     serviceProvider.GetRequiredService<SqliteProjectStore>());
-builder.Services.AddSingleton(new ProjectApplication(
-    new SqliteProjectStore(),
+builder.Services.AddSingleton(reviewConfiguration);
+builder.Services.AddSingleton(serviceProvider => new ProjectApplication(
+    serviceProvider.GetRequiredService<ValidatedWorld.Application.IProjectStore>(),
     semanticReviewProvider: reviewConfiguration.CreateProvider(httpClient),
     semanticReviewOptions: reviewConfiguration.RuntimeOptions()));
 builder.Services.AddSingleton(options);
