@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - run: dotnet restore ValidatedWorld.slnx
+      - run: dotnet build ValidatedWorld.slnx --no-restore
+
+      - run: >
+          dotnet test ValidatedWorld.slnx
+          --no-build
+          --no-restore
+          --logger "trx;LogFileName=test-results.trx"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: "**/TestResults/*.trx"
