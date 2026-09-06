@@ -1,3 +1,5 @@
+#requires -Version 5.1
+
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
@@ -7,7 +9,11 @@ param(
     [ValidateSet('win-x64')]
     [string] $RuntimeIdentifier = 'win-x64',
 
-    [string] $ArtifactsDirectory
+    [string] $ArtifactsDirectory,
+
+    [string] $CodexCommand,
+
+    [switch] $RequireCodex
 )
 
 Set-StrictMode -Version Latest
@@ -22,22 +28,50 @@ $vwCliArchive = Join-Path $vwArtifactsRoot "validated-world-cli-$Version-$Runtim
 $vwPluginArchive = Join-Path $vwArtifactsRoot "validated-world-plugin-$Version-$RuntimeIdentifier.zip"
 $vwChecksums = Join-Path $vwArtifactsRoot 'SHA256SUMS.txt'
 
+function ConvertTo-VwCommandLineArgument {
+    param([AllowEmptyString()][string] $Argument)
+
+    if ($Argument.Length -gt 0 -and $Argument -notmatch '[\s"]') { return $Argument }
+
+    $vwBuilder = [Text.StringBuilder]::new()
+    [void] $vwBuilder.Append('"')
+    $vwBackslashes = 0
+    foreach ($vwCharacter in $Argument.ToCharArray()) {
+        if ($vwCharacter -eq '\') {
+            $vwBackslashes++
+            continue
+        }
+        if ($vwCharacter -eq '"') {
+            [void] $vwBuilder.Append(('\' * (($vwBackslashes * 2) + 1)))
+            [void] $vwBuilder.Append('"')
+            $vwBackslashes = 0
+            continue
+        }
+        if ($vwBackslashes -gt 0) {
+            [void] $vwBuilder.Append(('\' * $vwBackslashes))
+            $vwBackslashes = 0
+        }
+        [void] $vwBuilder.Append($vwCharacter)
+    }
+    if ($vwBackslashes -gt 0) { [void] $vwBuilder.Append(('\' * ($vwBackslashes * 2))) }
+    [void] $vwBuilder.Append('"')
+    return $vwBuilder.ToString()
+}
+
 function Invoke-VwProcess {
     param(
         [string] $FilePath,
         [string[]] $Arguments,
-        [string] $WorkingDirectory,
-        [hashtable] $Environment = @{}
+        [string] $WorkingDirectory
     )
 
     $vwStart = [Diagnostics.ProcessStartInfo]::new()
     $vwStart.FileName = $FilePath
+    $vwStart.Arguments = (($Arguments | ForEach-Object { ConvertTo-VwCommandLineArgument $_ }) -join ' ')
     $vwStart.WorkingDirectory = $WorkingDirectory
     $vwStart.UseShellExecute = $false
     $vwStart.RedirectStandardOutput = $true
     $vwStart.RedirectStandardError = $true
-    foreach ($vwArgument in $Arguments) { [void] $vwStart.ArgumentList.Add($vwArgument) }
-    foreach ($vwPair in $Environment.GetEnumerator()) { $vwStart.Environment[$vwPair.Key] = [string] $vwPair.Value }
     $vwProcess = [Diagnostics.Process]::new()
     $vwProcess.StartInfo = $vwStart
     [void] $vwProcess.Start()
@@ -62,6 +96,34 @@ function Assert-VwPluginVersion {
     if ($vwExecutableVersion -ne "ValidatedWorld.Mcp $vwManifestVersion") {
         throw "Plugin manifest/binary version mismatch: manifest=$vwManifestVersion binary=$vwExecutableVersion"
     }
+}
+
+function Resolve-VwCodexExecutable {
+    if (-not [string]::IsNullOrWhiteSpace($CodexCommand)) {
+        $vwExplicitCodex = Get-Command $CodexCommand -CommandType Application -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($null -eq $vwExplicitCodex) {
+            throw "Codex executable was not found: $CodexCommand"
+        }
+        return $vwExplicitCodex.Source
+    }
+
+    $vwPathCodex = Get-Command codex -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($null -ne $vwPathCodex) { return $vwPathCodex.Source }
+
+    $vwLocalAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+    if (-not [string]::IsNullOrWhiteSpace($vwLocalAppData)) {
+        $vwDesktopBin = Join-Path $vwLocalAppData 'OpenAI\Codex\bin'
+        if (Test-Path -LiteralPath $vwDesktopBin -PathType Container) {
+            $vwDesktopCodex = Get-ChildItem -LiteralPath $vwDesktopBin -Filter 'codex.exe' -File -Recurse |
+                Sort-Object -Property LastWriteTimeUtc -Descending |
+                Select-Object -First 1
+            if ($null -ne $vwDesktopCodex) { return $vwDesktopCodex.FullName }
+        }
+    }
+
+    return $null
 }
 
 foreach ($vwRequiredFile in @($vwCliArchive, $vwPluginArchive, $vwChecksums)) {
@@ -116,7 +178,7 @@ try {
     $vwMcpStart.RedirectStandardInput = $true
     $vwMcpStart.RedirectStandardOutput = $true
     $vwMcpStart.RedirectStandardError = $true
-    $vwMcpStart.Environment['VW_AIREVIEW__ENABLED'] = 'false'
+    $vwMcpStart.EnvironmentVariables['VW_AIREVIEW__ENABLED'] = 'false'
     $vwMcpProcess = [Diagnostics.Process]::new()
     $vwMcpProcess.StartInfo = $vwMcpStart
     [void] $vwMcpProcess.Start()
@@ -139,7 +201,7 @@ try {
         if ($vwHostStatus.semanticReview.effective) { throw 'Release smoke review configuration should be disabled.' }
     }
     finally {
-        if (-not $vwMcpProcess.HasExited) { $vwMcpProcess.Kill($true) }
+        if (-not $vwMcpProcess.HasExited) { $vwMcpProcess.Kill() }
         $vwMcpProcess.WaitForExit()
         $vwMcpProcess.Dispose()
     }
@@ -154,26 +216,41 @@ try {
     if (-not $vwMismatchRejected) { throw 'Deliberate plugin version mismatch was not rejected.' }
     [IO.File]::WriteAllText($vwPluginManifest, $vwOriginalManifest, [Text.UTF8Encoding]::new($false))
 
-    $vwCodexCommand = Get-Command codex -ErrorAction Stop
-    $vwIsolatedCodexHome = Join-Path $vwTemporaryRoot 'isolated codex home'
-    [IO.Directory]::CreateDirectory($vwIsolatedCodexHome) | Out-Null
-    [Environment]::SetEnvironmentVariable('CODEX_HOME', $vwIsolatedCodexHome, 'Process')
-    Invoke-VwProcess $vwCodexCommand.Source @('plugin', 'marketplace', 'add', $vwMarketplaceInstall, '--json') $vwTemporaryRoot | Out-Null
-    Invoke-VwProcess $vwCodexCommand.Source @('plugin', 'add', 'validated-world@validated-world-local', '--json') $vwTemporaryRoot | Out-Null
-    $vwInstalled = Invoke-VwProcess $vwCodexCommand.Source @('plugin', 'list', '--json') $vwTemporaryRoot | ConvertFrom-Json
-    if ($vwInstalled.installed.Count -ne 1 -or (($vwInstalled.installed | ConvertTo-Json -Depth 20) -notmatch 'validated-world')) {
-        throw 'Codex did not report the local plugin as installed.'
+    $vwCodexExecutable = Resolve-VwCodexExecutable
+    $vwCodexVersion = $null
+    if ($null -eq $vwCodexExecutable) {
+        if ($RequireCodex) {
+            throw 'Codex CLI is required for plugin lifecycle checks. Install Codex, add codex.exe to PATH, or pass -CodexCommand with its full path.'
+        }
+        Write-Warning 'Codex CLI was not found; plugin install/reinstall/uninstall checks were skipped. Use -RequireCodex for strict release acceptance.'
     }
-    Invoke-VwProcess $vwCodexCommand.Source @('plugin', 'add', 'validated-world@validated-world-local', '--json') $vwTemporaryRoot | Out-Null
-    Invoke-VwProcess $vwCodexCommand.Source @('plugin', 'remove', 'validated-world@validated-world-local', '--json') $vwTemporaryRoot | Out-Null
-    $vwRemoved = Invoke-VwProcess $vwCodexCommand.Source @('plugin', 'list', '--json') $vwTemporaryRoot | ConvertFrom-Json
-    if ($vwRemoved.installed.Count -ne 0) { throw 'Codex still reports a plugin after uninstall.' }
+    else {
+        $vwIsolatedCodexHome = Join-Path $vwTemporaryRoot 'isolated codex home'
+        [IO.Directory]::CreateDirectory($vwIsolatedCodexHome) | Out-Null
+        [Environment]::SetEnvironmentVariable('CODEX_HOME', $vwIsolatedCodexHome, 'Process')
+        Invoke-VwProcess $vwCodexExecutable @('plugin', 'marketplace', 'add', $vwMarketplaceInstall, '--json') $vwTemporaryRoot | Out-Null
+        Invoke-VwProcess $vwCodexExecutable @('plugin', 'add', 'validated-world@validated-world-local', '--json') $vwTemporaryRoot | Out-Null
+        $vwInstalled = Invoke-VwProcess $vwCodexExecutable @('plugin', 'list', '--json') $vwTemporaryRoot | ConvertFrom-Json
+        if ($vwInstalled.installed.Count -ne 1 -or (($vwInstalled.installed | ConvertTo-Json -Depth 20) -notmatch 'validated-world')) {
+            throw 'Codex did not report the local plugin as installed.'
+        }
+        Invoke-VwProcess $vwCodexExecutable @('plugin', 'add', 'validated-world@validated-world-local', '--json') $vwTemporaryRoot | Out-Null
+        Invoke-VwProcess $vwCodexExecutable @('plugin', 'remove', 'validated-world@validated-world-local', '--json') $vwTemporaryRoot | Out-Null
+        $vwRemoved = Invoke-VwProcess $vwCodexExecutable @('plugin', 'list', '--json') $vwTemporaryRoot | ConvertFrom-Json
+        if ($vwRemoved.installed.Count -ne 0) { throw 'Codex still reports a plugin after uninstall.' }
+        $vwCodexVersion = Invoke-VwProcess $vwCodexExecutable @('--version') $vwTemporaryRoot
+    }
+
     if (-not (Test-Path -LiteralPath $vwDatabase -PathType Leaf)) { throw 'Plugin uninstall removed external user data.' }
     $vwVerifiedAfterRemoval = Invoke-VwProcess $vwCliExecutable @('project', 'verify', $vwDatabase) $vwDataDirectory
     if (-not ($vwVerifiedAfterRemoval | ConvertFrom-Json).isValid) { throw 'External database was invalid after plugin uninstall.' }
 
-    $vwCodexVersion = Invoke-VwProcess $vwCodexCommand.Source @('--version') $vwTemporaryRoot
-    Write-Host "Release smoke passed: $Version $RuntimeIdentifier; $vwCodexVersion"
+    if ($null -eq $vwCodexVersion) {
+        Write-Host "Release package smoke passed: $Version $RuntimeIdentifier; Codex plugin lifecycle skipped"
+    }
+    else {
+        Write-Host "Release smoke passed: $Version $RuntimeIdentifier; $vwCodexVersion"
+    }
 }
 finally {
     [Environment]::SetEnvironmentVariable('VW_AIREVIEW__ENABLED', $vwPreviousReviewSetting, 'Process')
