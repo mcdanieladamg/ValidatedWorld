@@ -61,6 +61,18 @@ public sealed class PackagingContractTests
         Assert.Contains("SHA256SUMS.txt", releaseScript, StringComparison.Ordinal);
         Assert.Contains("validated-world-cli-", releaseScript, StringComparison.Ordinal);
         Assert.Contains("validated-world-plugin-", releaseScript, StringComparison.Ordinal);
+        Assert.StartsWith("#requires -Version 5.1", releaseScript, StringComparison.Ordinal);
+        Assert.DoesNotContain(".ArgumentList", releaseScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("Path]::GetRelativePath", releaseScript, StringComparison.Ordinal);
+
+        var smokeScript = File.ReadAllText(Path.Combine(root, "eng", "Test-Release.ps1"));
+        Assert.StartsWith("#requires -Version 5.1", smokeScript, StringComparison.Ordinal);
+        Assert.DoesNotContain(".ArgumentList", smokeScript, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Environment[", smokeScript, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Kill($true)", smokeScript, StringComparison.Ordinal);
+        Assert.Contains("CodexCommand", smokeScript, StringComparison.Ordinal);
+        Assert.Contains("RequireCodex", smokeScript, StringComparison.Ordinal);
+        Assert.Contains("OpenAI\\Codex\\bin", smokeScript, StringComparison.Ordinal);
 
         var installGuide = File.ReadAllText(Path.Combine(root, "packaging", "PLUGIN_INSTALL.md"));
         Assert.Contains("outside", installGuide, StringComparison.OrdinalIgnoreCase);

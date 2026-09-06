@@ -1,3 +1,5 @@
+#requires -Version 5.1
+
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
@@ -24,16 +26,46 @@ if (Test-Path -LiteralPath $vwOutputRoot) {
     throw "Release output already exists: $vwOutputRoot. Choose a new version or remove that exact directory deliberately."
 }
 
+function ConvertTo-VwCommandLineArgument {
+    param([AllowEmptyString()][string] $Argument)
+
+    if ($Argument.Length -gt 0 -and $Argument -notmatch '[\s"]') { return $Argument }
+
+    $vwBuilder = [Text.StringBuilder]::new()
+    [void] $vwBuilder.Append('"')
+    $vwBackslashes = 0
+    foreach ($vwCharacter in $Argument.ToCharArray()) {
+        if ($vwCharacter -eq '\') {
+            $vwBackslashes++
+            continue
+        }
+        if ($vwCharacter -eq '"') {
+            [void] $vwBuilder.Append(('\' * (($vwBackslashes * 2) + 1)))
+            [void] $vwBuilder.Append('"')
+            $vwBackslashes = 0
+            continue
+        }
+        if ($vwBackslashes -gt 0) {
+            [void] $vwBuilder.Append(('\' * $vwBackslashes))
+            $vwBackslashes = 0
+        }
+        [void] $vwBuilder.Append($vwCharacter)
+    }
+    if ($vwBackslashes -gt 0) { [void] $vwBuilder.Append(('\' * ($vwBackslashes * 2))) }
+    [void] $vwBuilder.Append('"')
+    return $vwBuilder.ToString()
+}
+
 function Invoke-VwNative {
     param([string] $FilePath, [string[]] $Arguments)
 
     $vwStart = [Diagnostics.ProcessStartInfo]::new()
     $vwStart.FileName = $FilePath
+    $vwStart.Arguments = (($Arguments | ForEach-Object { ConvertTo-VwCommandLineArgument $_ }) -join ' ')
     $vwStart.WorkingDirectory = $vwRepositoryRoot
     $vwStart.UseShellExecute = $false
     $vwStart.RedirectStandardOutput = $true
     $vwStart.RedirectStandardError = $true
-    foreach ($vwArgument in $Arguments) { [void] $vwStart.ArgumentList.Add($vwArgument) }
     $vwProcess = [Diagnostics.Process]::new()
     $vwProcess.StartInfo = $vwStart
     [void] $vwProcess.Start()
@@ -67,6 +99,9 @@ function Expand-VwTemplate {
 function New-VwDeterministicZip {
     param([string] $SourceDirectory, [string] $DestinationArchive)
 
+    $vwSourceRoot = [IO.Path]::GetFullPath($SourceDirectory).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
     $vwArchiveStream = [IO.File]::Open($DestinationArchive, [IO.FileMode]::CreateNew)
     try {
         $vwArchive = [IO.Compression.ZipArchive]::new(
@@ -77,7 +112,11 @@ function New-VwDeterministicZip {
             $vwFiles = Get-ChildItem -LiteralPath $SourceDirectory -File -Recurse -Force |
                 Sort-Object -Property FullName
             foreach ($vwFile in $vwFiles) {
-                $vwRelative = [IO.Path]::GetRelativePath($SourceDirectory, $vwFile.FullName).Replace('\', '/')
+                $vwFilePath = [IO.Path]::GetFullPath($vwFile.FullName)
+                if (-not $vwFilePath.StartsWith($vwSourceRoot, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Archive input is outside its source directory: $vwFilePath"
+                }
+                $vwRelative = $vwFilePath.Substring($vwSourceRoot.Length).Replace('\', '/')
                 $vwEntry = $vwArchive.CreateEntry($vwRelative, [IO.Compression.CompressionLevel]::Optimal)
                 $vwEntry.LastWriteTime = [DateTimeOffset]::new(2000, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
                 $vwInput = $vwFile.OpenRead()

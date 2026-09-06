@@ -35,9 +35,12 @@ The smoke test uses paths with spaces and an isolated temporary Codex home. It
 launches the packaged executables (not `dotnet`), creates and verifies a SQLite
 project outside the installation, exercises the packaged MCP protocol and
 `host_status`, rejects a deliberately mismatched manifest/binary version,
-installs/reinstalls/removes the plugin with the locally available Codex CLI, and
-confirms the external database survives. It cleans up only its unique temporary
-directory.
+and confirms the external database survives. When available, it discovers the
+Codex CLI from `PATH` or the local Codex desktop installation and also verifies
+plugin installation, reinstallation, and removal. Pass `-CodexCommand` with a
+specific `codex.exe` path when needed. Use `-RequireCodex` to make the complete
+plugin lifecycle check mandatory for release acceptance. The script cleans up
+only its unique temporary directory.
 
 ## Compatibility
 
