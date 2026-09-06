@@ -1,5 +1,7 @@
 # ValidatedWorld
 
+[![CI](https://github.com/mcdanieladamg/ValidatedWorld/actions/workflows/ci.yml/badge.svg)](https://github.com/mcdanieladamg/ValidatedWorld/actions/workflows/ci.yml)
+
 ValidatedWorld is a local semantic change-control engine for large, connected
 projects. It stores human-readable project knowledge as a graph, finds the parts
 that a proposed change may invalidate, and requires those parts to be reviewed

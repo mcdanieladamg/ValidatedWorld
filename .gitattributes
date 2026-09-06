@@ -1,0 +1,13 @@
+# Store text consistently across platforms.
+* text=auto eol=lf
+
+# Windows command scripts use Windows line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Versioned project databases and packaged binaries are opaque files.
+*.vw.db binary
+*.dll binary
+*.exe binary
+*.pdb binary
+*.zip binary
