@@ -25,6 +25,83 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true), Description("Returns the status and identity of the currently selected project, including its normalized path and state fingerprint.")]
     public McpProjectSelection ProjectStatus() => projects.Status();
 
+    [McpServerTool(UseStructuredContent = true), Description("Begins one sequential, process-local MCP change session for the selected project. The returned revision is required for later mutations.")]
+    public McpChangeSummary BeginChange(
+        [Description("Human-readable intent for the proposed change.")] string intent) => projects.BeginChange(intent);
+
+    [McpServerTool(UseStructuredContent = true), Description("Applies one bounded batch of complete graph operations to the in-memory proposal. The application owns validation, affected analysis, and exact stale-state checks.")]
+    public object PatchChange(
+        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision,
+        [Description("One batch of add, replace, or remove operations. A batch is limited to 100 operations and a proposal to 1,000.")] OperationBatchDto operations) =>
+        projects.PatchChange(expectedRevision, McpProjectService.ParseOperations(operations));
+
+    [McpServerTool(UseStructuredContent = true), Description("Refreshes affected/context analysis for the current in-memory proposal using bounded application limits.")]
+    public object ExpandChange(
+        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision) =>
+        projects.ExpandChange(expectedRevision);
+
+    [McpServerTool(UseStructuredContent = true), Description("Adds or replaces one complete node in the current proposal. This is a convenience wrapper over the same bounded application batch operation.")]
+    public object PutNode(
+        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision,
+        [Description("Either add or replace.")] string mode,
+        [Description("Stable node identifier.")] string id,
+        [Description("Human-readable node text.")] string text,
+        [Description("Optional node kind.")] string? kind = null,
+        [Description("Canonical node tags.")] IReadOnlyList<string>? tags = null,
+        [Description("Named graph attributes using text, integer, decimal, boolean, symbol, or instant values.")] IReadOnlyList<McpAttributeInput>? attributes = null) =>
+        projects.PatchChange(expectedRevision, new GraphOperationBatch([
+            McpProjectService.NodeOperation(mode, id, text, kind, tags, attributes)]));
+
+    [McpServerTool(UseStructuredContent = true), Description("Adds or replaces one complete edge in the current proposal. This is a convenience wrapper over the same bounded application batch operation.")]
+    public object PutEdge(
+        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision,
+        [Description("Either add or replace.")] string mode,
+        [Description("Stable edge identifier.")] string id,
+        [Description("Stable source node identifier.")] string source,
+        [Description("Stable target node identifier.")] string target,
+        [Description("Relationship label.")] string relationship,
+        [Description("Review direction: None, SourceToTarget, TargetToSource, or Both.")] string reviewDirection,
+        [Description("Optional edge rationale.")] string? rationale = null,
+        [Description("Canonical edge tags.")] IReadOnlyList<string>? tags = null,
+        [Description("Named graph attributes using text, integer, decimal, boolean, symbol, or instant values.")] IReadOnlyList<McpAttributeInput>? attributes = null) =>
+        projects.PatchChange(expectedRevision, new GraphOperationBatch([
+            McpProjectService.EdgeOperation(mode, id, source, target, relationship, reviewDirection, rationale, tags, attributes)]));
+
+    [McpServerTool(UseStructuredContent = true), Description("Removes one node or edge explicitly from the current proposal. Incident edges are never silently cascaded.")]
+    public object RemoveEntity(
+        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision,
+        [Description("Either node or edge.")] string entityKind,
+        [Description("Stable entity identifier.")] string id) =>
+        projects.PatchChange(expectedRevision, new GraphOperationBatch([
+            McpProjectService.RemoveOperation(entityKind, id)]));
+
+    [McpServerTool(UseStructuredContent = true), Description("Returns the exact current operations, affected explanations, old/new scope context, dispositions, omissions, and review readiness. Fingerprints remain application-owned and are not accepted as mutation arguments.")]
+    public McpChangePreview ProposalPreview(
+        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision) =>
+        projects.PreviewChange(expectedRevision);
+
+    [McpServerTool(UseStructuredContent = true), Description("Requests human review of the exact current proposal. The local MCP process emits the complete preview and a one-time token to its diagnostic channel; the token is deliberately not returned to the model.")]
+    public McpApprovalRequested RequestApproval(
+        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision) =>
+        projects.RequestApproval(expectedRevision);
+
+    [McpServerTool(UseStructuredContent = true), Description("Confirms a human approval token for the exact displayed proposal. The token must come from the local MCP diagnostic channel; this tool cannot manufacture approval or bypass review.")]
+    public McpApprovalResult ConfirmApproval(
+        [Description("The proposal revision shown in the local approval request.")] int expectedRevision,
+        [Description("One-time token supplied by the human after inspecting the local approval display.")] string token) =>
+        projects.ConfirmApproval(expectedRevision, token);
+
+    [McpServerTool(UseStructuredContent = true), Description("Writes only the current human-approved proposal through the shared Application layer. Independent semantic review remains enabled by effective configuration and this tool has no bypass argument.")]
+    public Task<McpChangeWrite> WriteChange(
+        [Description("Current proposal revision returned by confirm_approval.")] int expectedRevision,
+        CancellationToken cancellationToken = default) =>
+        projects.WriteChangeAsync(expectedRevision, cancellationToken);
+
+    [McpServerTool(UseStructuredContent = true), Description("Discards the current unresolved in-memory proposal without writing it.")]
+    public McpDiscardResult DiscardChange(
+        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision) =>
+        projects.DiscardChange(expectedRevision);
+
     [McpServerTool(UseStructuredContent = true), Description("Reads one node from the selected project. The result is bounded and marked incomplete if the byte bound is exceeded.")]
     public object ReadNode([Description("Stable node identifier.")] string nodeId) =>
         McpProjectService.Read(McpProjectService.Node(projects.Queries().GetNode(new EntityId(nodeId))));

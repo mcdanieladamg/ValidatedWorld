@@ -13,6 +13,8 @@ if (options.ShowHelp)
     return 0;
 }
 
+var reviewConfiguration = McpSemanticReviewConfiguration.Load();
+using var httpClient = new HttpClient { BaseAddress = new Uri("https://api.openai.com/") };
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole(consoleLogOptions =>
@@ -22,7 +24,10 @@ builder.Logging.AddConsole(consoleLogOptions =>
 builder.Services.AddSingleton<SqliteProjectStore>();
 builder.Services.AddSingleton<ValidatedWorld.Application.IProjectStore>(serviceProvider =>
     serviceProvider.GetRequiredService<SqliteProjectStore>());
-builder.Services.AddSingleton<ProjectApplication>();
+builder.Services.AddSingleton(new ProjectApplication(
+    new SqliteProjectStore(),
+    semanticReviewProvider: reviewConfiguration.CreateProvider(httpClient),
+    semanticReviewOptions: reviewConfiguration.RuntimeOptions()));
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton<McpProjectService>();
 builder.Services
