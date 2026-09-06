@@ -45,10 +45,14 @@ public sealed class CliWorkflowTests
 
         var help = await Run(["--help"]);
         Assert.Equal(CliRunner.SuccessExitCode, help.ExitCode);
+        Assert.Contains($"Version {CliRunner.ProductVersion}", help.Output, StringComparison.Ordinal);
         Assert.Contains("read      Run bounded graph queries", help.Output, StringComparison.Ordinal);
         Assert.Contains("shell     Run the stateful flag-based interface", help.Output, StringComparison.Ordinal);
         Assert.Contains("ai-assistant-shell", help.Output, StringComparison.Ordinal);
         Assert.Contains("ndjson", help.Output, StringComparison.Ordinal);
+        var version = await Run(["--version"]);
+        Assert.Equal(CliRunner.SuccessExitCode, version.ExitCode);
+        Assert.Equal($"ValidatedWorld.Cli {CliRunner.ProductVersion}{Environment.NewLine}", version.Output);
         var shellHelp = await Run(["shell", "--help"]);
         Assert.Contains("commit --bypass-ai-review", shellHelp.Output, StringComparison.Ordinal);
         var assistantHelp = await Run(["ai-assistant-shell", "--help"]);

@@ -19,10 +19,10 @@ internal sealed record McpSemanticReviewConfiguration(
     private const string DefaultModel = "gpt-5.6-terra";
     private const int DefaultTimeoutSeconds = 1200;
 
-    private bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey) &&
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey) &&
         StringComparer.OrdinalIgnoreCase.Equals(Provider, DefaultProvider);
 
-    private bool IsEffectivelyEnabled => Enabled && IsConfigured;
+    public bool IsEffectivelyEnabled => Enabled && IsConfigured;
 
     public static McpSemanticReviewConfiguration Load()
     {

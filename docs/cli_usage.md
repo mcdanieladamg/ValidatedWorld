@@ -176,10 +176,8 @@ state why the accepted graph already covers the work. Phase and status tags are
 project-defined vocabulary, not hidden engine behavior, but their persisted
 changes are still visible to semantic diff and bounded queries.
 
-An independent project can build a publisher that reads the public graph and
-generates final artifacts. That publisher is external project tooling; this
-guide does not define a plugin contract or imply a ValidatedWorld development
-phase for it.
+The graph's public data can also serve as input to independent tooling that
+generates project artifacts.
 
 ## Bounded reads
 

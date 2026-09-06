@@ -1,0 +1,4 @@
+interface:
+  display_name: "ValidatedWorld"
+  short_description: "Use local semantic change control"
+  default_prompt: "Use ValidatedWorld to inspect and safely update this project knowledge graph."

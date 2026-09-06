@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using ValidatedWorld.Application;
@@ -30,6 +31,24 @@ internal sealed record McpProjectSelectionResult(
 internal sealed record McpProjectInitializationResult(
     McpProjectSelection Project,
     string Message);
+
+internal sealed record McpSemanticReviewHostStatus(
+    bool Enabled,
+    bool Configured,
+    bool Effective,
+    string Provider,
+    string Model,
+    int TimeoutSeconds);
+
+internal sealed record McpHostStatus(
+    string ProductVersion,
+    string HostSupport,
+    string Transport,
+    string OperatingSystem,
+    string ProcessArchitecture,
+    string Framework,
+    string InstallationDirectory,
+    McpSemanticReviewHostStatus SemanticReview);
 
 internal sealed record McpReadResult<T>(
     T? Item,
@@ -240,7 +259,10 @@ internal sealed record McpAttributeInput(string Name, string Kind, string Value)
 
 internal sealed record McpPendingApproval(string Token, int Revision, ChangeSessionReference Reference);
 
-internal sealed class McpProjectService(ProjectApplication application, McpHostOptions hostOptions)
+internal sealed class McpProjectService(
+    ProjectApplication application,
+    McpHostOptions hostOptions,
+    McpSemanticReviewConfiguration reviewConfiguration)
 {
     private const int MaximumPathLength = 4_096;
     private const int MaximumOutputBytes = 512 * 1_024;
@@ -252,6 +274,22 @@ internal sealed class McpProjectService(ProjectApplication application, McpHostO
     private ChangeSessionSnapshot? _session;
     private int _revision;
     private McpPendingApproval? _pendingApproval;
+
+    public McpHostStatus HostStatus() => new(
+        McpAssembly.ProductVersion,
+        "local-only",
+        "stdio",
+        RuntimeInformation.OSDescription,
+        RuntimeInformation.ProcessArchitecture.ToString(),
+        RuntimeInformation.FrameworkDescription,
+        AppContext.BaseDirectory,
+        new McpSemanticReviewHostStatus(
+            reviewConfiguration.Enabled,
+            reviewConfiguration.IsConfigured,
+            reviewConfiguration.IsEffectivelyEnabled,
+            reviewConfiguration.Provider,
+            reviewConfiguration.Model,
+            reviewConfiguration.TimeoutSeconds));
 
     public McpProjectSelectionResult Select(string path)
     {

@@ -151,11 +151,9 @@ page by page with the returned cursor.
 
 ## Keeping the graph and project in sync
 
-An independent project may choose to build a publisher that reads its reviewed
-graph and deterministically generates final artifacts. That is an external use
-of ValidatedWorld's public data, not a built-in feature, plugin contract, or
-roadmap commitment. The publishing tool and its safety and correctness belong
-to that project.
+Projects can build deterministic publishers that read the reviewed graph and
+generate final artifacts. Those project-specific tools remain responsible for
+their output safety and correctness.
 
 The normal repository workflow is paired change control:
 
@@ -216,8 +214,9 @@ includes both ancestry lineages for review.
 
 ## Human and AI interfaces
 
-ValidatedWorld provides three local interfaces:
+ValidatedWorld provides a local agent plugin and three direct interfaces:
 
+- local plugin — workflow guidance backed by the stdio MCP server;
 - `shell <database>` — interactive manual authoring and review;
 - `ai-assistant-shell <database>` — conversational authoring with bounded graph
   tools and explicit human approval; and
@@ -283,10 +282,9 @@ write with `commit --bypass-ai-review`.
 - Consistency depends on meaningful nodes and explicit dependency edges. The
   engine does not infer every unstated relationship from prose.
 - The database represents current project knowledge, not commit history.
-- ValidatedWorld identifies external artifacts that may be stale; it does not
-  rewrite, render, publish, or certify novels, papers, source trees, or media by
-  itself. Independent project tooling may consume the public graph and generate
-  artifacts, but that tooling is outside ValidatedWorld's product contract.
+- ValidatedWorld identifies external artifacts that may be stale. Rendering and
+  publishing remain the responsibility of project-specific tooling built on the
+  public graph.
 - Optional profiles may add domain vocabulary and deterministic checks without
   changing the plain node-and-edge model.
 

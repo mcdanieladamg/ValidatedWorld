@@ -9,6 +9,9 @@ namespace ValidatedWorld.Mcp;
 [McpServerToolType]
 internal sealed class McpTools(McpProjectService projects)
 {
+    [McpServerTool(UseStructuredContent = true), Description("Reports the local MCP host version, runtime, installation path, transport, and effective semantic-review configuration without exposing credentials. This does not require a selected project.")]
+    public McpHostStatus HostStatus() => projects.HostStatus();
+
     [McpServerTool(UseStructuredContent = true), Description("Selects an existing local ValidatedWorld .vw.db project for this MCP session. Paths are interpreted by the host process and are never taken from graph text.")]
     public McpProjectSelectionResult SelectProject(
         [Description("Absolute or relative path to an existing .vw.db file.")] string path) => projects.Select(path);

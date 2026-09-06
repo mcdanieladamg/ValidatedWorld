@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "validated_world": {
+      "command": "cmd.exe",
+      "args": [
+        "/d",
+        "/s",
+        "/c",
+        "call",
+        "./scripts/launch-mcp.cmd"
+      ],
+      "cwd": ".",
+      "enabled": true,
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 1200,
+      "env_vars": [
+        "VW_AIREVIEW__ENABLED",
+        "VW_AIREVIEW__PROVIDER",
+        "VW_AIREVIEW__MODEL",
+        "VW_AIREVIEW__TIMEOUTSECONDS",
+        "VW_AIREVIEW__MAXREQUESTBYTES",
+        "VW_AIREVIEW__MAXREQUESTITEMS",
+        "VW_AIREVIEW__MAXREQUESTTOKENS",
+        "VW_AIREVIEW__OPENAI__APIKEY",
+        "OPENAI_API_KEY"
+      ]
+    }
+  }
+}
