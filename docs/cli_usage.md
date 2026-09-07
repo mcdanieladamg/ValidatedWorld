@@ -737,12 +737,11 @@ in-memory proposal with strict node/edge tools. It cannot execute SQL, write the
 database directly, record review dispositions, or bypass independent semantic
 review. Type `discard` to abandon its current proposal or `exit` to leave.
 
-When the agent believes the proposal is ready, the application—not the
-model—prints every operation, affected path, required scope context, and exact
-fingerprint. The prompt accepts only `yes` as approval. That response records
-the displayed affected/context review and creates a ten-minute process-local
-approval for the exact current reference. Any edit invalidates it. The normal
-write still invokes the configured independent semantic reviewer.
+When the agent believes the proposal is ready, it inspects the complete preview
+and calls `write_change`. The application records direct edits as updated,
+semantic consequences as reviewed-no-change, and the complete required scope
+context before attempting the atomic write. The normal write still invokes the
+configured independent semantic reviewer.
 
 If AI authoring is disabled or has no configured key, this command opens an
 existing database in the manual shell. Use `ai-assistant-shell --help` for the

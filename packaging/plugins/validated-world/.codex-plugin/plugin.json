@@ -1,6 +1,6 @@
 {
   "name": "validated-world",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.20260907005556",
   "description": "Local semantic change control for large, connected projects.",
   "author": {
     "name": "Adam McDaniel",
@@ -9,7 +9,12 @@
   "homepage": "https://github.com/mcdanieladamg/ValidatedWorld",
   "repository": "https://github.com/mcdanieladamg/ValidatedWorld",
   "license": "MIT",
-  "keywords": ["semantic-change-control", "knowledge-graph", "mcp", "local-first"],
+  "keywords": [
+    "semantic-change-control",
+    "knowledge-graph",
+    "mcp",
+    "local-first"
+  ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
@@ -18,7 +23,10 @@
     "longDescription": "Inspect and update a local ValidatedWorld project through bounded MCP tools, explicit affected-context review, and atomic writes.",
     "developerName": "Adam McDaniel",
     "category": "Productivity",
-    "capabilities": ["Read", "Write"],
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
     "defaultPrompt": [
       "Inspect this project's semantic status and current priorities.",
       "Propose a reviewed update to this project's knowledge graph.",

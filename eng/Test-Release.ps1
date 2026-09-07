@@ -156,6 +156,11 @@ try {
     $vwMcpExecutable = Join-Path $vwMarketplaceInstall "plugins/validated-world/bin/$RuntimeIdentifier/ValidatedWorld.Mcp.exe"
     $vwPluginManifest = Join-Path $vwMarketplaceInstall 'plugins/validated-world/.codex-plugin/plugin.json'
     $vwLauncher = Join-Path $vwMarketplaceInstall 'plugins/validated-world/scripts/launch-mcp.cmd'
+    $vwReviewConfiguration = Join-Path $vwMarketplaceInstall 'plugins/validated-world/scripts/Configure-Review.ps1'
+
+    if (-not (Test-Path -LiteralPath $vwReviewConfiguration -PathType Leaf)) {
+        throw 'Packaged plugin is missing its independent-review configuration helper.'
+    }
 
     $vwCliVersion = Invoke-VwProcess $vwCliExecutable @('--version') $vwCliInstall
     if ($vwCliVersion -ne "ValidatedWorld.Cli $Version") { throw "CLI version mismatch: $vwCliVersion" }

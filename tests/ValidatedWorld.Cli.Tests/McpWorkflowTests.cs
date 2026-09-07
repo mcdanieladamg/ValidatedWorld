@@ -34,10 +34,15 @@ public sealed class McpWorkflowTests
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "initialize_project");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "read_context");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "begin_change");
-        Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "confirm_approval");
         Assert.DoesNotContain(toolItems, tool => tool!["name"]!.GetValue<string>().Contains("bypass", StringComparison.OrdinalIgnoreCase));
         var listNodesTool = toolItems.Single(tool => tool!["name"]!.GetValue<string>() == "list_nodes");
         Assert.Equal("integer", listNodesTool!["inputSchema"]!["properties"]!["limit"]!["type"]!.GetValue<string>());
+        Assert.True(listNodesTool["annotations"]!["readOnlyHint"]!.GetValue<bool>());
+        Assert.False(listNodesTool["annotations"]!["destructiveHint"]!.GetValue<bool>());
+        var writeTool = toolItems.Single(tool => tool!["name"]!.GetValue<string>() == "write_change");
+        Assert.Null(writeTool!["annotations"]!["readOnlyHint"]);
+        Assert.True(writeTool["annotations"]!["destructiveHint"]!.GetValue<bool>());
+        Assert.False(writeTool["annotations"]!["openWorldHint"]!.GetValue<bool>());
 
         var hostStatus = await host.Call("host_status", new { });
         Assert.Equal(McpAssembly.ProductVersion, hostStatus["productVersion"]!.GetValue<string>());
@@ -65,7 +70,7 @@ public sealed class McpWorkflowTests
     }
 
     [Fact]
-    public async Task Reviewed_edit_requires_current_revision_and_human_token_then_reopens_written_graph()
+    public async Task Edit_writes_the_exact_current_revision_and_reopens_graph()
     {
         using var temporary = new TemporaryDirectory();
         var project = Path.Combine(temporary.Path, "reviewed-edit.vw.db");
@@ -109,28 +114,14 @@ public sealed class McpWorkflowTests
         var revision = edgeAdded["revision"]!.GetValue<int>();
         Assert.Equal(3, revision);
 
-        var preview = await host.Call("proposal_preview", new { expectedRevision = revision });
-        Assert.Equal(2, preview["operationCount"]!.GetValue<int>());
-        Assert.False(preview["readiness"]!["isReady"]!.GetValue<bool>());
-        Assert.NotEmpty(preview["readiness"]!["pendingNodeIds"]!.AsArray());
+        var stale = await host.CallResult("write_change", new { expectedRevision = nodeRevision });
+        Assert.True(stale["isError"]!.GetValue<bool>());
+        Assert.Contains(
+            "proposal revision 2 is stale; the current revision is 3",
+            stale["content"]![0]!["text"]!.GetValue<string>(),
+            StringComparison.Ordinal);
 
-        var requested = await host.Call("request_approval", new { expectedRevision = revision });
-        Assert.True(requested["approvalRequired"]!.GetValue<bool>());
-        var fakeApproval = await host.CallResult("confirm_approval", new
-        {
-            expectedRevision = revision,
-            token = "yes",
-        });
-        Assert.True(fakeApproval["isError"]!.GetValue<bool>());
-
-        var tokenLine = await host.ReadErrorUntil("One-time approval token", TimeSpan.FromSeconds(5));
-        var token = tokenLine[(tokenLine.IndexOf(": ", StringComparison.Ordinal) + 2)..].Trim();
-        var approved = await host.Call("confirm_approval", new { expectedRevision = revision, token });
-        Assert.True(approved["approved"]!.GetValue<bool>());
-        var approvedRevision = approved["revision"]!.GetValue<int>();
-        Assert.True(approvedRevision > revision);
-
-        var written = await host.Call("write_change", new { expectedRevision = approvedRevision });
+        var written = await host.Call("write_change", new { expectedRevision = revision });
         Assert.Equal("Written", written["status"]!.GetValue<string>());
         Assert.False(written["aiReviewBypassed"]!.GetValue<bool>());
 
@@ -286,17 +277,6 @@ public sealed class McpWorkflowTests
 
         public async Task<JsonNode> CallResult(string name, object arguments) =>
             (await Request("tools/call", new { name, arguments }))["result"]!;
-
-        public async Task<string> ReadErrorUntil(string text, TimeSpan timeout)
-        {
-            using var cancellation = new CancellationTokenSource(timeout);
-            while (true)
-            {
-                cancellation.Token.ThrowIfCancellationRequested();
-                if (errors.TryDequeue(out var line) && line.Contains(text, StringComparison.Ordinal)) return line;
-                await Task.Delay(10, cancellation.Token);
-            }
-        }
 
         public async ValueTask DisposeAsync()
         {

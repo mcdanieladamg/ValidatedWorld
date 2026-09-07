@@ -157,7 +157,9 @@ public static class SemanticReviewInstructions
         dependency evidence and cannot justify omitting any required affected or context item.
 
         Every concern must cite one or more exact IDs from manifest.allowedCitationIds. Do not cite or invent any other
-        ID. An "allow" decision must have zero concerns. A "block" decision must have at least one cited concern.
+        ID. Concerns are blocking findings only; never report confirmations, positive observations, or a
+        "no-semantic-concern" item as a concern. An "allow" decision must return an empty concerns array. A "block"
+        decision must return at least one cited concern.
         If supplied context cannot support a safe allow decision, return "block" and explain the insufficiency with
         supplied citations. Return only the required structured result.
         """;
@@ -595,11 +597,17 @@ public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvi
             additionalProperties = false,
             properties = new
             {
-                decision = new { type = "string", @enum = new[] { "allow", "block" } },
+                decision = new
+                {
+                    type = "string",
+                    @enum = new[] { "allow", "block" },
+                    description = "Use allow only when concerns is empty; otherwise use block.",
+                },
                 summary = new { type = "string" },
                 concerns = new
                 {
                     type = "array",
+                    description = "Blocking concerns only. This must be an empty array when decision is allow.",
                     items = new
                     {
                         type = "object",

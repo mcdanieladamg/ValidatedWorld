@@ -17,16 +17,53 @@ call `host_status`; verify product version `{{VERSION}}`, `local-only` support,
 review configuration. Database selection begins when you place a `.vw.db` path
 in scope.
 
-Upgrade by extracting the newer complete marketplace to a new stable directory,
-checking that the manifest and `host_status` versions match, updating the local
-marketplace source to that directory, and running:
+## Optional independent semantic review
+
+The plugin's author is the Codex agent in your task. Independent semantic
+review is a separate, fresh OpenAI API request containing the bounded proposed
+transaction and its review evidence, not the authoring conversation. It runs
+before `write_change` only when review is enabled and an API key is configured.
+
+To enable it with your own OpenAI API key, run this from the extracted plugin
+directory:
 
 ```powershell
-codex plugin marketplace upgrade validated-world-local
+.\plugins\validated-world\scripts\Configure-Review.ps1
+```
+
+The script prompts without echoing the key and stores the settings as
+user-level Windows environment variables. Restart Codex afterward, start a new
+task, and ask the agent to call `host_status`; `semanticReview.effective` should
+be `true`. User-level environment variables are readable by processes running
+as your Windows account, so remove the key when it is no longer needed:
+
+```powershell
+.\plugins\validated-world\scripts\Configure-Review.ps1 -RemoveKey
+```
+
+To disable review while retaining the configured key:
+
+```powershell
+.\plugins\validated-world\scripts\Configure-Review.ps1 -Disable
+```
+
+Without an effective reviewer, the normal previewed and atomic MCP workflow
+still works. Reviewer credentials are configured independently of the Codex
+host, and the review request is sent directly to OpenAI.
+
+To replace an installed copy, extract the newer complete marketplace archive to
+a new stable directory. Then remove the cached plugin and old marketplace
+source before registering and installing the new directory:
+
+```powershell
+codex plugin remove validated-world@validated-world-local
+codex plugin marketplace remove validated-world-local
+codex plugin marketplace add "C:\path with spaces\new-validated-world-marketplace"
 codex plugin add validated-world@validated-world-local
 ```
 
-Use a new task after upgrade. To uninstall the plugin:
+Restart Codex and use a new task after replacement. Ask the agent to call
+`host_status` and confirm the expected product version. To uninstall the plugin:
 
 ```powershell
 codex plugin remove validated-world@validated-world-local

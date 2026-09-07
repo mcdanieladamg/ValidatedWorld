@@ -7,6 +7,8 @@ Initial local-plugin distribution for Windows x64:
 - Bounded project discovery, reads, affected-context review, and guarded writes.
 - Credential-free `host_status` diagnostics for version, runtime, installation,
   transport, and optional semantic-review configuration.
+- Interactive setup for an optional independent semantic reviewer using the
+  user's own OpenAI API key.
 - User databases and settings remain outside replaceable application packages.
 
 Tested support: Windows x64, Codex CLI 0.153.4 as bundled with the local ChatGPT

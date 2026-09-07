@@ -46,23 +46,21 @@ Editing uses one sequential in-memory session per MCP process:
    supplying the latest revision. Use `proposal_preview` to inspect exact
    operations, affected explanations, old/new scope context, dispositions,
    omissions, and readiness.
-3. Call `request_approval` for a complete, structurally valid proposal. The
-   application writes the same complete preview and a one-time approval token
-   to the MCP process diagnostic stream (`stderr`). The token is intentionally
-   absent from the tool result, so an agent cannot manufacture human approval.
-   After a human has inspected the local display, provide that token through
-   `confirm_approval` with the displayed revision.
-4. Call `write_change` with the revision returned by `confirm_approval`. This
-   tool has no AI-review bypass argument; configured enabled semantic review is
-   still an exact-write preflight. Use `discard_change` to abandon the
-   unresolved proposal.
+3. Call `proposal_preview` after the final mutation and inspect the exact current
+   operations and consequences. Its readiness still shows pending dispositions
+   until the write is attempted.
+4. Call `write_change` with that same revision. The adapter accounts for the
+   presented affected/context set and performs the atomic write through
+   Application. The tool has no AI-review bypass argument; configured enabled
+   semantic review remains an exact-write preflight. Use `discard_change` to
+   abandon the unresolved proposal.
 
 The adapter keeps exact Application references and fingerprints private. MCP
 callers use only the monotonic proposal revision, so stale revisions are
 rejected rather than being converted into a fresh write. Project switching is
-also rejected while a proposal is active. Disconnecting or restarting the
-process loses the unresolved proposal; it is never recovered or written
-automatically. A human token, stale base, provider block, cancellation, or
+also rejected while a proposal is active. Disconnecting
+or restarting the process loses the unresolved proposal; it is never recovered
+or written automatically. A stale base, provider block, cancellation, or
 storage failure leaves the SQLite project unchanged.
 
 For a local agent host, configure one stdio server process with the executable
