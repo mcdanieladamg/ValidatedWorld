@@ -87,7 +87,7 @@ public static class CliRunner
                 "ai-assistant-shell" when arguments.Length == 2 && authoringProvider is not null =>
                     await new AiAssistantShell(
                         authoringProvider,
-                        new AuthoringToolHost(application, arguments[1], Guid.NewGuid().ToString("N")),
+                        new AuthoringToolHost(application, arguments[1]),
                         input,
                         output,
                         error,

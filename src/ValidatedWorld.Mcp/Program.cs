@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using ValidatedWorld.Application;
 using ValidatedWorld.Persistence.Sqlite;
@@ -39,7 +40,26 @@ builder.Services.AddSingleton<McpProjectService>();
 builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
+    .WithRequestFilters(filters => filters.AddCallToolFilter(next => async (request, cancellationToken) =>
+    {
+        try
+        {
+            return await next(request, cancellationToken);
+        }
+        catch (Exception exception) when (IsExpectedToolFailure(exception))
+        {
+            throw new McpException(exception.Message, exception);
+        }
+    }))
     .WithTools<McpTools>();
 
 await builder.Build().RunAsync();
 return 0;
+
+static bool IsExpectedToolFailure(Exception exception) => exception is
+    ArgumentException or
+    ChangeSessionException or
+    ProjectQueryException or
+    ProjectStorageException or
+    FileNotFoundException or
+    IOException;

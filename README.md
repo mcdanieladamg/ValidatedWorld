@@ -221,13 +221,13 @@ ValidatedWorld provides a local agent plugin and three direct interfaces:
 - local plugin — workflow guidance backed by the stdio MCP server;
 - `shell <database>` — interactive manual authoring and review;
 - `ai-assistant-shell <database>` — conversational authoring with bounded graph
-  tools and explicit human approval; and
+  tools; and
 - `ndjson` — a structured protocol for agents, scripts, and integrations.
 
 The AI author and semantic reviewer are separate roles. The author searches and
 edits through the same guarded application operations available to a human. The
 reviewer can allow or block the exact proposed write but cannot edit the graph.
-Changing the proposal invalidates its approval and review decision.
+Changing the proposal invalidates its review decision.
 
 The [CLI usage guide](docs/cli_usage.md) documents commands, response shapes,
 pagination, graph traversal, manual review, and automation examples.
@@ -269,11 +269,11 @@ dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
     ai-assistant-shell project.vw.db
 ```
 
-Before writing, the application shows the exact operations, affected evidence,
-scope context, and fingerprints. The authoring agent cannot approve its own
-proposal, bypass review, use raw SQL, or write directly. A configured reviewer
-must return `allow`; blocks, malformed responses, timeouts, and provider errors
-leave SQLite unchanged.
+Before writing, the authoring agent inspects the exact operations, affected
+evidence, scope context, and fingerprints. It cannot bypass review, use raw SQL,
+or write directly. The application accounts for the affected/context set and a
+configured reviewer must return `allow`; blocks, malformed responses, timeouts,
+and provider errors leave SQLite unchanged.
 
 Manual operation remains available when AI features are disabled or
 unconfigured. A human can explicitly bypass AI review for one otherwise valid

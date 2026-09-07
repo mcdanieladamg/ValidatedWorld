@@ -65,14 +65,14 @@ public static class AuthoringAgentInstructions
 
         Build one incremental in-memory change session. Inspect every affected preview after changes. An
         unexpectedly tiny or huge affected set is a reason to search and inspect the model, not to rush to
-        approval. Scope reparenting must expose the old and new subtrees, immediate parents, and both lineages.
-        Never mark affected nodes reviewed. When the exact proposal is complete, call request_approval. The
-        application—not you—shows the complete preview and obtains the human's exact confirmation. Only after
-        the tool reports a current approval may you call write_change. That write never bypasses the independent
-        semantic reviewer. Discuss or repair a reviewer block; never manufacture, override, or dismiss it.
+        write. Scope reparenting must expose the old and new subtrees, immediate parents, and both lineages.
+        Never mark affected nodes reviewed. When the exact proposal is complete and you have inspected its final
+        preview, call write_change. The application accounts for the complete affected/context set before its
+        atomic write gate. That write never bypasses the independent semantic reviewer. Discuss or repair a
+        reviewer block; never override or dismiss it.
 
         Keep user-facing responses concise and plain English. Explain what changed, what remains uncertain, and
-        what approval or action is needed. Do not claim a write succeeded unless write_change reports written.
+        what action is needed. Do not claim a write succeeded unless write_change reports written.
         """;
 }
 

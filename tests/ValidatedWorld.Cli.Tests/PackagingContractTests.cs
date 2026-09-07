@@ -23,7 +23,9 @@ public sealed class PackagingContractTests
         var manifestText = File.ReadAllText(manifestPath);
         var manifest = JsonNode.Parse(manifestText)!;
         Assert.Equal("validated-world", manifest["name"]!.GetValue<string>());
-        Assert.Matches(@"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$", manifest["version"]!.GetValue<string>());
+        Assert.Matches(
+            @"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$",
+            manifest["version"]!.GetValue<string>());
         Assert.Equal("./skills/", manifest["skills"]!.GetValue<string>());
         Assert.Equal("./.mcp.json", manifest["mcpServers"]!.GetValue<string>());
         Assert.DoesNotContain(@"D:\", manifestText, StringComparison.OrdinalIgnoreCase);
@@ -36,6 +38,7 @@ public sealed class PackagingContractTests
             argument!.GetValue<string>() == "./scripts/launch-mcp.cmd");
         Assert.DoesNotContain(@"D:\", mcpText, StringComparison.OrdinalIgnoreCase);
         Assert.True(File.Exists(Path.Combine(pluginRoot, "scripts", "launch-mcp.cmd")));
+        Assert.True(File.Exists(Path.Combine(pluginRoot, "scripts", "Configure-Review.ps1")));
     }
 
     [Fact]
@@ -47,7 +50,7 @@ public sealed class PackagingContractTests
         Assert.DoesNotContain("TODO", skill, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ranked_search", skill, StringComparison.Ordinal);
         Assert.Contains("proposal_preview", skill, StringComparison.Ordinal);
-        Assert.Contains("request_approval", skill, StringComparison.Ordinal);
+        Assert.Contains("write_change", skill, StringComparison.Ordinal);
         Assert.Contains("software example", skill, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("novel or research folder", skill, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Git project", skill, StringComparison.Ordinal);
@@ -77,6 +80,17 @@ public sealed class PackagingContractTests
         var installGuide = File.ReadAllText(Path.Combine(root, "packaging", "PLUGIN_INSTALL.md"));
         Assert.Contains("outside", installGuide, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("codex plugin remove", installGuide, StringComparison.Ordinal);
+        Assert.Contains("codex plugin marketplace remove", installGuide, StringComparison.Ordinal);
+        Assert.Contains("codex plugin marketplace add", installGuide, StringComparison.Ordinal);
+        Assert.DoesNotContain("codex plugin marketplace upgrade", installGuide, StringComparison.Ordinal);
+        Assert.Contains("Configure-Review.ps1", installGuide, StringComparison.Ordinal);
+        Assert.Contains("separate, fresh OpenAI API request", installGuide, StringComparison.Ordinal);
+
+        var reviewConfiguration = File.ReadAllText(Path.Combine(
+            root, "packaging", "plugins", "validated-world", "scripts", "Configure-Review.ps1"));
+        Assert.Contains("Read-Host 'Enter your OpenAI API key' -AsSecureString", reviewConfiguration, StringComparison.Ordinal);
+        Assert.Contains("SetEnvironmentVariable($vwKeyName, $vwPlainKey, 'User')", reviewConfiguration, StringComparison.Ordinal);
+        Assert.DoesNotContain("Write-Host $vwPlainKey", reviewConfiguration, StringComparison.Ordinal);
     }
 
     private static string RepositoryRoot()

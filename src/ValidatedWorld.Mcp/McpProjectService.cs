@@ -1,9 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using ValidatedWorld.Application;
 using ValidatedWorld.Core;
@@ -215,20 +213,6 @@ internal sealed record McpChangePreview(
     IReadOnlyList<string> PresentedContextNodeIds,
     McpReadiness Readiness);
 
-internal sealed record McpApprovalRequested(
-    bool ApprovalRequired,
-    int Revision,
-    McpChangePreview Preview,
-    string Message);
-
-internal sealed record McpApprovalResult(
-    bool Approved,
-    int Revision,
-    string ApprovalId,
-    DateTimeOffset ExpiresUtc,
-    McpReadiness Readiness,
-    string Message);
-
 internal sealed record McpSemanticReviewConcern(
     string Code,
     string Message,
@@ -257,8 +241,6 @@ internal sealed record McpDiscardResult(
 
 internal sealed record McpAttributeInput(string Name, string Kind, string Value);
 
-internal sealed record McpPendingApproval(string Token, int Revision, ChangeSessionReference Reference);
-
 internal sealed class McpProjectService(
     ProjectApplication application,
     McpHostOptions hostOptions,
@@ -267,13 +249,10 @@ internal sealed class McpProjectService(
     private const int MaximumPathLength = 4_096;
     private const int MaximumOutputBytes = 512 * 1_024;
     private readonly object _gate = new();
-    private readonly AuthoringApprovalGate _approvalGate = new();
-    private readonly string _conversationId = $"mcp-{Guid.NewGuid():N}";
     private McpProjectSelection? _selection;
     private bool _defaultWasAttempted;
     private ChangeSessionSnapshot? _session;
     private int _revision;
-    private McpPendingApproval? _pendingApproval;
 
     public McpHostStatus HostStatus() => new(
         McpAssembly.ProductVersion,
@@ -355,8 +334,6 @@ internal sealed class McpProjectService(
                 "mcp-agent",
                 intent);
             _revision = 1;
-            _pendingApproval = null;
-            _approvalGate.Invalidate(_conversationId);
             return Summary(_session, "The in-memory MCP change session has begun.");
         }
     }
@@ -373,8 +350,6 @@ internal sealed class McpProjectService(
                     existing => existing.EntityId == operation.EntityId)))
                 throw new ArgumentException("A proposal cannot exceed 1,000 operations.", nameof(operations));
 
-            _approvalGate.Invalidate(_conversationId);
-            _pendingApproval = null;
             _session = application.PatchChange(
                 session.Reference,
                 operations,
@@ -400,83 +375,16 @@ internal sealed class McpProjectService(
         lock (_gate) return Preview(RequireRevision(expectedRevision), _revision);
     }
 
-    public McpApprovalRequested RequestApproval(int expectedRevision)
-    {
-        lock (_gate)
-        {
-            var session = RequireRevision(expectedRevision);
-            if (session.Operations.Operations.Count == 0)
-                throw new InvalidOperationException("There is no proposal to approve.");
-            if (!session.Affected.IsComplete || !session.Affected.ProposedValidation.IsValid ||
-                !session.Affected.CurrentValidation.IsValid)
-                throw new InvalidOperationException(
-                    "Approval is unavailable while affected analysis is incomplete or graph validation is invalid.");
-
-            var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-            _pendingApproval = new McpPendingApproval(token, _revision, session.Reference);
-            var preview = Preview(session, _revision);
-            WriteHumanApprovalRequest(preview, token);
-            return new McpApprovalRequested(
-                true,
-                _revision,
-                preview,
-                "The complete proposal was sent to the local MCP host for human review. The human must provide the one-time token shown by that host to confirm_approval; the token is intentionally not returned here.");
-        }
-    }
-
-    public McpApprovalResult ConfirmApproval(int expectedRevision, string token)
-    {
-        lock (_gate)
-        {
-            var session = RequireRevision(expectedRevision);
-            var pending = _pendingApproval;
-            if (pending is null || pending.Revision != _revision ||
-                !ReferencesEqual(pending.Reference, session.Reference) ||
-                !FixedTokenEquals(pending.Token, token))
-                throw new InvalidOperationException(
-                    "The human approval token is missing, expired, or belongs to a different proposal revision.");
-
-            var direct = session.Affected.AffectedNodes
-                .Where(node => node.IsDirectChange)
-                .Select(node => node.NodeId)
-                .ToHashSet();
-            var dispositions = session.Dispositions
-                .Where(value => value.Kind == ReviewDispositionKind.Pending)
-                .Select(value => new ReviewDisposition(
-                    value.NodeId,
-                    direct.Contains(value.NodeId)
-                        ? ReviewDispositionKind.Updated
-                        : ReviewDispositionKind.ReviewedNoChange,
-                    null))
-                .ToArray();
-            _session = application.ReviewChange(
-                session.Reference,
-                new ChangeReviewUpdate(
-                    dispositions,
-                    session.Affected.ScopeContext.Select(value => value.NodeId)));
-            _revision++;
-            var approval = _approvalGate.Approve(_conversationId, _session);
-            _pendingApproval = null;
-            return new McpApprovalResult(
-                true,
-                _revision,
-                approval.ApprovalId,
-                approval.ExpiresUtc,
-                Readiness(_session.Readiness),
-                "The human approved the exact proposal and all displayed affected/context items. write_change may now be attempted with the current revision.");
-        }
-    }
-
     public async Task<McpChangeWrite> WriteChangeAsync(
         int expectedRevision,
         CancellationToken cancellationToken = default)
     {
         ChangeSessionSnapshot session;
-        AuthoringApproval approval;
         lock (_gate)
         {
             session = RequireRevision(expectedRevision);
-            approval = _approvalGate.RequireCurrent(_conversationId, session.Path, session.Reference);
+            session = CompleteReviewForWrite(session);
+            _session = session;
         }
 
         var result = await application.WriteChangeAsync(
@@ -489,8 +397,6 @@ internal sealed class McpProjectService(
             {
                 _session = null;
                 _revision = 0;
-                _pendingApproval = null;
-                _approvalGate.Invalidate(_conversationId);
                 _selection = ToSelection(application.Status(session.Path));
             }
 
@@ -520,8 +426,6 @@ internal sealed class McpProjectService(
             var discarded = application.DiscardChange(session.Reference);
             _session = null;
             _revision = 0;
-            _pendingApproval = null;
-            _approvalGate.Invalidate(_conversationId);
             return new McpDiscardResult(
                 discarded.ProjectId.Value,
                 expectedRevision,
@@ -557,7 +461,7 @@ internal sealed class McpProjectService(
         if (_session is not null)
             throw new ChangeSessionException(
                 ChangeSessionErrorCode.SessionAlreadyActive,
-                "An unresolved MCP change session is active; preview, approve, write, or discard it before switching projects.");
+                "An unresolved MCP change session is active; preview, write, or discard it before switching projects.");
     }
 
     private ChangeSessionSnapshot RequireRevision(int expectedRevision)
@@ -641,14 +545,36 @@ internal sealed class McpProjectService(
         session.PresentedContextNodeIds.Select(id => id.Value).ToArray(),
         Readiness(session.Readiness));
 
-    private void WriteHumanApprovalRequest(McpChangePreview preview, string token)
+    private ChangeSessionSnapshot CompleteReviewForWrite(ChangeSessionSnapshot session)
     {
-        var output = JsonSerializer.Serialize(preview, Protocol.CreateJsonOptions());
-        Console.Error.WriteLine("ValidatedWorld MCP human approval required.");
-        Console.Error.WriteLine("Review this exact proposal before continuing:");
-        Console.Error.WriteLine(output);
-        Console.Error.WriteLine($"One-time approval token (not returned to the agent): {token}");
-        Console.Error.WriteLine("Provide that token to the human-controlled MCP client, then call confirm_approval with the current revision.");
+        if (session.Operations.Operations.Count == 0)
+            throw new InvalidOperationException("There is no proposal to write.");
+        if (!session.Affected.IsComplete || !session.Affected.ProposedValidation.IsValid ||
+            !session.Affected.CurrentValidation.IsValid)
+            throw new InvalidOperationException(
+                "The proposal cannot be written while affected analysis is incomplete or graph validation is invalid.");
+
+        var direct = session.Affected.AffectedNodes
+            .Where(node => node.IsDirectChange)
+            .Select(node => node.NodeId)
+            .ToHashSet();
+        var dispositions = session.Dispositions
+            .Where(value => value.Kind == ReviewDispositionKind.Pending)
+            .Select(value => new ReviewDisposition(
+                value.NodeId,
+                direct.Contains(value.NodeId)
+                    ? ReviewDispositionKind.Updated
+                    : ReviewDispositionKind.ReviewedNoChange,
+                null))
+            .ToArray();
+        var reviewed = application.ReviewChange(
+            session.Reference,
+            new ChangeReviewUpdate(
+                dispositions,
+                session.Affected.ScopeContext.Select(value => value.NodeId)));
+        if (!reviewed.Readiness.IsReady)
+            throw new InvalidOperationException(string.Join(" ", reviewed.Readiness.Blockers));
+        return reviewed;
     }
 
     private static McpChangeOperation Operation(GraphOperation operation) => new(
@@ -665,22 +591,6 @@ internal sealed class McpProjectService(
         readiness.PendingNodeIds.Select(id => id.Value).ToArray(),
         readiness.MissingContextNodeIds.Select(id => id.Value).ToArray(),
         readiness.Blockers);
-
-    private static bool ReferencesEqual(ChangeSessionReference left, ChangeSessionReference right) =>
-        left.ProjectId == right.ProjectId &&
-        StringComparer.Ordinal.Equals(left.SessionId, right.SessionId) &&
-        StringComparer.Ordinal.Equals(left.BaseFingerprint, right.BaseFingerprint) &&
-        StringComparer.Ordinal.Equals(left.OperationFingerprint, right.OperationFingerprint) &&
-        StringComparer.Ordinal.Equals(left.ProposedFingerprint, right.ProposedFingerprint) &&
-        StringComparer.Ordinal.Equals(left.AffectedFingerprint, right.AffectedFingerprint) &&
-        StringComparer.Ordinal.Equals(left.ReviewFingerprint, right.ReviewFingerprint);
-
-    private static bool FixedTokenEquals(string expected, string? actual)
-    {
-        if (string.IsNullOrWhiteSpace(actual)) return false;
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(actual));
-    }
 
     public static GraphOperationBatch ParseOperations(OperationBatchDto dto)
     {

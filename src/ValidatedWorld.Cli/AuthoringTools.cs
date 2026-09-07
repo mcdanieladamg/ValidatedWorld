@@ -7,7 +7,7 @@ using ValidatedWorld.Validation;
 
 namespace ValidatedWorld.Cli;
 
-public sealed record AuthoringToolExecution(string Output, bool ApprovalRequested = false);
+public sealed record AuthoringToolExecution(string Output);
 
 public sealed class AuthoringToolHost
 {
@@ -17,27 +17,18 @@ public sealed class AuthoringToolHost
 
     private readonly ProjectApplication _application;
     private readonly string _path;
-    private readonly string _conversationId;
-    private readonly AuthoringApprovalGate _approvalGate;
     private ChangeSessionSnapshot? _session;
-    private ProjectGraph? _pendingProject;
     private ProjectId? _projectId;
     private bool _searched;
 
     public AuthoringToolHost(
         ProjectApplication application,
-        string path,
-        string conversationId,
-        AuthoringApprovalGate? approvalGate = null)
+        string path)
     {
         _application = application ?? throw new ArgumentNullException(nameof(application));
         _path = System.IO.Path.GetFullPath(string.IsNullOrWhiteSpace(path)
             ? throw new ArgumentException("A database path is required.", nameof(path))
             : path);
-        _conversationId = string.IsNullOrWhiteSpace(conversationId)
-            ? throw new ArgumentException("A conversation ID is required.", nameof(conversationId))
-            : conversationId;
-        _approvalGate = approvalGate ?? new AuthoringApprovalGate();
     }
 
     public string Path => _path;
@@ -67,7 +58,6 @@ public sealed class AuthoringToolHost
                 "put_edge" => Result(PutEdge(arguments, cancellationToken)),
                 "remove_entity" => Result(RemoveEntity(arguments, cancellationToken)),
                 "proposal_preview" => Result(Preview(arguments)),
-                "request_approval" => RequestApproval(arguments),
                 "write_change" => Result(await WriteChange(arguments, cancellationToken)),
                 "discard_change" => Result(DiscardChange(arguments)),
                 _ => Result(new { ok = false, error = $"Unknown authoring tool '{name}'." }),
@@ -77,60 +67,6 @@ public sealed class AuthoringToolHost
         {
             return Result(new { ok = false, error = exception.Message, errorType = exception.GetType().Name });
         }
-    }
-
-    public object ApproveRequested()
-    {
-        if (_pendingProject is not null)
-        {
-            var stored = _application.Initialize(
-                _path,
-                _pendingProject.ProjectId,
-                _pendingProject.Title,
-                _pendingProject.PurposeNodeId,
-                _pendingProject.Nodes.Single().Text);
-            _projectId = stored.Graph.ProjectId;
-            _pendingProject = null;
-            return new
-            {
-                approved = true,
-                initialized = true,
-                project = CliDto.Stored(stored),
-                message = "The human approved the exact displayed new project and it was initialized.",
-            };
-        }
-        var snapshot = RequireSession();
-        var direct = snapshot.Affected.AffectedNodes
-            .Where(node => node.IsDirectChange)
-            .Select(node => node.NodeId)
-            .ToHashSet();
-        var dispositions = snapshot.Dispositions
-            .Where(value => value.Kind == ReviewDispositionKind.Pending)
-            .Select(value => new ReviewDisposition(
-                value.NodeId,
-                direct.Contains(value.NodeId) ? ReviewDispositionKind.Updated : ReviewDispositionKind.ReviewedNoChange,
-                null))
-            .ToArray();
-        var context = snapshot.Affected.ScopeContext.Select(value => value.NodeId).ToArray();
-        snapshot = _application.ReviewChange(
-            snapshot.Reference,
-            new ChangeReviewUpdate(dispositions, context));
-        _session = snapshot;
-        var approval = _approvalGate.Approve(_conversationId, snapshot);
-        return new
-        {
-            approved = true,
-            approvalId = approval.ApprovalId,
-            expiresUtc = approval.ExpiresUtc,
-            reference = CliDto.Reference(snapshot.Reference),
-            message = "The human approved the exact displayed proposal. write_change may now be attempted.",
-        };
-    }
-
-    public void DeclineRequested()
-    {
-        _pendingProject = null;
-        _approvalGate.Invalidate(_conversationId);
     }
 
     public string CompletePreview()
@@ -160,82 +96,6 @@ public sealed class AuthoringToolHost
         });
     }
 
-    public string HumanPreview()
-    {
-        if (_pendingProject is not null)
-        {
-            var purpose = _pendingProject.Nodes.Single(node => node.Id == _pendingProject.PurposeNodeId);
-            return string.Join(Environment.NewLine,
-                "New project initialization:",
-                $"  path={_path}",
-                $"  projectId={_pendingProject.ProjectId.Value}",
-                $"  title={JsonSerializer.Serialize(_pendingProject.Title)}",
-                $"  purpose={Format(purpose)}",
-                $"  state fingerprint={GraphFingerprints.State(_pendingProject)}");
-        }
-        var snapshot = RequireSession();
-        var lines = new List<string>
-        {
-            $"Project: {snapshot.ProposedGraph.ProjectId.Value} — {snapshot.ProposedGraph.Title}",
-            $"Operations: {snapshot.Operations.Operations.Count}; affected nodes: {snapshot.Affected.AffectedNodes.Count}; scope context: {snapshot.Affected.ScopeContext.Count}",
-            $"Validation: {snapshot.Affected.ProposedValidation.Status}; affected analysis: {snapshot.Affected.Status}",
-            "Operations:",
-        };
-        foreach (var operation in snapshot.Operations.Operations)
-        {
-            lines.Add($"  {operation.Kind.ToString().ToLowerInvariant()} {operation.EntityKind.ToString().ToLowerInvariant()} {operation.EntityId.Value}");
-            var currentNode = snapshot.Affected.CurrentGraph.Nodes.FirstOrDefault(node => node.Id == operation.EntityId);
-            var currentEdge = snapshot.Affected.CurrentGraph.Edges.FirstOrDefault(edge => edge.Id == operation.EntityId);
-            if (currentNode is not null) lines.Add("    current: " + Format(currentNode));
-            if (currentEdge is not null) lines.Add("    current: " + Format(currentEdge));
-            if (operation.Node is not null) lines.Add("    proposed: " + Format(operation.Node));
-            if (operation.Edge is not null) lines.Add("    proposed: " + Format(operation.Edge));
-        }
-        lines.Add("Affected review:");
-        foreach (var node in snapshot.Affected.AffectedNodes)
-        {
-            lines.Add($"  {node.NodeId.Value}: {(node.IsDirectChange ? "direct edit" : "semantic/scope consequence")}");
-            lines.Add($"    path nodes: {string.Join(" -> ", node.Explanation.Nodes.Select(id => id.Value))}");
-            lines.Add($"    path edges: {(node.Explanation.Edges.Count == 0 ? "(none)" : string.Join(" -> ", node.Explanation.Edges.Select(id => id.Value)))}");
-            if (node.CurrentNode is not null) lines.Add("    current: " + Format(node.CurrentNode));
-            if (node.ProposedNode is not null) lines.Add("    proposed: " + Format(node.ProposedNode));
-        }
-        lines.Add("Required scope context:");
-        foreach (var context in snapshot.Affected.ScopeContext)
-        {
-            lines.Add($"  {context.NodeId.Value}:");
-            foreach (var lineage in context.Lineages)
-            {
-                lines.Add($"    for affected {lineage.AffectedNodeId.Value}");
-                lines.Add($"      current path: {(lineage.CurrentPath.Count == 0 ? "(absent)" : string.Join(" -> ", lineage.CurrentPath.Select(id => id.Value)))}");
-                lines.Add($"      proposed path: {(lineage.ProposedPath.Count == 0 ? "(absent)" : string.Join(" -> ", lineage.ProposedPath.Select(id => id.Value)))}");
-            }
-            if (context.CurrentNode is not null) lines.Add("    current: " + Format(context.CurrentNode));
-            if (context.ProposedNode is not null) lines.Add("    proposed: " + Format(context.ProposedNode));
-        }
-        if (snapshot.Affected.Omissions.Count > 0)
-        {
-            lines.Add("Omissions (approval is unsafe while present):");
-            lines.AddRange(snapshot.Affected.Omissions.Select(value => $"  {value.Message}"));
-        }
-        lines.Add($"Base fingerprint: {snapshot.Reference.BaseFingerprint}");
-        lines.Add($"Operation fingerprint: {snapshot.Reference.OperationFingerprint}");
-        lines.Add($"Proposed fingerprint: {snapshot.Reference.ProposedFingerprint}");
-        lines.Add($"Affected fingerprint: {snapshot.Reference.AffectedFingerprint}");
-        lines.Add($"Review fingerprint before approval: {snapshot.Reference.ReviewFingerprint}");
-        return string.Join(Environment.NewLine, lines);
-    }
-
-    private static string Format(GraphNode node) =>
-        $"id={node.Id.Value}; kind={node.Kind ?? "(none)"}; tags=[{string.Join(",", node.Tags)}]; " +
-        $"attributes=[{string.Join(",", node.Attributes.Select(value => $"{value.Name}:{value.Value.Kind}={value.Value}"))}]; " +
-        $"text={JsonSerializer.Serialize(node.Text)}";
-
-    private static string Format(GraphEdge edge) =>
-        $"id={edge.Id.Value}; {edge.Source.Value} -[{JsonSerializer.Serialize(edge.Relationship)} / {edge.ReviewDirection}]-> {edge.Target.Value}; " +
-        $"rationale={JsonSerializer.Serialize(edge.Rationale)}; tags=[{string.Join(",", edge.Tags)}]; " +
-        $"attributes=[{string.Join(",", edge.Attributes.Select(value => $"{value.Name}:{value.Value.Kind}={value.Value}"))}]";
-
     private object ProjectStatus(JsonElement arguments)
     {
         Empty(arguments);
@@ -258,18 +118,18 @@ public sealed class AuthoringToolHost
         var title = Required(arguments, "title");
         var purposeId = Required(arguments, "purpose_id");
         var purposeText = Required(arguments, "purpose_text");
-        var purpose = new GraphNode(new EntityId(purposeId), purposeText, "purpose");
-        _pendingProject = new ProjectGraph(new ProjectId(projectId), title, purpose.Id, [purpose], []);
-        return new AuthoringToolExecution(
-            CliJson.Serialize(new
-            {
-                approvalRequired = true,
-                projectId,
-                title,
-                purposeId,
-                stateFingerprint = GraphFingerprints.State(_pendingProject),
-            }),
-            ApprovalRequested: true);
+        var stored = _application.Initialize(
+            _path,
+            new ProjectId(projectId),
+            title,
+            new EntityId(purposeId),
+            purposeText);
+        _projectId = stored.Graph.ProjectId;
+        return Result(new
+        {
+            initialized = true,
+            project = CliDto.Stored(stored),
+        });
     }
 
     private object Search(JsonElement arguments)
@@ -319,7 +179,6 @@ public sealed class AuthoringToolHost
         EnsureProject();
         var intent = Required(arguments, "intent");
         _session = _application.BeginChange(_path, _projectId!.Value, "ai-authoring-agent", intent);
-        _approvalGate.Invalidate(_conversationId);
         return SnapshotSummary(_session);
     }
 
@@ -372,7 +231,6 @@ public sealed class AuthoringToolHost
         if (snapshot.Operations.Operations.Count >= MaximumOperations &&
             snapshot.Operations.Operations.All(existing => existing.EntityId != operation.EntityId))
             throw new InvalidOperationException($"A proposal cannot exceed {MaximumOperations} operations.");
-        _approvalGate.Invalidate(_conversationId);
         _session = _application.PatchChange(
             snapshot.Reference,
             new GraphOperationBatch([operation]),
@@ -392,20 +250,39 @@ public sealed class AuthoringToolHost
         return JsonSerializer.Deserialize<JsonElement>(CompletePreview(), CliJson.Options);
     }
 
-    private AuthoringToolExecution RequestApproval(JsonElement arguments)
-    {
-        Empty(arguments);
-        var snapshot = RequireSession();
-        if (snapshot.Operations.Operations.Count == 0)
-            throw new InvalidOperationException("There is no proposal to approve.");
-        return new AuthoringToolExecution(CompletePreview(), ApprovalRequested: true);
-    }
-
     private async Task<object> WriteChange(JsonElement arguments, CancellationToken cancellationToken)
     {
         Empty(arguments);
         var snapshot = RequireSession();
-        var approval = _approvalGate.RequireCurrent(_conversationId, _path, snapshot.Reference);
+        if (snapshot.Operations.Operations.Count == 0)
+            throw new InvalidOperationException("There is no proposal to write.");
+        if (!snapshot.Affected.IsComplete || !snapshot.Affected.CurrentValidation.IsValid ||
+            !snapshot.Affected.ProposedValidation.IsValid)
+            throw new InvalidOperationException(
+                "The proposal cannot be written while affected analysis is incomplete or graph validation is invalid.");
+
+        var direct = snapshot.Affected.AffectedNodes
+            .Where(node => node.IsDirectChange)
+            .Select(node => node.NodeId)
+            .ToHashSet();
+        var dispositions = snapshot.Dispositions
+            .Where(value => value.Kind == ReviewDispositionKind.Pending)
+            .Select(value => new ReviewDisposition(
+                value.NodeId,
+                direct.Contains(value.NodeId)
+                    ? ReviewDispositionKind.Updated
+                    : ReviewDispositionKind.ReviewedNoChange,
+                null))
+            .ToArray();
+        snapshot = _application.ReviewChange(
+            snapshot.Reference,
+            new ChangeReviewUpdate(
+                dispositions,
+                snapshot.Affected.ScopeContext.Select(value => value.NodeId)));
+        _session = snapshot;
+        if (!snapshot.Readiness.IsReady)
+            throw new InvalidOperationException(string.Join(" ", snapshot.Readiness.Blockers));
+
         var result = await _application.WriteChangeAsync(
             snapshot.Reference,
             new ChangeWriteOptions(BypassAiReview: false),
@@ -413,9 +290,8 @@ public sealed class AuthoringToolHost
         if (result.Status == ChangeWriteStatus.Written)
         {
             _session = null;
-            _approvalGate.Invalidate(_conversationId);
         }
-        return new { approvalId = approval.ApprovalId, result = CliDto.Write(result) };
+        return new { result = CliDto.Write(result) };
     }
 
     private object DiscardChange(JsonElement arguments)
@@ -424,7 +300,6 @@ public sealed class AuthoringToolHost
         var snapshot = RequireSession();
         var discarded = _application.DiscardChange(snapshot.Reference);
         _session = null;
-        _approvalGate.Invalidate(_conversationId);
         return new { discarded.ProjectId.Value, discarded.SessionId, discarded.DiscardedUtc };
     }
 
@@ -532,7 +407,7 @@ public sealed class AuthoringToolHost
         return
         [
             new("project_status", "Inspect the fixed project path and AI review availability without a provider call.", empty),
-            new("initialize_project", "Prepare a new project only when project_status reports that the fixed path does not exist. The application pauses for exact human approval before creating the database.",
+            new("initialize_project", "Create a new purpose-only project only when project_status reports that the fixed path does not exist. Existing destinations are never overwritten.",
                 Schema("""{"type":"object","properties":{"project_id":{"type":"string"},"title":{"type":"string"},"purpose_id":{"type":"string"},"purpose_text":{"type":"string"}},"required":["project_id","title","purpose_id","purpose_text"],"additionalProperties":false}""")),
             new("search_graph", "Bounded text or exact-tag search. Search before creating and before changing closed-world claims.",
                 Schema("""{"type":"object","properties":{"text":{"type":["string","null"]},"tag":{"type":["string","null"]},"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["text","tag","limit"],"additionalProperties":false}""")),
@@ -549,8 +424,7 @@ public sealed class AuthoringToolHost
                 Schema("""{"type":"object","properties":{"mode":{"type":"string","enum":["add","replace"]},"id":{"type":"string"},"source":{"type":"string"},"target":{"type":"string"},"relationship":{"type":"string"},"review_direction":{"type":"string","enum":["none","sourceToTarget","targetToSource","both"]},"rationale":{"type":["string","null"]},"tags":{"type":"array","items":{"type":"string"}},"attributes":ATTRIBUTES},"required":["mode","id","source","target","relationship","review_direction","rationale","tags","attributes"],"additionalProperties":false}""".Replace("ATTRIBUTES", attribute, StringComparison.Ordinal))),
             new("remove_entity", "Remove one node or edge explicitly. Removing a node never cascades incident edges.", Schema("""{"type":"object","properties":{"entity_kind":{"type":"string","enum":["node","edge"]},"id":{"type":"string"}},"required":["entity_kind","id"],"additionalProperties":false}""")),
             new("proposal_preview", "Return the exact operations, affected paths, complete required scope context, validation, dispositions, and fingerprints.", empty),
-            new("request_approval", "Pause tool execution and ask the application to show the exact complete proposal to the human for approval.", empty),
-            new("write_change", "Write only a current human-approved proposal. Never bypasses independent semantic review.", empty),
+            new("write_change", "Account for the exact current affected/context set and attempt the atomic write. Never bypasses independent semantic review.", empty),
             new("discard_change", "Discard the unresolved in-memory proposal.", empty),
         ];
     }

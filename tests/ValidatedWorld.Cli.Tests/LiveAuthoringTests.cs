@@ -26,8 +26,7 @@ public sealed class LiveAuthoringTests
             provider,
             new ProjectApplication(new SqliteProjectStore()),
             newPath,
-            "Create a new project with stable ID tiny-lore, title Tiny Lore, purpose ID purpose, and purpose text 'Keep a tiny coherent lore graph.' Do not begin another change.",
-            approve: true);
+            "Create a new project with stable ID tiny-lore, title Tiny Lore, purpose ID purpose, and purpose text 'Keep a tiny coherent lore graph.' Do not begin another change.");
         Assert.True(File.Exists(newPath), newTranscript);
         Assert.Contains("tiny-lore", newTranscript, StringComparison.OrdinalIgnoreCase);
 
@@ -44,8 +43,7 @@ public sealed class LiveAuthoringTests
             provider,
             existingApplication,
             existingPath,
-            "Search first, then add exactly one note node with stable ID power-maintenance-note, text 'Inspect the power enclosure before maintenance.', kind note, no tags or attributes. Add exactly one scope-parent edge with stable ID power-maintenance-note-parent from that node to scope-power, review direction none, and no rationale, tags, or attributes. Make no other changes. Request approval and write the change.",
-            approve: true);
+            "Search first, then add exactly one note node with stable ID power-maintenance-note, text 'Inspect the power enclosure before maintenance.', kind note, no tags or attributes. Add exactly one scope-parent edge with stable ID power-maintenance-note-parent from that node to scope-power, review direction none, and no rationale, tags, or attributes. Make no other changes. Preview and write the change.");
         var updated = existingApplication.Load(existingPath).Graph;
         Assert.Contains(updated.Nodes, node =>
             node.Id.Value == "power-maintenance-note" &&
@@ -76,17 +74,15 @@ public sealed class LiveAuthoringTests
         IAuthoringAgentProvider provider,
         ProjectApplication application,
         string path,
-        string prompt,
-        bool approve)
+        string prompt)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         var shell = new AiAssistantShell(
             provider,
-            new AuthoringToolHost(application, path, Guid.NewGuid().ToString("N")),
-            new StringReader(prompt + Environment.NewLine + (approve ? "yes" + Environment.NewLine : string.Empty) +
-                "exit" + Environment.NewLine),
+            new AuthoringToolHost(application, path),
+            new StringReader(prompt + Environment.NewLine + "exit" + Environment.NewLine),
             output,
             error,
             cancellationToken: timeout.Token);

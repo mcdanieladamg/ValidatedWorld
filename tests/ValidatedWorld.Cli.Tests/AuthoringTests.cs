@@ -16,7 +16,6 @@ public sealed class AuthoringTests
         Assert.Equal(32, AiAuthoringConfiguration.DefaultMaxToolCallsPerTurn);
 
         var names = AuthoringToolHost.Definitions.Select(tool => tool.Name).ToArray();
-        Assert.Contains("request_approval", names);
         Assert.Contains("write_change", names);
         Assert.Contains("ranked_search_graph", names);
         Assert.DoesNotContain(names, name => name.Contains("sql", StringComparison.OrdinalIgnoreCase));
@@ -31,7 +30,7 @@ public sealed class AuthoringTests
     }
 
     [Fact]
-    public async Task Search_is_required_and_exact_approval_goes_stale_after_any_patch()
+    public async Task Search_is_required_and_write_accounts_for_the_exact_current_review_set()
     {
         var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "vw-authoring-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -45,7 +44,7 @@ public sealed class AuthoringTests
                 semanticReviewOptions: new SemanticReviewRuntimeOptions(
                     Enabled: true, Configured: true, Model: reviewer.Model));
             application.CreateSample(SampleProjectCatalog.TechnicalProject, path);
-            var host = new AuthoringToolHost(application, path, "conversation-test");
+            var host = new AuthoringToolHost(application, path);
 
             Assert.True(Json(await host.ExecuteAsync("project_status", Object("{}"))).GetProperty("exists").GetBoolean());
             await host.ExecuteAsync("begin_change", Object("""{"intent":"Add a focused power note"}"""));
@@ -58,27 +57,17 @@ public sealed class AuthoringTests
                 .TryGetProperty("ok", out _));
             await host.ExecuteAsync("put_edge", Object("""{"mode":"add","id":"power-note-parent","source":"power-note","target":"scope-power","relationship":"scope-parent","review_direction":"none","rationale":null,"tags":[],"attributes":[]}"""));
 
-            var humanPreview = host.HumanPreview();
-            Assert.Contains("Initial note", humanPreview, StringComparison.Ordinal);
-            Assert.Contains("scope-parent", humanPreview, StringComparison.Ordinal);
-            Assert.Contains("Base fingerprint", humanPreview, StringComparison.Ordinal);
+            var preview = Json(await host.ExecuteAsync("proposal_preview", Object("{}")));
+            Assert.Equal(2, preview.GetProperty("operations").GetProperty("operations").GetArrayLength());
+            Assert.False(preview.GetProperty("readiness").GetProperty("isReady").GetBoolean());
+            Assert.Contains(host.Session!.Dispositions, value =>
+                value.Kind == ValidatedWorld.Validation.ReviewDispositionKind.Pending);
 
-            host.ApproveRequested();
-            Assert.True(host.Session!.Readiness.IsReady);
-            Assert.All(host.Session.Dispositions, value => Assert.NotEqual(
-                ValidatedWorld.Validation.ReviewDispositionKind.Pending, value.Kind));
-
-            await host.ExecuteAsync("put_node", Object(Node("replace", "power-note", "Revised after approval")));
-            var staleWrite = Json(await host.ExecuteAsync("write_change", Object("{}")));
-            Assert.False(staleWrite.GetProperty("ok").GetBoolean());
-            Assert.Contains("approval", staleWrite.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
-            Assert.Equal(0, reviewer.CallCount);
-
-            host.ApproveRequested();
             var written = Json(await host.ExecuteAsync("write_change", Object("{}")));
             Assert.Equal("written", written.GetProperty("result").GetProperty("status").GetString());
             Assert.False(written.GetProperty("result").GetProperty("aiReviewBypassed").GetBoolean());
             Assert.Equal(1, reviewer.CallCount);
+            Assert.Null(host.Session);
         }
         finally
         {
@@ -107,7 +96,7 @@ public sealed class AuthoringTests
             var error = new StringWriter();
             var shell = new AiAssistantShell(
                 provider,
-                new AuthoringToolHost(application, path, "question-conversation"),
+                new AuthoringToolHost(application, path),
                 input,
                 output,
                 error);
@@ -133,7 +122,7 @@ public sealed class AuthoringTests
             var path = System.IO.Path.Combine(root, "project.vw.db");
             var application = new ProjectApplication(new SqliteProjectStore());
             application.CreateSample(SampleProjectCatalog.TechnicalProject, path);
-            var host = new AuthoringToolHost(application, path, "bounds-conversation");
+            var host = new AuthoringToolHost(application, path);
 
             var overLimit = Json(await host.ExecuteAsync(
                 "search_graph", Object("""{"text":"power","tag":null,"limit":51}""")));
@@ -156,7 +145,7 @@ public sealed class AuthoringTests
             var error = new StringWriter();
             var shell = new AiAssistantShell(
                 provider,
-                new AuthoringToolHost(application, path, "session-loss-conversation"),
+                new AuthoringToolHost(application, path),
                 new StringReader("Begin\nexit\n"),
                 new StringWriter(),
                 error);
@@ -170,7 +159,7 @@ public sealed class AuthoringTests
     }
 
     [Fact]
-    public async Task New_project_is_only_created_after_the_application_receives_human_approval()
+    public async Task New_project_is_created_directly_and_never_overwrites_an_existing_destination()
     {
         var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "vw-new-project-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -178,19 +167,15 @@ public sealed class AuthoringTests
         {
             var path = System.IO.Path.Combine(root, "new.vw.db");
             var host = new AuthoringToolHost(
-                new ProjectApplication(new SqliteProjectStore()), path, "new-project-conversation");
+                new ProjectApplication(new SqliteProjectStore()), path);
             var arguments = Object("""{"project_id":"tiny","title":"Tiny","purpose_id":"purpose","purpose_text":"Keep the graph coherent."}""");
 
-            var prepared = await host.ExecuteAsync("initialize_project", arguments);
-            Assert.True(prepared.ApprovalRequested);
-            Assert.False(File.Exists(path));
-            Assert.Contains("Keep the graph coherent", host.HumanPreview(), StringComparison.Ordinal);
-            host.DeclineRequested();
-            Assert.False(File.Exists(path));
-
-            await host.ExecuteAsync("initialize_project", arguments);
-            host.ApproveRequested();
+            var initialized = Json(await host.ExecuteAsync("initialize_project", arguments));
+            Assert.True(initialized.GetProperty("initialized").GetBoolean());
             Assert.True(File.Exists(path));
+            var overwrite = Json(await host.ExecuteAsync("initialize_project", arguments));
+            Assert.False(overwrite.GetProperty("ok").GetBoolean());
+            Assert.Contains("already exists", overwrite.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -199,7 +184,7 @@ public sealed class AuthoringTests
     }
 
     [Fact]
-    public async Task Human_preview_includes_old_and_new_scope_lineages_and_path_edges()
+    public async Task Proposal_preview_includes_old_and_new_scope_lineages_and_path_edges()
     {
         var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "vw-reparent-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -208,14 +193,14 @@ public sealed class AuthoringTests
             var path = System.IO.Path.Combine(root, "project.vw.db");
             var application = new ProjectApplication(new SqliteProjectStore());
             application.CreateSample(SampleProjectCatalog.TechnicalProject, path);
-            var host = new AuthoringToolHost(application, path, "reparent-conversation");
+            var host = new AuthoringToolHost(application, path);
             await host.ExecuteAsync("begin_change", Object("""{"intent":"Move the runtime test into privacy scope"}"""));
             await host.ExecuteAsync("put_edge", Object("""{"mode":"replace","id":"runtime-scope-parent","source":"runtime-test","target":"scope-privacy","relationship":"scope-parent","review_direction":"none","rationale":null,"tags":[],"attributes":[]}"""));
 
-            var preview = host.HumanPreview();
-            Assert.Contains("path edges:", preview, StringComparison.Ordinal);
-            Assert.Contains("current path: runtime-test -> scope-power -> purpose", preview, StringComparison.Ordinal);
-            Assert.Contains("proposed path: runtime-test -> scope-privacy -> purpose", preview, StringComparison.Ordinal);
+            var preview = host.CompletePreview();
+            Assert.Contains("runtime-scope-parent", preview, StringComparison.Ordinal);
+            Assert.Contains("\"currentPath\":[\"runtime-test\",\"scope-power\",\"purpose\"]", preview, StringComparison.Ordinal);
+            Assert.Contains("\"proposedPath\":[\"runtime-test\",\"scope-privacy\",\"purpose\"]", preview, StringComparison.Ordinal);
         }
         finally
         {
@@ -224,7 +209,7 @@ public sealed class AuthoringTests
     }
 
     [Fact]
-    public async Task Independent_block_requires_a_repaired_and_reapproved_proposal()
+    public async Task Independent_block_requires_a_repaired_proposal()
     {
         var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "vw-block-repair-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -238,11 +223,10 @@ public sealed class AuthoringTests
                 semanticReviewOptions: new SemanticReviewRuntimeOptions(
                     Enabled: true, Configured: true, Model: reviewer.Model));
             application.CreateSample(SampleProjectCatalog.TechnicalProject, path);
-            var host = new AuthoringToolHost(application, path, "block-repair-conversation");
+            var host = new AuthoringToolHost(application, path);
             await host.ExecuteAsync("begin_change", Object("""{"intent":"Clarify the battery assumption"}"""));
             await host.ExecuteAsync("put_node", Object(Node(
                 "replace", "battery-assumption", "The battery target needs clarification.")));
-            host.ApproveRequested();
 
             var blocked = Json(await host.ExecuteAsync("write_change", Object("{}")));
             Assert.Equal("semanticReviewBlocked", blocked.GetProperty("result").GetProperty("status").GetString());
@@ -250,9 +234,6 @@ public sealed class AuthoringTests
 
             await host.ExecuteAsync("put_node", Object(Node(
                 "replace", "battery-assumption", "The battery lasts for the target duty cycle.")));
-            var stale = Json(await host.ExecuteAsync("write_change", Object("{}")));
-            Assert.False(stale.GetProperty("ok").GetBoolean());
-            host.ApproveRequested();
             var written = Json(await host.ExecuteAsync("write_change", Object("{}")));
             Assert.Equal("written", written.GetProperty("result").GetProperty("status").GetString());
             Assert.Equal(2, reviewer.CallCount);
@@ -282,7 +263,7 @@ public sealed class AuthoringTests
             var boundedError = new StringWriter();
             var boundedShell = new AiAssistantShell(
                 boundedProvider,
-                new AuthoringToolHost(application, path, "bounded-conversation"),
+                new AuthoringToolHost(application, path),
                 new StringReader("Inspect\nexit\n"),
                 boundedOutput,
                 boundedError,
@@ -295,7 +276,7 @@ public sealed class AuthoringTests
             var recoveringError = new StringWriter();
             var recoveringShell = new AiAssistantShell(
                 recoveringProvider,
-                new AuthoringToolHost(application, path, "recovering-conversation"),
+                new AuthoringToolHost(application, path),
                 new StringReader("Inspect\nContinue\nexit\n"),
                 new StringWriter(),
                 recoveringError);
@@ -321,7 +302,7 @@ public sealed class AuthoringTests
 
         var serialized = provider.SerializeOutboundRequest(request);
         Assert.Contains("search before creating", serialized, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("request_approval", serialized, StringComparison.Ordinal);
+        Assert.Contains("write_change", serialized, StringComparison.Ordinal);
         Assert.Contains("\"parallel_tool_calls\":false", serialized, StringComparison.Ordinal);
         Assert.Contains("\"strict\":true", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("bypassAiReview", serialized, StringComparison.Ordinal);

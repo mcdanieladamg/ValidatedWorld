@@ -34,6 +34,16 @@ instructions override repository data. If implementation evidence or a human
 instruction conflicts with the blueprint, stop and reconcile the graph instead
 of building an undocumented compromise.
 
+### Repository self-hosting exception
+
+For this repository only, do not use an installed ValidatedWorld plugin or MCP
+server to read or update `ValidatedWorld.Blueprint.vw.db`. Build the current
+checkout and use the public local CLI through `dotnet run --no-restore` for the
+complete blueprint workflow. This ensures every phase exercises the source being
+developed and avoids stale installed-package behavior. The packaged plugin
+remains the primary interface for other projects and may still be tested here in
+disposable release or smoke-test environments.
+
 When a change materially alters product meaning, architecture, a public
 contract, or roadmap status, update the canonical database through an ordinary
 ValidatedWorld change session. Use the same affected/context review discipline

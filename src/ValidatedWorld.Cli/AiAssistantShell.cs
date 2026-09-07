@@ -96,29 +96,6 @@ public sealed class AiAssistantShell(
                 response.ToolCall.Name,
                 response.ToolCall.Arguments,
                 cancellationToken);
-            var toolOutput = execution.Output;
-            if (execution.ApprovalRequested)
-            {
-                await output.WriteLineAsync();
-                await output.WriteLineAsync("Exact proposal for human review");
-                await output.WriteLineAsync(tools.HumanPreview());
-                await output.WriteAsync("Approve this exact proposal and record every shown affected node/context as reviewed? [yes/no] ");
-                await output.FlushAsync(cancellationToken);
-                var answer = await input.ReadLineAsync(cancellationToken);
-                if (StringComparer.OrdinalIgnoreCase.Equals(answer?.Trim(), "yes"))
-                {
-                    toolOutput = CliJson.Serialize(tools.ApproveRequested());
-                }
-                else
-                {
-                    tools.DeclineRequested();
-                    toolOutput = CliJson.Serialize(new
-                    {
-                        approved = false,
-                        message = "The human declined or did not provide the exact 'yes' confirmation. Do not write.",
-                    });
-                }
-            }
 
             turnInput = JsonSerializer.SerializeToElement(new[]
             {
@@ -126,7 +103,7 @@ public sealed class AiAssistantShell(
                 {
                     type = "function_call_output",
                     call_id = response.ToolCall.CallId,
-                    output = toolOutput,
+                    output = execution.Output,
                 },
             }, CliJson.Options);
         }
