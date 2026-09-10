@@ -213,18 +213,26 @@ history, test transcripts, or corrective-addendum prose to the README or
 blueprint; Git history is the change record. Rewrite obsolete requirements in
 place so they describe only the current design.
 
-The current phase estimate is set only after implementation, testing, and smoke
-QA are complete, while advancing the blueprint roadmap. It describes expected
-code-change volume for the newly selected phase,
-not elapsed time and not permission to split, start, or redesign that phase. Keep
+Set the estimate when selecting the current phase: normally after the previous
+phase's implementation, testing, and smoke QA, or during an explicitly authorized
+roadmap reprioritization. Estimate overall implementation and reasoning effort,
+including code volume, algorithmic/design difficulty, uncertainty, availability
+of suitable libraries/tools, integration complexity, and verification burden.
+Raise the rating when a small amount of code hides difficult reasoning or lacks
+a clear, established implementation path. Explain the dominant difficulty in the
+handoff so the human can choose an appropriate model. If deterministic treatment
+may be infeasible, identify that feasibility question rather than implying that
+a larger estimate or stronger model guarantees a solution.
+The estimate is not elapsed time or permission to split, start, or redesign a phase. Keep
 the persisted estimate only in that header field, and repeat its value in the
 final user-facing phase handoff. Use the four labels consistently:
 
-- `small`: a localized change with a narrow test surface;
-- `medium`: several related changes within one primary subsystem;
-- `large`: broad changes spanning multiple components or public behaviors; or
-- `gigantic`: an unusually wide phase with many contracts, state paths, or
-  integration boundaries and correspondingly extensive tests.
+- `small`: a localized, well-understood change with suitable tools and narrow tests;
+- `medium`: several related changes with manageable design uncertainty;
+- `large`: broad integration or substantial algorithmic/design difficulty, even
+  when expected code volume is modest; or
+- `gigantic`: unusually extensive work or exceptionally difficult reasoning,
+  unresolved feasibility, interacting contracts, or demanding verification.
 
 When there is no current phase, omit the estimate tag.
 
