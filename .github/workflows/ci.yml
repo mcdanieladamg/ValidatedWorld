@@ -27,10 +27,4 @@ jobs:
           dotnet test ValidatedWorld.slnx
           --no-build
           --no-restore
-          --logger "trx;LogFileName=test-results.trx"
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: "**/TestResults/*.trx"
+          --filter "Category!=LiveOpenAI"

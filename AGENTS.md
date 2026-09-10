@@ -99,6 +99,39 @@ Phase and status tags are project-defined vocabulary rather than hidden engine
 semantics, but they are explicit, queryable, and reviewable. External artifact
 drift detection remains optional integration work.
 
+## Portable work state and cleanup
+
+- Put durable project meaning, decisions, open questions and remaining work in
+  the canonical blueprint. Put human instructions in README or existing docs,
+  agent instructions here, and reusable tooling/fixtures in their tracked folders.
+  No workflow may depend on a chat transcript, app memory, ignored handoff note,
+  or files outside the checkout. Leave changes unstaged for the human as usual.
+  Keep README and user-facing documentation focused on the project as it exists;
+  do not leak prompts, rejected ideas, corrections, development deliberations, or
+  other conversational residue into it. Mention negative constraints or excluded
+  alternatives only when they are materially necessary for correct usage, compatibility,
+  safety, or maintenance.
+- Ignored files are only regenerable outputs/caches or local settings/secrets.
+  Build outputs and extracted installations must have documented regeneration
+  commands. Never use `artifacts/`, `.tmp/`, or another ignored directory as
+  durable project memory or as the only copy of useful smoke-test foundations.
+- Use a unique OS temporary directory for one-off scripts, proposal payloads,
+  trial databases and diagnostics. Clean it up when done, including on failure.
+  Before pausing, preserve necessary meaning in the tracked sources above;
+  do not create an ignored resume document. If cleanup is blocked, report the
+  exact remaining path and reason, then clean it up at the next opportunity.
+- Preserve useful smoke-test starting graphs as sanitized tracked fixtures with
+  a short command for creating disposable copies. These are foundations for
+  exploratory testing, not mandatory scripted scenarios. They are more like a replacement
+  for human-style smoke QA, but run typically by agents. Remove duplicate runs and stale
+  logs after recording any actionable finding in the graph or the corresponding regression
+  test. Check a file's contents/role before deleting it. Do not delete the canonical
+  database, user settings, unknown user data, or an active installation during
+  cleanup. Completed release archives may remain as documented build outputs.
+- Keep the workflow usable by other agents through the tracked CLI/MCP and
+  skill sources. Host-specific installation adapters are optional setup;
+  distinguish them from portable project knowledge and unverified client support.
+
 ## One-phase development loop
 
 The blueprint contains exactly one phase tagged `status:current`; `precedes`
@@ -149,6 +182,15 @@ dotnet restore ValidatedWorld.slnx
 dotnet build ValidatedWorld.slnx --no-restore
 dotnet test ValidatedWorld.slnx --no-build --no-restore
 ```
+
+For an offline review or when the human asks to omit live provider calls, use
+`dotnet test ValidatedWorld.slnx --no-build --no-restore --filter "Category!=LiveOpenAI"`.
+This selects tests without changing saved preferences or effective feature
+configuration. Report the live tests as excluded, not passed. It does not replace
+the authorized live acceptance checks required for a live-AI feature phase.
+Also run `eng/Test-DeveloperTools.ps1` and `eng/Test-Blueprint.ps1` for changes to
+release tooling or blueprint conventions. The latter enforces this repository's
+roadmap rules through the public CLI; it is not a built-in domain profile.
 
 If restore fails with `Unauthorized access` while reading the user-level
 `NuGet.Config`, do not inspect, copy, modify, or search for credentials in that
@@ -204,18 +246,26 @@ history, test transcripts, or corrective-addendum prose to the README or
 blueprint; Git history is the change record. Rewrite obsolete requirements in
 place so they describe only the current design.
 
-The current phase estimate is set only after implementation, testing, and smoke
-QA are complete, while advancing the blueprint roadmap. It describes expected
-code-change volume for the newly selected phase,
-not elapsed time and not permission to split, start, or redesign that phase. Keep
+Set the estimate when selecting the current phase: normally after the previous
+phase's implementation, testing, and smoke QA, or during an explicitly authorized
+roadmap reprioritization. Estimate overall implementation and reasoning effort,
+including code volume, algorithmic/design difficulty, uncertainty, availability
+of suitable libraries/tools, integration complexity, and verification burden.
+Raise the rating when a small amount of code hides difficult reasoning or lacks
+a clear, established implementation path. Explain the dominant difficulty in the
+handoff so the human can choose an appropriate model. If deterministic treatment
+may be infeasible, identify that feasibility question rather than implying that
+a larger estimate or stronger model guarantees a solution.
+The estimate is not elapsed time or permission to split, start, or redesign a phase. Keep
 the persisted estimate only in that header field, and repeat its value in the
 final user-facing phase handoff. Use the four labels consistently:
 
-- `small`: a localized change with a narrow test surface;
-- `medium`: several related changes within one primary subsystem;
-- `large`: broad changes spanning multiple components or public behaviors; or
-- `gigantic`: an unusually wide phase with many contracts, state paths, or
-  integration boundaries and correspondingly extensive tests.
+- `small`: a localized, well-understood change with suitable tools and narrow tests;
+- `medium`: several related changes with manageable design uncertainty;
+- `large`: broad integration or substantial algorithmic/design difficulty, even
+  when expected code volume is modest; or
+- `gigantic`: unusually extensive work or exceptionally difficult reasoning,
+  unresolved feasibility, interacting contracts, or demanding verification.
 
 When there is no current phase, omit the estimate tag.
 

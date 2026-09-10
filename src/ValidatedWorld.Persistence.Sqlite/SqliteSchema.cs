@@ -110,8 +110,17 @@ internal static class SqliteSchema
             """),
     ];
 
-    public static string MigrationChecksum { get; } = Convert.ToHexString(
-        SHA256.HashData(Encoding.UTF8.GetBytes(string.Join(";\n", Objects.Select(value => value.Sql)))))
+    // Raw string literals inherit source-file line endings. Hash a fixed form so
+    // checkout settings cannot change the identity of the same SQLite schema.
+    public static string MigrationChecksum { get; } = ComputeMigrationChecksum("\n");
+
+    // Earlier Windows builds hashed CRLF inside each statement (but LF between
+    // statements). Accept that exact v1 identity without rewriting existing files.
+    private static string LegacyCrLfMigrationChecksum { get; } = ComputeMigrationChecksum("\r\n");
+
+    private static string ComputeMigrationChecksum(string lineEnding) => Convert.ToHexString(
+        SHA256.HashData(Encoding.UTF8.GetBytes(string.Join(";\n",
+            Objects.Select(value => value.Sql.ReplaceLineEndings(lineEnding))))))
         .ToLowerInvariant();
 
     public static IReadOnlyList<string> DefinitionStatements { get; } =
@@ -183,7 +192,8 @@ internal static class SqliteSchema
         var id = reader.GetString(0);
         var checksum = reader.GetString(1);
         if (reader.Read() || !StringComparer.Ordinal.Equals(id, MigrationId) ||
-            !StringComparer.Ordinal.Equals(checksum, MigrationChecksum))
+            (!StringComparer.Ordinal.Equals(checksum, MigrationChecksum) &&
+             !StringComparer.Ordinal.Equals(checksum, LegacyCrLfMigrationChecksum)))
         {
             throw new ProjectStorageException(
                 ProjectStorageErrorCode.MigrationMismatch,

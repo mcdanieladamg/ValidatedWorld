@@ -2,7 +2,6 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)]
     [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$')]
     [string] $Version,
 
@@ -17,7 +16,22 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Use the same ZIP implementation locally and on Windows CI, even from pwsh.
+if ($PSVersionTable.PSEdition -ne 'Desktop') {
+    $vwWindowsPowerShell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    $vwForward = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    foreach ($vwParameter in $PSBoundParameters.GetEnumerator()) {
+        if ($vwParameter.Key -eq 'NoRestore') { if ($vwParameter.Value) { $vwForward += '-NoRestore' } }
+        else { $vwForward += @(('-' + $vwParameter.Key), [string] $vwParameter.Value) }
+    }
+    & $vwWindowsPowerShell @vwForward
+    if ($LASTEXITCODE -ne 0) { throw "Windows package build failed ($LASTEXITCODE)." }
+    return
+}
+
 $vwRepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+. (Join-Path $PSScriptRoot 'ReleaseChecks.ps1')
+$Version = Get-VwReleaseVersion $vwRepositoryRoot $Version
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $vwRepositoryRoot "artifacts/release/$Version"
 }
@@ -92,7 +106,7 @@ function Write-VwUtf8 {
 function Expand-VwTemplate {
     param([string] $Source, [string] $Destination)
     $vwText = [IO.File]::ReadAllText($Source)
-    $vwText = $vwText.Replace('{{VERSION}}', $Version).Replace('{{RUNTIME}}', $RuntimeIdentifier)
+    $vwText = $vwText.Replace('{{VERSION}}', $Version).Replace('{{RUNTIME}}', $RuntimeIdentifier).Replace("`r`n", "`n")
     Write-VwUtf8 $Destination $vwText
 }
 
@@ -109,15 +123,18 @@ function New-VwDeterministicZip {
             [IO.Compression.ZipArchiveMode]::Create,
             $false)
         try {
-            $vwFiles = Get-ChildItem -LiteralPath $SourceDirectory -File -Recurse -Force |
-                Sort-Object -Property FullName
-            foreach ($vwFile in $vwFiles) {
+            [string[]] $vwFiles = @(Get-ChildItem -LiteralPath $SourceDirectory -File -Recurse -Force | ForEach-Object { $_.FullName })
+            [Array]::Sort($vwFiles, [StringComparer]::Ordinal)
+            foreach ($vwFileName in $vwFiles) {
+                $vwFile = Get-Item -LiteralPath $vwFileName
                 $vwFilePath = [IO.Path]::GetFullPath($vwFile.FullName)
                 if (-not $vwFilePath.StartsWith($vwSourceRoot, [StringComparison]::OrdinalIgnoreCase)) {
                     throw "Archive input is outside its source directory: $vwFilePath"
                 }
                 $vwRelative = $vwFilePath.Substring($vwSourceRoot.Length).Replace('\', '/')
-                $vwEntry = $vwArchive.CreateEntry($vwRelative, [IO.Compression.CompressionLevel]::Optimal)
+                # No-compression mode and a fixed packaging host keep ZIP encoding stable.
+                $vwEntry = $vwArchive.CreateEntry($vwRelative, [IO.Compression.CompressionLevel]::NoCompression)
+                $vwEntry.ExternalAttributes = 0
                 $vwEntry.LastWriteTime = [DateTimeOffset]::new(2000, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
                 $vwInput = $vwFile.OpenRead()
                 $vwOutput = $vwEntry.Open()
@@ -154,6 +171,10 @@ try {
         '-p:IncludeNativeLibrariesForSelfExtract=true',
         '-p:DebugType=None',
         '-p:DebugSymbols=false',
+        '-p:Deterministic=true',
+        '-p:EnableSourceControlManagerQueries=false',
+        '-p:EnableSourceLink=false',
+        "-p:PathMap=$vwRepositoryRoot=/_/",
         '-p:IncludeSourceRevisionInInformationalVersion=false',
         "-p:Version=$Version",
         "-p:InformationalVersion=$Version"
@@ -189,9 +210,13 @@ try {
 
     $vwPackagedPlugin = Join-Path $vwPluginPackage 'plugins/validated-world'
     $vwPackagedManifestPath = Join-Path $vwPackagedPlugin '.codex-plugin/plugin.json'
-    $vwManifest = Get-Content -Raw -LiteralPath $vwPackagedManifestPath | ConvertFrom-Json
-    $vwManifest.version = $Version
-    Write-VwUtf8 $vwPackagedManifestPath (($vwManifest | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
+    # Preserve source formatting; ConvertTo-Json differs between PowerShell 5 and 7.
+    $vwManifestText = [IO.File]::ReadAllText($vwPackagedManifestPath)
+    if ([regex]::Matches($vwManifestText, '"version"\s*:\s*"[^"]*"').Count -ne 1) {
+        throw 'Expected exactly one plugin manifest version.'
+    }
+    $vwManifestText = [regex]::Replace($vwManifestText, '("version"\s*:\s*")[^"]*(")', ('${1}' + $Version + '${2}'))
+    Write-VwUtf8 $vwPackagedManifestPath $vwManifestText
     $vwPluginBin = Join-Path $vwPackagedPlugin "bin/$RuntimeIdentifier"
     [IO.Directory]::CreateDirectory($vwPluginBin) | Out-Null
     Copy-Item -LiteralPath $vwMcpExecutable -Destination $vwPluginBin
@@ -205,6 +230,15 @@ try {
         throw 'Packaged plugin manifest component paths are invalid.'
     }
 
+    # All non-binary package inputs are repository text; normalize checkout EOLs.
+    foreach ($vwPackageRoot in @($vwCliPackage, $vwPluginPackage)) {
+        Get-ChildItem -LiteralPath $vwPackageRoot -File -Recurse -Force |
+            Where-Object { $_.Extension -ne '.exe' } | ForEach-Object {
+                Write-VwUtf8 $_.FullName ([IO.File]::ReadAllText($_.FullName).Replace("`r`n", "`n"))
+            }
+    }
+    # Detect a changed HEAD or newly dirty tree before labeling automatic artifacts.
+    Get-VwReleaseVersion $vwRepositoryRoot $Version | Out-Null
     $vwCliArchive = Join-Path $vwOutputRoot "validated-world-cli-$Version-$RuntimeIdentifier.zip"
     $vwPluginArchive = Join-Path $vwOutputRoot "validated-world-plugin-$Version-$RuntimeIdentifier.zip"
     New-VwDeterministicZip $vwCliPackage $vwCliArchive
