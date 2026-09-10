@@ -61,6 +61,11 @@ checksum list fails. Checksums detect accidental changes, not publisher identity
 
 ## Offline checks and manual CI packaging
 
+PRs and pushes to `main` run only restore, build and the offline .NET tests.
+Their pass/fail result appears in GitHub Checks; CI uploads no artifacts and
+does not run packaging, installation or blueprint checks. Build is necessary
+to compile the tests. The README badge links to that same status.
+
 Run tests without live OpenAI calls or changing saved preferences:
 
 ```powershell
@@ -112,7 +117,25 @@ account allowance. This optional workflow uses one standard Windows runner,
 a 20-minute limit, three-day retention and read-only repository permission.
 [GitHub billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
 
-## Compatibility
+## Other local agent hosts
+
+The `codex plugin` installer is host-specific; the stdio MCP executable and
+workflow skill are not. On Windows x64, build with `Build-Release.ps1` (no Codex
+installation required), or download a tested archive. Extract the plugin ZIP
+to a stable folder and configure your client's local **stdio** server command as
+`<folder>/plugins/validated-world/bin/win-x64/ValidatedWorld.Mcp.exe` with no args.
+Give the agent `<folder>/plugins/validated-world/skills/validated-world/SKILL.md`
+as workflow instructions. These sources are also tracked under `packaging/`.
+
+For VS Code/Copilot, use **MCP: Add Server** and select a local command. Keep
+project-scoped configuration in source control with portable paths if sharing it;
+keep credentials out. See [VS Code's MCP setup](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
+Then call `host_status`, select a disposable graph, and perform your own smoke
+check. This is the generic integration route; Copilot acceptance is still pending
+T29. When developing this repository, follow `AGENTS.md` and use the source CLI
+for its blueprint regardless of host.
+
+## Supported targets
 
 The prepared matrix currently contains only Windows x64. Self-contained .NET
 single-file outputs are runtime-specific, and the native SQLite provider must be

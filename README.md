@@ -122,6 +122,16 @@ that process. See [release details](docs/release_distribution.md) for downloaded
 packages, reproducibility limits, and manual publishing. Searchable catalog
 distribution remains planned in the blueprint under `phase:t29`.
 
+**Another computer or agent:** clone the repository, read `AGENTS.md`, and use
+the tracked blueprint; no chat history or local artifact folder is needed.
+`Build-Release.ps1` builds the CLI/MCP packages without Codex installed. The
+Prepare/Install helpers target Codex hosts; other local MCP clients can use the
+same server and skill via [manual setup](docs/release_distribution.md#other-local-agent-hosts).
+
+`artifacts/release/` holds regenerable packages; `bin/`, `obj/`, and `.vs/` hold
+generated build/IDE data. They are not project memory. For reusable starting
+graphs and disposable copies, see [smoke-test foundations](samples/TechnicalProject/README.md#exploratory-smoke-test-foundations).
+
 ## CLI quick start
 
 ValidatedWorld targets .NET 10.

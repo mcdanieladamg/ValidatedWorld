@@ -120,7 +120,7 @@ public sealed class TechnicalProjectScenarioTests
     }
 
     [Fact]
-    public async Task Backup_and_bounded_diagnostic_scenarios_are_verified_without_tracking_a_database()
+    public async Task Backup_and_bounded_diagnostic_scenarios_preserve_their_source_foundations()
     {
         using var workspace = new ScenarioWorkspace();
         var application = CreateApplication(workspace, "backup", out var path);
@@ -131,8 +131,13 @@ public sealed class TechnicalProjectScenarioTests
         Assert.Equal(original.Graph, copied.Graph);
         Assert.Equal(original.StateFingerprint, copied.StateFingerprint);
         Assert.True(application.Verify(backup).IsValid);
-        Assert.DoesNotContain(Directory.GetFiles(AppContext.BaseDirectory, "*.vw.db", SearchOption.AllDirectories),
-            value => value.Contains("TechnicalProject", StringComparison.Ordinal));
+        var foundation = Path.Combine(AppContext.BaseDirectory, "TechnicalProject", "semantic-review-foundation.vw.db");
+        var foundationBytes = File.ReadAllBytes(foundation);
+        var foundationCopy = workspace.PathFor("privacy smoke copy.vw.db");
+        var copiedFoundation = application.Backup(foundation, foundationCopy);
+        Assert.Equal(application.Load(foundation).StateFingerprint, copiedFoundation.StateFingerprint);
+        Assert.True(application.Verify(foundationCopy).IsValid);
+        Assert.Equal(foundationBytes, File.ReadAllBytes(foundation));
 
         var bounded = BeginAndApply(
             application,

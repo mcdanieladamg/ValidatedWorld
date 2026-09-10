@@ -99,6 +99,39 @@ Phase and status tags are project-defined vocabulary rather than hidden engine
 semantics, but they are explicit, queryable, and reviewable. External artifact
 drift detection remains optional integration work.
 
+## Portable work state and cleanup
+
+- Put durable project meaning, decisions, open questions and remaining work in
+  the canonical blueprint. Put human instructions in README or existing docs,
+  agent instructions here, and reusable tooling/fixtures in their tracked folders.
+  No workflow may depend on a chat transcript, app memory, ignored handoff note,
+  or files outside the checkout. Leave changes unstaged for the human as usual.
+  Keep README and user-facing documentation focused on the project as it exists;
+  do not leak prompts, rejected ideas, corrections, development deliberations, or
+  other conversational residue into it. Mention negative constraints or excluded
+  alternatives only when they are materially necessary for correct usage, compatibility,
+  safety, or maintenance.
+- Ignored files are only regenerable outputs/caches or local settings/secrets.
+  Build outputs and extracted installations must have documented regeneration
+  commands. Never use `artifacts/`, `.tmp/`, or another ignored directory as
+  durable project memory or as the only copy of useful smoke-test foundations.
+- Use a unique OS temporary directory for one-off scripts, proposal payloads,
+  trial databases and diagnostics. Clean it up when done, including on failure.
+  Before pausing, preserve necessary meaning in the tracked sources above;
+  do not create an ignored resume document. If cleanup is blocked, report the
+  exact remaining path and reason, then clean it up at the next opportunity.
+- Preserve useful smoke-test starting graphs as sanitized tracked fixtures with
+  a short command for creating disposable copies. These are foundations for
+  exploratory testing, not mandatory scripted scenarios. They are more like a replacement
+  for human-style smoke QA, but run typically by agents. Remove duplicate runs and stale
+  logs after recording any actionable finding in the graph or the corresponding regression
+  test. Check a file's contents/role before deleting it. Do not delete the canonical
+  database, user settings, unknown user data, or an active installation during
+  cleanup. Completed release archives may remain as documented build outputs.
+- Keep the workflow usable by other agents through the tracked CLI/MCP and
+  skill sources. Host-specific installation adapters are optional setup;
+  distinguish them from portable project knowledge and unverified client support.
+
 ## One-phase development loop
 
 The blueprint contains exactly one phase tagged `status:current`; `precedes`
