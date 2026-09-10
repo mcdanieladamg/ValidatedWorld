@@ -150,6 +150,15 @@ dotnet build ValidatedWorld.slnx --no-restore
 dotnet test ValidatedWorld.slnx --no-build --no-restore
 ```
 
+For an offline review or when the human asks to omit live provider calls, use
+`dotnet test ValidatedWorld.slnx --no-build --no-restore --filter "Category!=LiveOpenAI"`.
+This selects tests without changing saved preferences or effective feature
+configuration. Report the live tests as excluded, not passed. It does not replace
+the authorized live acceptance checks required for a live-AI feature phase.
+Also run `eng/Test-DeveloperTools.ps1` and `eng/Test-Blueprint.ps1` for changes to
+release tooling or blueprint conventions. The latter enforces this repository's
+roadmap rules through the public CLI; it is not a built-in domain profile.
+
 If restore fails with `Unauthorized access` while reading the user-level
 `NuGet.Config`, do not inspect, copy, modify, or search for credentials in that
 file. Rerun the exact restore command with the command tool's elevated,

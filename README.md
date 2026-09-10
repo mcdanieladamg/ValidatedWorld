@@ -79,7 +79,50 @@ commit writes the complete reviewed graph in one SQLite transaction. Any stale
 state, validation, constraint, I/O, or mapping failure leaves the previous graph
 unchanged.
 
-## Quick start
+## Build and install the local plugin
+
+On Windows x64, from this repository in PowerShell with .NET 10 and Codex (or
+ChatGPT Desktop) installed. Use the exact SDK in `global.json` and a clean,
+committed checkout (for example, `main` after merging):
+
+```powershell
+# Build, run offline checks, package, and test a disposable installation
+.\eng\Prepare-LocalPlugin.ps1
+```
+
+Prepare runs `Build-Release.ps1` and `Test-Release.ps1` for you. When it succeeds,
+run the exact install command it prints to update your actual app:
+
+```powershell
+.\eng\Install-LocalPlugin.ps1 -Version <the-printed-version>
+```
+
+Restart the app, start a new task, and ask ValidatedWorld to report `host_status`
+to confirm the version. Repeat these two steps after source changes.
+
+The version is `VersionPrefix-dev.g<full-commit-id>`, using `Directory.Build.props`
+and Git `HEAD`. The same commit gets the same version locally and on GitHub.
+Existing output is never overwritten: install it again, or deliberately remove
+that version's `artifacts/release` directory before rebuilding. For uncommitted
+experiments only, use `Prepare-LocalPlugin.ps1 -Version 0.1.0-local.1` with a fresh
+explicit version. An intentional release may also supply `-Version`.
+
+**Optional GitHub build:** use **Actions → Prepare Windows packages → Run workflow**
+on the same commit and leave Version blank. It builds/tests and retains packages
+for three days; it does not publish a release or update your local installation.
+
+The plugin bundles agent instructions (a skill) and callable tools (a local MCP
+server). Installation replaces only `validated-world@validated-world-local` and
+preserves databases and reviewer settings. Keep its active `artifacts/local-plugin`
+directory. No live OpenAI calls run during preparation.
+
+If unsigned scripts are blocked, prefix the command with
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File`; this applies only to
+that process. See [release details](docs/release_distribution.md) for downloaded
+packages, reproducibility limits, and manual publishing. Searchable catalog
+distribution remains planned in the blueprint under `phase:t29`.
+
+## CLI quick start
 
 ValidatedWorld targets .NET 10.
 

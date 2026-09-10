@@ -130,16 +130,9 @@ foreach ($vwRequiredFile in @($vwCliArchive, $vwPluginArchive, $vwChecksums)) {
     if (-not (Test-Path -LiteralPath $vwRequiredFile -PathType Leaf)) { throw "Missing release artifact: $vwRequiredFile" }
 }
 
-$vwExpectedHashes = @{}
-foreach ($vwLine in Get-Content -LiteralPath $vwChecksums) {
-    if ($vwLine -notmatch '^([0-9a-f]{64})  (.+)$') { throw "Invalid checksum line: $vwLine" }
-    $vwExpectedHashes[$Matches[2]] = $Matches[1]
-}
-foreach ($vwName in $vwExpectedHashes.Keys) {
-    $vwTargetPath = Join-Path $vwArtifactsRoot $vwName
-    $vwActualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $vwTargetPath).Hash.ToLowerInvariant()
-    if ($vwActualHash -ne $vwExpectedHashes[$vwName]) { throw "Checksum mismatch: $vwName" }
-}
+. (Join-Path $PSScriptRoot 'ReleaseChecks.ps1')
+Test-VwReleaseHashes $vwArtifactsRoot @(
+    [IO.Path]::GetFileName($vwCliArchive), [IO.Path]::GetFileName($vwPluginArchive), "RELEASE_NOTES-$Version.md")
 
 $vwTemporaryRoot = Join-Path ([IO.Path]::GetTempPath()) ("ValidatedWorld release QA $([Guid]::NewGuid().ToString('N'))")
 [IO.Directory]::CreateDirectory($vwTemporaryRoot) | Out-Null
@@ -175,6 +168,8 @@ try {
     if (($vwInitialized | ConvertFrom-Json).projectId -ne 'release-smoke') { throw 'Packaged CLI project initialization failed.' }
     $vwVerified = Invoke-VwProcess $vwCliExecutable @('project', 'verify', $vwDatabase) $vwDataDirectory
     if (-not ($vwVerified | ConvertFrom-Json).isValid) { throw 'Packaged CLI SQLite verification failed.' }
+
+    & (Join-Path $PSScriptRoot 'Test-McpWorkflow.ps1') -Executable $vwMcpExecutable -Database $vwDatabase -Version $Version
 
     $vwMcpStart = [Diagnostics.ProcessStartInfo]::new()
     $vwMcpStart.FileName = $vwMcpExecutable
@@ -233,16 +228,40 @@ try {
         $vwIsolatedCodexHome = Join-Path $vwTemporaryRoot 'isolated codex home'
         [IO.Directory]::CreateDirectory($vwIsolatedCodexHome) | Out-Null
         [Environment]::SetEnvironmentVariable('CODEX_HOME', $vwIsolatedCodexHome, 'Process')
-        Invoke-VwProcess $vwCodexExecutable @('plugin', 'marketplace', 'add', $vwMarketplaceInstall, '--json') $vwTemporaryRoot | Out-Null
-        Invoke-VwProcess $vwCodexExecutable @('plugin', 'add', 'validated-world@validated-world-local', '--json') $vwTemporaryRoot | Out-Null
+        $vwHelperInstallRoot = Join-Path $vwTemporaryRoot 'helper installs'
+        $vwBeforeWhatIf = Invoke-VwProcess $vwCodexExecutable @('plugin', 'list', '--json') $vwTemporaryRoot
+        $vwMarketsBeforeWhatIf = Invoke-VwProcess $vwCodexExecutable @('plugin', 'marketplace', 'list', '--json') $vwTemporaryRoot
+        & (Join-Path $PSScriptRoot 'Install-LocalPlugin.ps1') -Version $Version -ArtifactsDirectory $vwArtifactsRoot `
+            -CodexCommand $vwCodexExecutable -InstallRoot $vwHelperInstallRoot -WhatIf 6>$null
+        if (Test-Path -LiteralPath $vwHelperInstallRoot) { throw 'WhatIf extracted an installation.' }
+        if ((Invoke-VwProcess $vwCodexExecutable @('plugin', 'list', '--json') $vwTemporaryRoot) -cne $vwBeforeWhatIf -or
+            (Invoke-VwProcess $vwCodexExecutable @('plugin', 'marketplace', 'list', '--json') $vwTemporaryRoot) -cne $vwMarketsBeforeWhatIf) {
+            throw 'WhatIf changed plugin or marketplace registration.'
+        }
+        & (Join-Path $PSScriptRoot 'Install-LocalPlugin.ps1') -Version $Version -ArtifactsDirectory $vwArtifactsRoot `
+            -CodexCommand $vwCodexExecutable -InstallRoot $vwHelperInstallRoot 6>$null
         $vwInstalled = Invoke-VwProcess $vwCodexExecutable @('plugin', 'list', '--json') $vwTemporaryRoot | ConvertFrom-Json
         if ($vwInstalled.installed.Count -ne 1 -or (($vwInstalled.installed | ConvertTo-Json -Depth 20) -notmatch 'validated-world')) {
             throw 'Codex did not report the local plugin as installed.'
         }
-        Invoke-VwProcess $vwCodexExecutable @('plugin', 'add', 'validated-world@validated-world-local', '--json') $vwTemporaryRoot | Out-Null
+        $vwFirstSource = $vwInstalled.installed[0].source.path
+        # Exercise the actual user update helper against a stale marketplace path.
+        & (Join-Path $PSScriptRoot 'Install-LocalPlugin.ps1') -Version $Version -ArtifactsDirectory $vwArtifactsRoot `
+            -CodexCommand $vwCodexExecutable -InstallRoot $vwHelperInstallRoot 6>$null
+        $vwUpdated = Invoke-VwProcess $vwCodexExecutable @('plugin', 'list', '--json') $vwTemporaryRoot | ConvertFrom-Json
+        if ($vwUpdated.installed[0].source.path -ceq $vwFirstSource) { throw 'Reinstall retained the obsolete marketplace source.' }
+        $vwCacheRoot = Join-Path $vwIsolatedCodexHome "plugins/cache/validated-world-local/validated-world/$Version"
+        $vwCachedExecutable = Join-Path $vwCacheRoot 'bin/win-x64/ValidatedWorld.Mcp.exe'
+        Assert-VwPluginVersion (Join-Path $vwCacheRoot '.codex-plugin/plugin.json') $vwCachedExecutable
+        if ((Get-FileHash -LiteralPath $vwCachedExecutable).Hash -ne (Get-FileHash -LiteralPath $vwMcpExecutable).Hash) {
+            throw 'Codex cached a different executable from the tested package.'
+        }
+        & (Join-Path $PSScriptRoot 'Test-McpWorkflow.ps1') -Executable $vwCachedExecutable -Database $vwDatabase -Version $Version
         Invoke-VwProcess $vwCodexExecutable @('plugin', 'remove', 'validated-world@validated-world-local', '--json') $vwTemporaryRoot | Out-Null
         $vwRemoved = Invoke-VwProcess $vwCodexExecutable @('plugin', 'list', '--json') $vwTemporaryRoot | ConvertFrom-Json
         if ($vwRemoved.installed.Count -ne 0) { throw 'Codex still reports a plugin after uninstall.' }
+        Invoke-VwProcess $vwCodexExecutable @('plugin', 'marketplace', 'remove', 'validated-world-local', '--json') $vwTemporaryRoot | Out-Null
+        Write-Host 'Isolated Codex checks passed: WhatIf, first install, source replacement, cached workflow, uninstall.'
         $vwCodexVersion = Invoke-VwProcess $vwCodexExecutable @('--version') $vwTemporaryRoot
     }
 
@@ -262,7 +281,7 @@ finally {
     [Environment]::SetEnvironmentVariable('CODEX_HOME', $vwPreviousCodexHome, 'Process')
     if (Test-Path -LiteralPath $vwTemporaryRoot) {
         $vwResolvedTemporary = [IO.Path]::GetFullPath($vwTemporaryRoot)
-        $vwSystemTemporary = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+        $vwSystemTemporary = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
         if (-not $vwResolvedTemporary.StartsWith($vwSystemTemporary, [StringComparison]::OrdinalIgnoreCase)) {
             throw "Refusing unsafe temporary cleanup: $vwResolvedTemporary"
         }

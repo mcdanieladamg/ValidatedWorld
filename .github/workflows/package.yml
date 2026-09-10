@@ -1,0 +1,54 @@
+name: Prepare Windows packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Leave blank for the commit-derived version; override only for an intentional release.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-windows-packages
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      VW_VERSION_OVERRIDE: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Resolve package version
+        shell: pwsh
+        run: |
+          . ./eng/ReleaseChecks.ps1
+          $version = Get-VwReleaseVersion $PWD.Path $env:VW_VERSION_OVERRIDE
+          if ($version -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') { throw 'Invalid package version.' }
+          "VW_PACKAGE_VERSION=$version" >> $env:GITHUB_ENV
+      - run: dotnet restore ValidatedWorld.slnx
+      - run: dotnet build ValidatedWorld.slnx --no-restore
+      - run: dotnet test ValidatedWorld.slnx --no-build --no-restore --filter "Category!=LiveOpenAI"
+      - shell: pwsh
+        run: ./eng/Test-DeveloperTools.ps1
+      - shell: pwsh
+        run: ./eng/Test-Blueprint.ps1
+      - shell: pwsh
+        run: ./eng/Build-Release.ps1 -Version $env:VW_PACKAGE_VERSION
+      - shell: pwsh
+        # Hosted runner need not have Codex; complete host acceptance is local.
+        run: ./eng/Test-Release.ps1 -Version $env:VW_PACKAGE_VERSION
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: artifacts/release/${{ env.VW_PACKAGE_VERSION }}/*
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
