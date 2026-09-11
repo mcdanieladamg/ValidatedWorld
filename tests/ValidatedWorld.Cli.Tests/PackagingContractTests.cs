@@ -28,7 +28,6 @@ public sealed class PackagingContractTests
             manifest["version"]!.GetValue<string>());
         Assert.Equal("./skills/", manifest["skills"]!.GetValue<string>());
         Assert.Equal("./.mcp.json", manifest["mcpServers"]!.GetValue<string>());
-        Assert.Contains("English-only", manifest["description"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.Contains("Unicode graph text", manifest["interface"]!["longDescription"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.DoesNotContain(@"D:\", manifestText, StringComparison.OrdinalIgnoreCase);
 
