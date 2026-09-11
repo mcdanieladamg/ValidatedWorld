@@ -49,9 +49,16 @@ public sealed class GraphProjector
     }
 
     public GraphProjectionResult Project(ProjectGraph baseGraph, GraphOperationBatch operations)
+        => Project(baseGraph, operations, graph => new GraphValidator().Validate(graph));
+
+    public GraphProjectionResult Project(
+        ProjectGraph baseGraph,
+        GraphOperationBatch operations,
+        Func<ProjectGraph, GraphValidationResult> validate)
     {
         ArgumentNullException.ThrowIfNull(baseGraph);
         ArgumentNullException.ThrowIfNull(operations);
+        ArgumentNullException.ThrowIfNull(validate);
 
         var nodes = BuildUniqueMap(baseGraph.Nodes, node => node.Id, "base-duplicate-node-id");
         var edges = BuildUniqueMap(baseGraph.Edges, edge => edge.Id, "base-duplicate-edge-id");
@@ -73,7 +80,7 @@ public sealed class GraphProjector
             baseGraph.PurposeNodeId,
             nodes.Values,
             edges.Values);
-        var validation = new GraphValidator().Validate(graph);
+        var validation = validate(graph);
         return new GraphProjectionResult(graph, operations, validation);
     }
 

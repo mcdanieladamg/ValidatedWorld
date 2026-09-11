@@ -31,7 +31,7 @@ public sealed class SqliteProjectStoreTests
         Assert.Equal(1, status.SchemaVersion);
         Assert.NotEmpty(status.SqliteVersion);
         Assert.True(verification.IsValid);
-        Assert.Equal(9, verification.Checks.Count);
+        Assert.Equal(10, verification.Checks.Count);
         Assert.Equal(bytesBeforeReads, bytesAfterReads);
         Assert.Equal(new[] { databasePath }, Directory.GetFiles(Path.GetDirectoryName(databasePath)!));
     }
@@ -43,7 +43,7 @@ public sealed class SqliteProjectStoreTests
         var application = CreateApplication();
 
         var versionPath = CreateSample(application, workspace, "unknown-version.vw.db");
-        Execute(versionPath, "PRAGMA user_version = 2");
+        Execute(versionPath, "PRAGMA user_version = 3");
         AssertStorageError(ProjectStorageErrorCode.UnsupportedVersion, () => application.Verify(versionPath));
 
         var migrationPath = CreateSample(application, workspace, "migration-mismatch.vw.db");

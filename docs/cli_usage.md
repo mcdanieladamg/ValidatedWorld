@@ -1,5 +1,8 @@
 # ValidatedWorld CLI usage
 
+For format-v2 full-graph rules, bundled and user-authored templates, and the code-
+development workflow, see [Templates and deterministic rules](templates_and_rules.md).
+
 ValidatedWorld is a local, headless .NET 10 command-line application.
 One-shot commands cover project storage and bounded reads. Long-lived change
 sessions have two interfaces over the same Application behavior:

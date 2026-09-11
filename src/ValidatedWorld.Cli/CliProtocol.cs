@@ -159,7 +159,8 @@ internal sealed record StoredProjectDto(
     int EdgeCount,
     string StateFingerprint,
     string CreatedUtc,
-    string UpdatedUtc);
+    string UpdatedUtc,
+    int SchemaVersion);
 internal sealed record LoadedProjectDto(StoredProjectDto Project, GraphDto Graph);
 internal sealed record ProjectStatusDto(
     string Path,
@@ -177,7 +178,11 @@ internal sealed record ProjectVerificationDto(
     string StateFingerprint,
     int NodeCount,
     int EdgeCount,
-    IReadOnlyList<string> Checks);
+    IReadOnlyList<string> Checks,
+    ValidationStatus RuleStatus,
+    IReadOnlyList<RuleDiagnosticDto> RuleDiagnostics);
+internal sealed record RuleDiagnosticDto(string Code, string Message, string? RuleId,
+    IReadOnlyList<string> OffendingEntityIds, int TotalOffendingCount, int OmittedOffendingCount);
 internal sealed record SqlExportDto(string Path, string StateFingerprint, string Sql);
 internal sealed record ProjectMetadataChangeDto(string Field, string OldValue, string NewValue);
 internal sealed record ProjectDiffSummaryDto(
@@ -433,14 +438,19 @@ internal static class CliDto
         value.Graph.Edges.Count,
         value.StateFingerprint,
         Utc(value.CreatedUtc),
-        Utc(value.UpdatedUtc));
+        Utc(value.UpdatedUtc),
+        value.SchemaVersion);
 
     public static ProjectStatusDto Status(ProjectStatus value) => new(
         value.Path, value.ProjectId.Value, value.Title, value.PurposeNodeId.Value,
         value.NodeCount, value.EdgeCount, value.StateFingerprint, value.SchemaVersion, value.SqliteVersion);
 
     public static ProjectVerificationDto Verification(ProjectVerification value) => new(
-        value.Path, value.IsValid, value.StateFingerprint, value.NodeCount, value.EdgeCount, value.Checks);
+        value.Path, value.IsValid, value.StateFingerprint, value.NodeCount, value.EdgeCount, value.Checks,
+        value.RuleStatus, (value.RuleDiagnostics ?? []).Select(item => new RuleDiagnosticDto(
+            item.Code, item.Message, item.RuleId?.Value,
+            item.OffendingEntityIds.Select(id => id.Value).ToArray(),
+            item.TotalOffendingCount, item.OmittedOffendingCount)).ToArray());
 
     public static ProjectDiffDto Diff(ProjectDiffResult value) => new(
         value.BasePath,

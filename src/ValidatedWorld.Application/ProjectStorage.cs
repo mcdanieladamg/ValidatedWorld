@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using ValidatedWorld.Core;
+using ValidatedWorld.Serialization;
 using ValidatedWorld.Validation;
 
 namespace ValidatedWorld.Application;
@@ -39,7 +40,8 @@ public sealed record StoredProject(
     ProjectGraph Graph,
     string StateFingerprint,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    int SchemaVersion = 1);
 
 public sealed record ProjectStatus(
     string Path,
@@ -58,7 +60,9 @@ public sealed record ProjectVerification(
     string StateFingerprint,
     int NodeCount,
     int EdgeCount,
-    IReadOnlyList<string> Checks);
+    IReadOnlyList<string> Checks,
+    ValidationStatus RuleStatus = ValidationStatus.Valid,
+    IReadOnlyList<RuleDiagnostic>? RuleDiagnostics = null);
 
 /// <summary>A deterministic SQL representation of one verified current project.</summary>
 public sealed record ProjectSqlExport(string Path, string StateFingerprint, string Sql);
@@ -69,7 +73,8 @@ public sealed record ProjectWriteRequest(
     ProjectId ProjectId,
     string BaseFingerprint,
     GraphOperationBatch Operations,
-    string ProposedFingerprint);
+    string ProposedFingerprint,
+    int BaseSchemaVersion = 1);
 
 public enum ProjectWriteOutcome
 {
@@ -91,6 +96,10 @@ public interface IProjectStore
 {
     StoredProject Initialize(string path, ProjectGraph graph);
 
+    StoredProject InitializeWithSchemaVersion(string path, ProjectGraph graph, int schemaVersion) =>
+        schemaVersion == 1 ? Initialize(path, graph) : throw new ProjectStorageException(
+            ProjectStorageErrorCode.UnsupportedVersion, "This store cannot initialize the requested project format.");
+
     StoredProject Load(string path);
 
     ProjectStatus GetStatus(string path);
@@ -102,6 +111,9 @@ public interface IProjectStore
     ProjectSqlExport ExportSql(string path);
 
     ProjectWriteResult Write(ProjectWriteRequest request);
+
+    StoredProject Upgrade(string path, int targetSchemaVersion) => throw new ProjectStorageException(
+        ProjectStorageErrorCode.UnsupportedVersion, "This store does not support project format upgrades.");
 }
 
 /// <summary>Public project use cases over the configured store.</summary>
@@ -163,6 +175,18 @@ public sealed partial class ProjectApplication
 
     public StoredProject Load(string path) => _store.Load(path);
 
+    public StoredProject Upgrade(string path, int targetSchemaVersion = 2)
+    {
+        lock (_sessionLock)
+        {
+            if (_activeSessions.Values.Any(session =>
+                    StringComparer.OrdinalIgnoreCase.Equals(Path.GetFullPath(session.BaseProject.Path), Path.GetFullPath(path))))
+                throw new ChangeSessionException(ChangeSessionErrorCode.SessionAlreadyActive,
+                    "Discard or write the active change session before upgrading the project format.");
+        }
+        return _store.Upgrade(path, targetSchemaVersion);
+    }
+
     public ProjectStatus Status(string path) => _store.GetStatus(path);
 
     public ProjectVerification Verify(string path) => _store.Verify(path);
@@ -210,6 +234,31 @@ public sealed partial class ProjectApplication
             throw new ProjectStorageException(
                 ProjectStorageErrorCode.InvalidGraph,
                 $"The project graph cannot be initialized: {first}");
+        }
+    }
+
+    private GraphValidationResult ValidateForFormat(ProjectGraph graph, int schemaVersion)
+    {
+        var structural = _validator.Validate(graph);
+        if (!structural.IsValid) return structural;
+        var hasRuleEntities = graph.Nodes.Any(node => node.Kind is RuleProtocol.RuleKind or RuleProtocol.ViewKind);
+        if (schemaVersion < 2)
+        {
+            return hasRuleEntities
+                ? GraphValidator.CombineRules(structural, new RuleValidationResult(ValidationStatus.Inconclusive,
+                    [new RuleDiagnostic("rule-format-requires-v2", "Validation rule and view nodes require project format v2.", null, [], 0, 0)]))
+                : structural;
+        }
+
+        try
+        {
+            return GraphValidator.CombineRules(structural,
+                new GraphRuleValidator().Validate(graph, RuleProtocol.Parse(graph)));
+        }
+        catch (RuleFormatException exception)
+        {
+            return GraphValidator.CombineRules(structural, new RuleValidationResult(ValidationStatus.Inconclusive,
+                [new RuleDiagnostic(exception.Code, exception.Message, exception.EntityId, [], 0, 0)]));
         }
     }
 }

@@ -211,7 +211,9 @@ internal sealed record McpChangePreview(
     IReadOnlyList<McpAffectedOmission> Omissions,
     IReadOnlyList<McpDisposition> Dispositions,
     IReadOnlyList<string> PresentedContextNodeIds,
-    McpReadiness Readiness);
+    McpReadiness Readiness,
+    ValidationDto CurrentValidation,
+    ValidationDto ProposedValidation);
 
 internal sealed record McpSemanticReviewConcern(
     string Code,
@@ -308,6 +310,40 @@ internal sealed class McpProjectService(
             "The purpose-only project was initialized and selected. Add graph content through a reviewed MCP change session.");
     }
 
+    public IReadOnlyList<TemplateDescriptor> ListTemplates() => application.ListTemplates();
+
+    public object DescribeTemplate(string nameOrPath)
+    {
+        var template = application.ReadTemplate(nameOrPath);
+        return new
+        {
+            descriptor = GraphTemplateCatalog.Describe(template),
+            template.PurposeNodeId,
+            requiredInputs = new[] { "path", "projectId", "title", "purposeText" },
+            workflow = "Inspect repository evidence and uncertainty, instantiate explicitly, then use ordinary reviewed changes to populate and activate the roadmap.",
+        };
+    }
+
+    public McpProjectInitializationResult InitializeTemplate(
+        string nameOrPath,
+        string path,
+        string projectId,
+        string title,
+        string purposeText)
+    {
+        lock (_gate) EnsureNoActiveSession();
+        var normalized = ProjectPathPolicy.New(path);
+        var created = application.InstantiateTemplate(nameOrPath, normalized, new ProjectId(projectId), title, purposeText);
+        var selected = ToSelection(application.Status(created.Path));
+        lock (_gate)
+        {
+            EnsureNoActiveSession();
+            _selection = selected;
+        }
+        return new McpProjectInitializationResult(selected,
+            "The selected template was instantiated as a format-v2 project and selected. Attached active rules govern subsequent reviewed changes.");
+    }
+
     public McpProjectSelection Status()
     {
         EnsureDefaultSelected();
@@ -319,6 +355,24 @@ internal sealed class McpProjectService(
         EnsureDefaultSelected();
         var selected = Selection();
         return application.Queries(selected.Path, new ProjectId(selected.ProjectId));
+    }
+
+    public object ValidateProject()
+    {
+        var selection = Status();
+        var result = application.Verify(selection.Path);
+        return new
+        {
+            result.IsValid,
+            result.RuleStatus,
+            ruleDiagnostics = (result.RuleDiagnostics ?? []).Select(item => new
+            {
+                item.Code, item.Message, ruleId = item.RuleId?.Value,
+                offendingEntityIds = item.OffendingEntityIds.Select(id => id.Value).ToArray(),
+                item.TotalOffendingCount, item.OmittedOffendingCount,
+            }).ToArray(),
+            result.Checks,
+        };
     }
 
     public McpChangeSummary BeginChange(string intent)
@@ -543,7 +597,9 @@ internal sealed class McpProjectService(
             disposition.Kind.ToString(),
             disposition.Rationale)).ToArray(),
         session.PresentedContextNodeIds.Select(id => id.Value).ToArray(),
-        Readiness(session.Readiness));
+        Readiness(session.Readiness),
+        ValidationProtocol.ToDto(session.Affected.CurrentValidation),
+        ValidationProtocol.ToDto(session.Affected.ProposedValidation));
 
     private ChangeSessionSnapshot CompleteReviewForWrite(ChangeSessionSnapshot session)
     {

@@ -202,8 +202,11 @@ public sealed partial class ProjectApplication
             }
 
             var now = UtcNow();
-            var projection = new GraphProjector().Project(project.Graph, GraphOperationBatch.Empty);
-            var affected = new AffectedAnalyzer().Analyze(project.Graph, projection);
+            var currentValidation = ValidateForFormat(project.Graph, project.SchemaVersion);
+            var projection = new GraphProjector().Project(project.Graph, GraphOperationBatch.Empty,
+                graph => ValidateForFormat(graph, project.SchemaVersion));
+            var affected = new AffectedAnalyzer().Analyze(project.Graph, projection,
+                currentValidationOverride: currentValidation);
             var state = new ActiveChangeSession(
                 project,
                 sessionId,
@@ -243,7 +246,8 @@ public sealed partial class ProjectApplication
                 state.BaseProject.Graph,
                 operations,
                 scopeParents);
-            var projection = new GraphProjector().Project(state.BaseProject.Graph, expanded);
+            var projection = new GraphProjector().Project(state.BaseProject.Graph, expanded,
+                graph => ValidateForFormat(graph, state.BaseProject.SchemaVersion));
             return new ChangeFocusResult(
                 expanded,
                 GraphFingerprints.Operations(state.BaseProject.StateFingerprint, expanded),
@@ -294,7 +298,8 @@ public sealed partial class ProjectApplication
         {
             var state = FindAndVerify(reference);
             VerifyBaseUnchanged(state);
-            var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, state.Projection, options);
+            var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, state.Projection, options,
+                ValidateForFormat(state.BaseProject.Graph, state.BaseProject.SchemaVersion));
             var refresh = state.Review.Refresh(affected);
             state.Affected = affected;
             state.UpdatedUtc = UtcNow();
@@ -481,7 +486,8 @@ public sealed partial class ProjectApplication
                 state.BaseProject.Graph.ProjectId,
                 state.BaseProject.StateFingerprint,
                 state.Projection.Operations,
-                GraphFingerprints.Proposed(state.Projection.Graph)));
+                GraphFingerprints.Proposed(state.Projection.Graph),
+                state.BaseProject.SchemaVersion));
             var result = new ChangeWriteResult(
                 write.Outcome switch
                 {
@@ -608,6 +614,13 @@ public sealed partial class ProjectApplication
                 ChangeSessionErrorCode.StaleBaseFingerprint,
                 "The canonical project changed after this session began; discard it and begin again.");
         }
+
+        if (current.SchemaVersion != state.BaseProject.SchemaVersion)
+        {
+            throw new ChangeSessionException(
+                ChangeSessionErrorCode.StaleBaseFingerprint,
+                "The canonical project format changed after this session began; discard it and begin again.");
+        }
     }
 
     private static void VerifyReviewUpdate(ActiveChangeSession state, ChangeReviewUpdate update)
@@ -731,8 +744,10 @@ public sealed partial class ProjectApplication
         GraphOperationBatch operations,
         AffectedAnalysisOptions? options)
     {
-        var projection = new GraphProjector().Project(state.BaseProject.Graph, operations);
-        var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, projection, options);
+        var projection = new GraphProjector().Project(state.BaseProject.Graph, operations,
+            graph => ValidateForFormat(graph, state.BaseProject.SchemaVersion));
+        var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, projection, options,
+            ValidateForFormat(state.BaseProject.Graph, state.BaseProject.SchemaVersion));
         var refresh = state.Review.Refresh(affected);
         state.Projection = projection;
         state.Affected = affected;

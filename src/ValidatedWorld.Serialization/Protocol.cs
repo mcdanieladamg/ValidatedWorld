@@ -82,7 +82,11 @@ public sealed record DiagnosticDto(
     string Message,
     string? EntityId,
     string? RelatedEntityId,
-    IReadOnlyList<string> Path);
+    IReadOnlyList<string> Path,
+    string? RuleId = null,
+    IReadOnlyList<string>? OffendingEntityIds = null,
+    int? TotalOffendingCount = null,
+    int? OmittedOffendingCount = null);
 
 public sealed record ValidationDto(ValidationStatus Status, IReadOnlyList<DiagnosticDto> Diagnostics);
 
@@ -99,7 +103,9 @@ public static class ValidationProtocol
 
         return new(result.Status, result.Diagnostics.Select(diagnostic => new DiagnosticDto(
             diagnostic.Code, diagnostic.Message, diagnostic.EntityId?.Value,
-            diagnostic.RelatedEntityId?.Value, diagnostic.Path?.Select(id => id.Value).ToArray() ?? [])).ToArray());
+            diagnostic.RelatedEntityId?.Value, diagnostic.Path?.Select(id => id.Value).ToArray() ?? [],
+            diagnostic.RuleId?.Value, diagnostic.OffendingEntityIds?.Select(id => id.Value).ToArray(),
+            diagnostic.TotalOffendingCount, diagnostic.OmittedOffendingCount)).ToArray());
     }
 }
 

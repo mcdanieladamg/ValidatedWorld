@@ -25,8 +25,27 @@ internal sealed class McpTools(McpProjectService projects)
         [Description("Human-readable governing purpose text.")] string purposeText) =>
         projects.Initialize(path, projectId, title, purposeNodeId, purposeText);
 
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Lists bundled graph templates. User-authored JSON templates can be supplied explicitly to describe_template or initialize_from_template.")]
+    public IReadOnlyList<TemplateDescriptor> ListTemplates() => projects.ListTemplates();
+
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Returns bounded metadata and required inputs for a bundled template name or explicit local JSON template path.")]
+    public object DescribeTemplate([Description("Bundled template name or explicit local JSON path.")] string nameOrPath) =>
+        projects.DescribeTemplate(nameOrPath);
+
+    [McpServerTool(UseStructuredContent = true, Destructive = false, OpenWorld = false), Description("Instantiates and selects an explicitly chosen bundled or user-authored template at a new non-overwriting .vw.db path. The host agent must inspect evidence and uncertainty rather than inventing project claims.")]
+    public McpProjectInitializationResult InitializeFromTemplate(
+        [Description("Bundled template name or explicit local JSON path.")] string nameOrPath,
+        [Description("New destination path ending in .vw.db.")] string path,
+        [Description("Stable project identifier.")] string projectId,
+        [Description("Human-readable title.")] string title,
+        [Description("Governing purpose based on human instructions and inspected evidence.")] string purposeText) =>
+        projects.InitializeTemplate(nameOrPath, path, projectId, title, purposeText);
+
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Returns the status and identity of the currently selected project, including its normalized path and state fingerprint.")]
     public McpProjectSelection ProjectStatus() => projects.Status();
+
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Runs structural verification and every attached active full-graph rule for the selected project, returning bounded actionable diagnostics.")]
+    public object ValidateProject() => projects.ValidateProject();
 
     [McpServerTool(UseStructuredContent = true, Destructive = false, OpenWorld = false), Description("Begins one sequential, process-local MCP change session for the selected project. The returned revision is required for later mutations.")]
     public McpChangeSummary BeginChange(

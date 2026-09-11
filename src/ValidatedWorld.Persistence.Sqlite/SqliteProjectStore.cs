@@ -46,7 +46,10 @@ public sealed class SqliteProjectStore : IProjectStore
         _writeFault = writeFault;
     }
 
-    public StoredProject Initialize(string path, ProjectGraph graph)
+    public StoredProject Initialize(string path, ProjectGraph graph) =>
+        InitializeWithSchemaVersion(path, graph, SqliteSchema.LegacyVersion);
+
+    public StoredProject InitializeWithSchemaVersion(string path, ProjectGraph graph, int schemaVersion)
     {
         ArgumentNullException.ThrowIfNull(graph);
         var fullPath = NormalizeNewPath(path, ProjectStorageErrorCode.ProjectAlreadyExists);
@@ -61,7 +64,7 @@ public sealed class SqliteProjectStore : IProjectStore
             using (var connection = OpenConnection(temporaryPath, SqliteOpenMode.ReadWriteCreate))
             {
                 var now = _utcNow().ToUniversalTime();
-                SqliteSchema.ApplyMigration(connection, now);
+                SqliteSchema.ApplyMigration(connection, now, schemaVersion);
                 InsertInitialGraph(connection, graph, now);
                 temporaryProject = LoadAndVerify(connection, temporaryPath);
             }
@@ -109,7 +112,7 @@ public sealed class SqliteProjectStore : IProjectStore
                 project.Graph.Nodes.Count,
                 project.Graph.Edges.Count,
                 project.StateFingerprint,
-                SqliteSchema.CurrentVersion,
+                project.SchemaVersion,
                 sqliteVersion);
         }
         catch (Exception exception)
@@ -121,9 +124,10 @@ public sealed class SqliteProjectStore : IProjectStore
     public ProjectVerification Verify(string path)
     {
         var project = Load(path);
+        var rules = ValidateRules(project.Graph, project.SchemaVersion);
         return new ProjectVerification(
             project.Path,
-            true,
+            rules.IsValid,
             project.StateFingerprint,
             project.Graph.Nodes.Count,
             project.Graph.Edges.Count,
@@ -136,8 +140,29 @@ public sealed class SqliteProjectStore : IProjectStore
                 "foreign-keys",
                 "strict-row-mapping",
                 "graph-validation",
+                "full-graph-rules",
                 "state-fingerprint",
-            ]);
+            ],
+            rules.Status,
+            rules.Diagnostics);
+    }
+
+    public StoredProject Upgrade(string path, int targetSchemaVersion)
+    {
+        if (targetSchemaVersion != SqliteSchema.CurrentVersion)
+            throw new ProjectStorageException(ProjectStorageErrorCode.UnsupportedVersion,
+                $"Only upgrade target {SqliteSchema.CurrentVersion} is supported.");
+        var fullPath = NormalizeExistingPath(path);
+        try
+        {
+            using var connection = OpenConnection(fullPath, SqliteOpenMode.ReadWrite);
+            SqliteSchema.UpgradeToV2(connection, _utcNow().ToUniversalTime());
+            return LoadAndVerify(connection, fullPath);
+        }
+        catch (Exception exception)
+        {
+            throw Translate(exception, $"Could not upgrade SQLite project '{fullPath}'.");
+        }
     }
 
     public StoredProject Backup(string sourcePath, string destinationPath)
@@ -187,7 +212,7 @@ public sealed class SqliteProjectStore : IProjectStore
         var sql = new StringBuilder();
         sql.AppendLine("PRAGMA foreign_keys = ON;");
         sql.Append("PRAGMA application_id = ").Append(SqliteSchema.ApplicationId).AppendLine(";");
-        sql.Append("PRAGMA user_version = ").Append(SqliteSchema.CurrentVersion).AppendLine(";");
+        sql.Append("PRAGMA user_version = ").Append(project.SchemaVersion).AppendLine(";");
         foreach (var statement in SqliteSchema.DefinitionStatements)
         {
             sql.Append(statement.Trim()).AppendLine(";");
@@ -196,6 +221,9 @@ public sealed class SqliteProjectStore : IProjectStore
         sql.AppendLine("BEGIN TRANSACTION;");
         AppendInsert(sql, "schema_migrations", ["migration_id", "checksum", "applied_utc"],
             [SqliteSchema.MigrationId, SqliteSchema.MigrationChecksum, SqliteSchema.FormatUtc(project.CreatedUtc)]);
+        if (project.SchemaVersion == SqliteSchema.CurrentVersion)
+            AppendInsert(sql, "schema_migrations", ["migration_id", "checksum", "applied_utc"],
+                [SqliteSchema.RuleFormatMigrationId, SqliteSchema.RuleFormatMigrationChecksum, SqliteSchema.FormatUtc(project.UpdatedUtc)]);
         AppendInsert(sql, "projects",
             ["project_id", "title", "purpose_node_id", "created_utc", "updated_utc", "state_fingerprint"],
             [project.Graph.ProjectId.Value, project.Graph.Title, project.Graph.PurposeNodeId.Value,
@@ -231,6 +259,18 @@ public sealed class SqliteProjectStore : IProjectStore
         SqliteConnection? connection = null;
         try
         {
+            var preflight = Load(fullPath);
+            if (preflight.Graph.ProjectId != request.ProjectId ||
+                !StringComparer.Ordinal.Equals(preflight.StateFingerprint, request.BaseFingerprint) ||
+                preflight.SchemaVersion != request.BaseSchemaVersion)
+                return new ProjectWriteResult(ProjectWriteOutcome.Stale, null, null,
+                    "The canonical project changed after the reviewed session began.");
+            var preflightProjection = new GraphProjector().Project(preflight.Graph, request.Operations);
+            var preflightRules = ValidateRules(preflightProjection.Graph, preflight.SchemaVersion);
+            if (!preflightRules.IsValid)
+                return new ProjectWriteResult(ProjectWriteOutcome.Failed, null, ProjectStorageErrorCode.InvalidGraph,
+                    preflightRules.Diagnostics.FirstOrDefault()?.Message ?? "Full-graph rules did not pass before the write transaction.");
+
             connection = OpenConnection(fullPath, SqliteOpenMode.ReadWrite);
             ExecuteTransactionCommand(connection, "BEGIN IMMEDIATE");
             transactionStarted = true;
@@ -238,7 +278,8 @@ public sealed class SqliteProjectStore : IProjectStore
 
             var current = LoadAndVerify(connection, fullPath);
             if (current.Graph.ProjectId != request.ProjectId ||
-                !StringComparer.Ordinal.Equals(current.StateFingerprint, request.BaseFingerprint))
+                !StringComparer.Ordinal.Equals(current.StateFingerprint, request.BaseFingerprint) ||
+                current.SchemaVersion != request.BaseSchemaVersion)
             {
                 Rollback(connection);
                 transactionStarted = false;
@@ -260,6 +301,14 @@ public sealed class SqliteProjectStore : IProjectStore
                     null,
                     ProjectStorageErrorCode.InvalidGraph,
                     "The proposal is not structurally valid at write time.");
+            }
+            var ruleValidation = ValidateRules(projection.Graph, current.SchemaVersion);
+            if (!ruleValidation.IsValid)
+            {
+                Rollback(connection);
+                transactionStarted = false;
+                return new ProjectWriteResult(ProjectWriteOutcome.Failed, null, ProjectStorageErrorCode.InvalidGraph,
+                    ruleValidation.Diagnostics.FirstOrDefault()?.Message ?? "Full-graph rules did not pass at write time.");
             }
 
             var expectedFingerprint = GraphFingerprints.Proposed(projection.Graph);
@@ -311,7 +360,7 @@ public sealed class SqliteProjectStore : IProjectStore
                 Rollback(connection);
             }
 
-            if (exception is SqliteException sqlite && IsBusy(sqlite))
+            if (FindSqliteException(exception) is { } sqlite && IsBusy(sqlite))
             {
                 return new ProjectWriteResult(
                     ProjectWriteOutcome.Busy,
@@ -336,7 +385,7 @@ public sealed class SqliteProjectStore : IProjectStore
 
     private StoredProject LoadAndVerify(SqliteConnection connection, string fullPath)
     {
-        SqliteSchema.Verify(connection);
+        var schemaVersion = SqliteSchema.Verify(connection);
         VerifyIntegrity(connection);
 
         var projectRow = ReadProjectRow(connection);
@@ -364,7 +413,37 @@ public sealed class SqliteProjectStore : IProjectStore
             graph,
             computedFingerprint,
             projectRow.CreatedUtc,
-            projectRow.UpdatedUtc);
+            projectRow.UpdatedUtc,
+            schemaVersion);
+    }
+
+    private static SqliteException? FindSqliteException(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+            if (current is SqliteException sqlite) return sqlite;
+        return null;
+    }
+
+    private static RuleValidationResult ValidateRules(ProjectGraph graph, int schemaVersion)
+    {
+        var containsRules = graph.Nodes.Any(node => node.Kind is RuleProtocol.RuleKind or RuleProtocol.ViewKind);
+        if (schemaVersion < SqliteSchema.CurrentVersion)
+        {
+            return containsRules
+                ? new RuleValidationResult(ValidationStatus.Inconclusive,
+                    [new RuleDiagnostic("rule-format-requires-v2", "Validation rule and view nodes require project format v2.", null, [], 0, 0)])
+                : new RuleValidationResult(ValidationStatus.Valid, []);
+        }
+        try
+        {
+            var document = RuleProtocol.Parse(graph);
+            return new GraphRuleValidator().Validate(graph, document);
+        }
+        catch (RuleFormatException exception)
+        {
+            return new RuleValidationResult(ValidationStatus.Inconclusive,
+                [new RuleDiagnostic(exception.Code, exception.Message, exception.EntityId, [], 0, 0)]);
+        }
     }
 
     private void InsertInitialGraph(SqliteConnection connection, ProjectGraph graph, DateTimeOffset now)

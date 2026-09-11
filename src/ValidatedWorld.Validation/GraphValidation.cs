@@ -47,7 +47,11 @@ public sealed record ValidationDiagnostic(
     string Message,
     EntityId? EntityId = null,
     EntityId? RelatedEntityId = null,
-    IReadOnlyList<EntityId>? Path = null);
+    IReadOnlyList<EntityId>? Path = null,
+    EntityId? RuleId = null,
+    IReadOnlyList<EntityId>? OffendingEntityIds = null,
+    int? TotalOffendingCount = null,
+    int? OmittedOffendingCount = null);
 
 public sealed class GraphValidationResult
 {
@@ -77,6 +81,30 @@ public sealed class GraphValidationResult
 /// <summary>Runs the common deterministic structural checks for a project graph.</summary>
 public sealed class GraphValidator
 {
+    public static GraphValidationResult CombineRules(
+        GraphValidationResult structural,
+        RuleValidationResult rules)
+    {
+        ArgumentNullException.ThrowIfNull(structural);
+        ArgumentNullException.ThrowIfNull(rules);
+        var diagnostics = structural.Diagnostics.Concat(rules.Diagnostics.Select(diagnostic => new ValidationDiagnostic(
+            diagnostic.Code,
+            diagnostic.Message,
+            diagnostic.RuleId,
+            null,
+            null,
+            diagnostic.RuleId,
+            diagnostic.OffendingEntityIds,
+            diagnostic.TotalOffendingCount,
+            diagnostic.OmittedOffendingCount)));
+        var status = structural.Status == ValidationStatus.Inconclusive || rules.Status == ValidationStatus.Inconclusive
+            ? ValidationStatus.Inconclusive
+            : structural.Status == ValidationStatus.Invalid || rules.Status == ValidationStatus.Invalid
+                ? ValidationStatus.Invalid
+                : ValidationStatus.Valid;
+        return new GraphValidationResult(status, structural.Index, diagnostics);
+    }
+
     public GraphValidationResult Validate(
         ProjectGraph graph,
         GraphValidationOptions? options = null)
