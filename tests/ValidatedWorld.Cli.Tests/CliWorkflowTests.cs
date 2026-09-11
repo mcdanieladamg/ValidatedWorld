@@ -46,6 +46,8 @@ public sealed class CliWorkflowTests
         var help = await Run(["--help"]);
         Assert.Equal(CliRunner.SuccessExitCode, help.ExitCode);
         Assert.Contains($"Version {CliRunner.ProductVersion}", help.Output, StringComparison.Ordinal);
+        Assert.Contains("Supported product language: English", help.Output, StringComparison.Ordinal);
+        Assert.Contains("Unicode graph text", help.Output, StringComparison.Ordinal);
         Assert.Contains("read      Run bounded graph queries", help.Output, StringComparison.Ordinal);
         Assert.Contains("shell     Run the stateful flag-based interface", help.Output, StringComparison.Ordinal);
         Assert.Contains("ai-assistant-shell", help.Output, StringComparison.Ordinal);
@@ -57,6 +59,7 @@ public sealed class CliWorkflowTests
         Assert.Contains("commit --bypass-ai-review", shellHelp.Output, StringComparison.Ordinal);
         var assistantHelp = await Run(["ai-assistant-shell", "--help"]);
         Assert.Contains("cannot use raw SQL", assistantHelp.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("supported authoring language is English", assistantHelp.Output, StringComparison.Ordinal);
 
         var created = await Run(["sample", "create", "technical-project", project]);
         Assert.Equal(CliRunner.SuccessExitCode, created.ExitCode);
@@ -447,6 +450,8 @@ public sealed class CliWorkflowTests
             .Select(value => value!.GetValue<string>()));
         Assert.Contains("read.health", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
+        Assert.Equal("English", help["payload"]!["supportedProductLanguage"]!.GetValue<string>());
+        Assert.Contains("Unicode text", help["payload"]!["graphTextSupport"]!.GetValue<string>());
         Assert.DoesNotContain("ai.review", help["payload"]!["commands"]!.AsArray()
             .Select(value => value!.GetValue<string>()));
         var aiStatus = await host.Send("ai.status", new { });

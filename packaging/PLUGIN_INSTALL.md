@@ -4,6 +4,11 @@ This archive is a local Codex marketplace containing the ValidatedWorld plugin
 and its self-contained Windows x64 MCP host. It runs in local Codex hosts over
 stdio.
 
+This initial release is supported in English only. The graph format stores
+Unicode text, but instructions, diagnostics, bundled content, search tuning, and
+optional AI workflows are authored and validated only in English; non-English
+workflow quality is unsupported.
+
 After extracting the complete archive to a stable user-owned directory:
 
 ```powershell

@@ -291,8 +291,10 @@ not a Git operation.
   the same change. Remove this instruction only when the final roadmap phase
   explicitly establishes a supported compatibility baseline.
 - Target .NET 10 and use `ValidatedWorld.slnx`.
-- Keep the MVP headless, local, and hardcoded in English. Do not add
-  localization infrastructure.
+- Keep the initial MVP and public release headless, local, and English-only across
+  commands, help, diagnostics, bundled content, documentation, search tuning,
+  and optional AI workflows. Unicode graph text may be stored and round-tripped,
+  but non-English workflows are unsupported and unvalidated.
 - Store one current human-readable graph in an embedded SQLite `.vw.db` file.
 - Use stable-ID text nodes and explicit stable-ID labeled edges whose review
   direction controls affected propagation.

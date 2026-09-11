@@ -36,6 +36,28 @@ public sealed class SqliteProjectStoreTests
     }
 
     [Fact]
+    public void Unicode_graph_text_round_trips_without_claiming_non_english_workflow_support()
+    {
+        using var workspace = new TestWorkspace();
+        var databasePath = workspace.PathFor("unicode-text.vw.db");
+        var application = CreateApplication();
+        const string title = "Plan de investigación — 研究計画";
+        const string purposeText = "Préserver les faits du projet — プロジェクトの事実を保持する 🌍";
+
+        application.Initialize(
+            databasePath,
+            new ProjectId("unicode-storage-example"),
+            title,
+            new EntityId("purpose"),
+            purposeText);
+        var reopened = application.Load(databasePath);
+
+        Assert.Equal(title, reopened.Graph.Title);
+        Assert.Equal(purposeText, reopened.Graph.Nodes.Single().Text);
+        Assert.True(application.Verify(databasePath).IsValid);
+    }
+
+    [Fact]
     public void Header_version_migration_checksum_and_schema_are_checked()
     {
         using var workspace = new TestWorkspace();

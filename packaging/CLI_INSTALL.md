@@ -3,6 +3,11 @@
 This archive contains the self-contained Windows x64 CLI. It does not require a
 .NET SDK or runtime.
 
+This initial release is supported in English only. The graph format stores and
+round-trips Unicode text, but the CLI, diagnostics, bundled content, search
+tuning, and optional AI workflows are authored and validated only in English;
+non-English workflow quality is unsupported.
+
 1. Extract the complete archive to a user-owned local directory. Paths with
    spaces are supported.
 2. Run `ValidatedWorld.Cli.exe --version` and confirm it reports `{{VERSION}}`.

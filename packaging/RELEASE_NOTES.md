@@ -2,6 +2,8 @@
 
 Initial local-plugin distribution for Windows x64:
 
+- English-only supported product experience; Unicode graph text can be stored
+  and round-tripped, but non-English workflows are not validated or supported.
 - Self-contained portable CLI; no .NET SDK/runtime required on the target.
 - Local Codex marketplace with a workflow skill and bundled stdio MCP host.
 - Bounded project discovery, reads, affected-context review, and guarded writes.

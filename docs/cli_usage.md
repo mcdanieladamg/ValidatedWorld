@@ -4,6 +4,14 @@ ValidatedWorld is a local, headless .NET 10 command-line application.
 One-shot commands cover project storage and bounded reads. Long-lived change
 sessions have two interfaces over the same Application behavior:
 
+The initial public release is supported in English only. Commands, help, errors,
+built-in templates and examples, ranked-search tuning, and optional AI workflows
+are authored and tested in English. Project titles and graph prose are stored as
+Unicode and deterministic graph/storage operations do not interpret language, so
+other-language text can be stored and round-tripped; non-English authoring,
+semantic review, and natural-language retrieval quality are unsupported and
+unvalidated.
+
 - `shell <database>` is the stateful flag-based interface. It remembers the
   selected entity, pending operation batch, review state, and fingerprints.
 - `ndjson` is the strict structured interface for AIs, scripts, and integrations.

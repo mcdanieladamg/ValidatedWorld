@@ -121,6 +121,8 @@ internal sealed class NdjsonHost(
         {
             protocolVersion = Protocol.CurrentVersion,
             framing = "One request and one result JSON object per line. Unknown fields are rejected.",
+            supportedProductLanguage = "English",
+            graphTextSupport = "Unicode text is stored without language interpretation; non-English workflows are unsupported and unvalidated.",
             requestShape = new { version = 1, command = "change.begin", payload = new { } },
             resultShape = new { version = 1, command = "change.begin", status = "ok|error", payload = new { } },
             note = "Sessions exist only for this process. Use the exact reference returned by each change response.",

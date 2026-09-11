@@ -28,6 +28,8 @@ public sealed class PackagingContractTests
             manifest["version"]!.GetValue<string>());
         Assert.Equal("./skills/", manifest["skills"]!.GetValue<string>());
         Assert.Equal("./.mcp.json", manifest["mcpServers"]!.GetValue<string>());
+        Assert.Contains("English-only", manifest["description"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("Unicode graph text", manifest["interface"]!["longDescription"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.DoesNotContain(@"D:\", manifestText, StringComparison.OrdinalIgnoreCase);
 
         var mcpText = File.ReadAllText(mcpPath);
@@ -56,6 +58,8 @@ public sealed class PackagingContractTests
         Assert.Contains("Git project", skill, StringComparison.Ordinal);
         Assert.Contains("non-Git folders", skill, StringComparison.Ordinal);
         Assert.Contains("normal review process", skill, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("supported product language is English", skill, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Graph text is stored as Unicode", skill, StringComparison.Ordinal);
 
         var releaseScript = File.ReadAllText(Path.Combine(root, "eng", "Build-Release.ps1"));
         Assert.Contains("--self-contained", releaseScript, StringComparison.Ordinal);
@@ -85,6 +89,8 @@ public sealed class PackagingContractTests
         Assert.DoesNotContain("codex plugin marketplace upgrade", installGuide, StringComparison.Ordinal);
         Assert.Contains("Configure-Review.ps1", installGuide, StringComparison.Ordinal);
         Assert.Contains("separate, fresh OpenAI API request", installGuide, StringComparison.Ordinal);
+        Assert.Contains("supported in English only", installGuide, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Unicode text", installGuide, StringComparison.Ordinal);
 
         var reviewConfiguration = File.ReadAllText(Path.Combine(
             root, "packaging", "plugins", "validated-world", "scripts", "Configure-Review.ps1"));
