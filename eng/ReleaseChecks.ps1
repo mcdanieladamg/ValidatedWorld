@@ -8,7 +8,7 @@ function Get-VwReleaseVersion {
     $vwChanges = & git -C $RepositoryRoot status --porcelain --untracked-files=normal
     if ($LASTEXITCODE -ne 0) { throw 'Could not check the Git working tree.' }
     if ($vwChanges) {
-        throw 'Automatic versioning requires a clean checkout. Commit/merge your changes first, or use an explicit -Version such as 0.1.0-local.1 for an uncommitted test build.'
+        throw 'Automatic versioning requires a clean checkout. Commit/merge your changes first, or use an explicit -Version such as 0.2.0-local.1 for an uncommitted test build.'
     }
     [xml] $vwProps = Get-Content -Raw -LiteralPath (Join-Path $RepositoryRoot 'Directory.Build.props')
     $vwPrefix = [string] $vwProps.Project.PropertyGroup.VersionPrefix

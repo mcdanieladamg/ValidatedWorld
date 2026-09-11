@@ -83,7 +83,7 @@ try {
     $vwRejected = $false
     try { Get-VwReleaseVersion $vwTestRoot | Out-Null } catch { $vwRejected = $true }
     Assert-Vw $vwRejected 'Dirty checkout received an automatic commit version.'
-    Assert-Vw ((Get-VwReleaseVersion $vwTestRoot '0.1.0-local.1') -ceq '0.1.0-local.1') 'Explicit local test version was rejected.'
+    Assert-Vw ((Get-VwReleaseVersion $vwTestRoot '0.2.0-local.1') -ceq '0.2.0-local.1') 'Explicit local test version was rejected.'
     $vwTestDirty = $false
     $vwRejected = $false
     try { Get-VwReleaseVersion $vwTestRoot $vwFirst | Out-Null } catch { $vwRejected = $true }

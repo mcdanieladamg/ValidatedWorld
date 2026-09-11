@@ -15,7 +15,10 @@ For the normal two-command development loop, start with the
 
 `Prepare-LocalPlugin.ps1 -NoRestore` reuses already restored solution and win-x64
 CLI/MCP dependencies. It still builds and runs all offline checks; use it only
-after those restores have succeeded.
+after those restores have succeeded. It also builds and tests archives for Github
+releases, producing files in the artifacts folder that you can tag and upload.
+When Codex is absent, its host lifecycle check is explicitly skipped; run
+`Test-Release.ps1 -RequireCodex` locally before accepting a release.
 
 ## Build packages only (advanced)
 
@@ -84,12 +87,6 @@ The unfiltered test command still honors the existing live-test opt-ins.
 `Test-Blueprint.ps1` evaluates repository roadmap conventions through paginated
 public CLI reads. It is repository tooling, not an implemented custom-rule
 feature of the product.
-
-The **Prepare Windows packages** Action runs only when manually dispatched. It
-builds and tests archives and retains downloads for three days. It neither tags
-nor publishes a release, installs into your desktop, nor supplies API credentials.
-When Codex is absent, its host lifecycle check is explicitly skipped; run
-`Test-Release.ps1 -RequireCodex` locally before accepting a release.
 
 To use downloaded workflow artifacts, extract them to a folder and run:
 

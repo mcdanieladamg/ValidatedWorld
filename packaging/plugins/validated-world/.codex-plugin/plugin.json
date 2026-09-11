@@ -1,6 +1,6 @@
 {
   "name": "validated-world",
-  "version": "0.1.0+codex.20260907005556",
+  "version": "0.2.0+codex.20260907005556",
   "description": "Local semantic change control for large, connected projects.",
   "author": {
     "name": "Adam McDaniel",
