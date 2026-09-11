@@ -113,12 +113,12 @@ The version is `VersionPrefix-dev.g<full-commit-id>`, using `Directory.Build.pro
 and Git `HEAD`. The same commit gets the same version locally and on GitHub.
 Existing output is never overwritten: install it again, or deliberately remove
 that version's `artifacts/release` directory before rebuilding. For uncommitted
-experiments only, use `Prepare-LocalPlugin.ps1 -Version 0.1.0-local.1` with a fresh
+experiments only, use `Prepare-LocalPlugin.ps1 -Version 0.2.0-local.1` with a fresh
 explicit version. An intentional release may also supply `-Version`.
 
-**Optional GitHub build:** use **Actions → Prepare Windows packages → Run workflow**
-on the same commit and leave Version blank. It builds/tests and retains packages
-for three days; it does not publish a release or update your local installation.
+It builds/tests and retains package built artifacts in the artifacts folder; it does
+not publish a release but does produce a command that you can use to update your local
+Codex plugin installation.
 
 The plugin bundles agent instructions (a skill) and callable tools (a local MCP
 server). Installation replaces only `validated-world@validated-world-local` and
@@ -299,10 +299,10 @@ pagination, graph traversal, manual review, and automation examples.
 All manual features work without an API key. AI authoring and review become
 active when a key is configured and their respective switches are enabled.
 
-| Setting | Default | Effect |
+| Setting               | Default | Effect                                                      |
 |---|---:|---|
-| `AiAuthoring:Enabled` | `true` | Enables conversational graph authoring. |
-| `AiReview:Enabled` | `true` | Requires independent semantic review before a normal write. |
+| `AiAuthoring:Enabled` |  `true` | Enables conversational graph authoring.                     |
+| `AiReview:Enabled`    |  `true` | Requires independent semantic review before a normal write. |
 
 For a source checkout, store the shared key in .NET User Secrets:
 
