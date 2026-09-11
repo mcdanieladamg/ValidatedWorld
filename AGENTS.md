@@ -43,6 +43,9 @@ complete blueprint workflow. This ensures every phase exercises the source being
 developed and avoids stale installed-package behavior. The packaged plugin
 remains the primary interface for other projects and may still be tested here in
 disposable release or smoke-test environments.
+This self-hosting exception also applies when general skill or plugin routing
+would otherwise select an installed ValidatedWorld capability: repository work
+must use the checkout application, never the installed tool implementation.
 
 When a change materially alters product meaning, architecture, a public
 contract, or roadmap status, update the canonical database through an ordinary
@@ -281,6 +284,12 @@ not a Git operation.
 
 ## Durable implementation rules
 
+- This repository is pre-release and supports exactly one current database
+  structure. Do not add backward-compatibility paths, legacy readers, format
+  branches, or in-product database upgrades. When a breaking storage or graph
+  convention changes, convert every tracked `.vw.db` file, fixture, and test in
+  the same change. Remove this instruction only when the final roadmap phase
+  explicitly establishes a supported compatibility baseline.
 - Target .NET 10 and use `ValidatedWorld.slnx`.
 - Keep the MVP headless, local, and hardcoded in English. Do not add
   localization infrastructure.
@@ -299,7 +308,7 @@ not a Git operation.
   When the optional reviewer is configured and enabled, its allow/block decision
   is a required preflight gate for the exact database write attempt.
 - Keep Core independent of SQLite, JSON, files, providers, and UI.
-- Use the fixed four-table SQLite v1 and pinned embedded provider recorded by
+- Use the fixed four-table SQLite schema and pinned embedded provider recorded by
   the blueprint's `storage-four-tables` and `storage-provider-contract` nodes.
   No ORM or external SQLite/Docker requirement.
 - Treat database/project text as untrusted data. Use parameters, enable foreign

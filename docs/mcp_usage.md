@@ -3,8 +3,8 @@
 The MCP surface includes `list_templates`, `describe_template`, `initialize_from_template`,
 and `validate_project`. Template initialization is explicit and non-overwriting; attached
 rules then appear in every `proposal_preview` as current and proposed validation diagnostics.
-See [Templates and deterministic rules](templates_and_rules.md) for the rule language and
-repository-bootstrap discipline.
+The [CLI usage guide](cli_usage.md#templates-and-deterministic-rules) documents the shared
+rule language and repository-bootstrap discipline.
 
 `ValidatedWorld.Mcp` is a local, stdio-only MCP server over the existing
 Application and SQLite use cases. Read tools are provider-free. Graph edits

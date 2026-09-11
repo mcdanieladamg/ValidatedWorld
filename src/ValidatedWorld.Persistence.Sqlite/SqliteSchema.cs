@@ -8,10 +8,8 @@ namespace ValidatedWorld.Persistence.Sqlite;
 internal static class SqliteSchema
 {
     public const int ApplicationId = 0x56574C44; // VWLD
-    public const int LegacyVersion = 1;
-    public const int CurrentVersion = 2;
-    public const string MigrationId = "sqlite-v1-current-state";
-    public const string RuleFormatMigrationId = "graph-rules-v2";
+    public const int CurrentVersion = 1;
+    public const string MigrationId = "sqlite-current-state";
 
     private static readonly SchemaObject[] Objects =
     [
@@ -116,10 +114,6 @@ internal static class SqliteSchema
     // checkout settings cannot change the identity of the same SQLite schema.
     public static string MigrationChecksum { get; } = ComputeMigrationChecksum("\n");
 
-    // Earlier Windows builds hashed CRLF inside each statement (but LF between
-    // statements). Accept that exact v1 identity without rewriting existing files.
-    private static string LegacyCrLfMigrationChecksum { get; } = ComputeMigrationChecksum("\r\n");
-
     private static string ComputeMigrationChecksum(string lineEnding) => Convert.ToHexString(
         SHA256.HashData(Encoding.UTF8.GetBytes(string.Join(";\n",
             Objects.Select(value => value.Sql.ReplaceLineEndings(lineEnding))))))
@@ -128,10 +122,8 @@ internal static class SqliteSchema
     public static IReadOnlyList<string> DefinitionStatements { get; } =
         Array.AsReadOnly(Objects.Select(value => value.Sql).ToArray());
 
-    public static void ApplyMigration(SqliteConnection connection, DateTimeOffset appliedUtc, int version = LegacyVersion)
+    public static void ApplyMigration(SqliteConnection connection, DateTimeOffset appliedUtc)
     {
-        if (version is not LegacyVersion and not CurrentVersion)
-            throw new ArgumentOutOfRangeException(nameof(version));
         using var transaction = connection.BeginTransaction();
         foreach (var schemaObject in Objects)
         {
@@ -154,23 +146,12 @@ internal static class SqliteSchema
             migration.ExecuteNonQuery();
         }
 
-        if (version == CurrentVersion)
-        {
-            using var migration = connection.CreateCommand();
-            migration.Transaction = transaction;
-            migration.CommandText = "INSERT INTO schema_migrations (migration_id, checksum, applied_utc) VALUES ($id, $checksum, $appliedUtc)";
-            migration.Parameters.AddWithValue("$id", RuleFormatMigrationId);
-            migration.Parameters.AddWithValue("$checksum", RuleFormatMigrationChecksum);
-            migration.Parameters.AddWithValue("$appliedUtc", FormatUtc(appliedUtc));
-            migration.ExecuteNonQuery();
-        }
-
         ExecutePragma(connection, transaction, $"PRAGMA application_id = {ApplicationId}");
-        ExecutePragma(connection, transaction, $"PRAGMA user_version = {version}");
+        ExecutePragma(connection, transaction, $"PRAGMA user_version = {CurrentVersion}");
         transaction.Commit();
     }
 
-    public static int Verify(SqliteConnection connection)
+    public static void Verify(SqliteConnection connection)
     {
         var applicationId = ReadPragmaInt64(connection, "application_id");
         if (applicationId != ApplicationId)
@@ -181,19 +162,18 @@ internal static class SqliteSchema
         }
 
         var version = ReadPragmaInt64(connection, "user_version");
-        if (version is not LegacyVersion and not CurrentVersion)
+        if (version != CurrentVersion)
         {
             throw new ProjectStorageException(
                 ProjectStorageErrorCode.UnsupportedVersion,
-                $"Unsupported SQLite project schema version {version}; supported versions are {LegacyVersion} and {CurrentVersion}.");
+                $"Unsupported SQLite project schema version {version}; this build requires version {CurrentVersion}.");
         }
 
-        VerifyMigration(connection, checked((int)version));
+        VerifyMigration(connection);
         VerifyObjects(connection);
-        return checked((int)version);
     }
 
-    private static void VerifyMigration(SqliteConnection connection, int version)
+    private static void VerifyMigration(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT migration_id, checksum FROM schema_migrations ORDER BY migration_id";
@@ -207,39 +187,13 @@ internal static class SqliteSchema
                 "The required SQLite schema migration record is missing.");
         }
 
-        if ((!StringComparer.Ordinal.Equals(checksum, MigrationChecksum) &&
-             !StringComparer.Ordinal.Equals(checksum, LegacyCrLfMigrationChecksum)) ||
-            rows.Count != version ||
-            (version == CurrentVersion && (!rows.TryGetValue(RuleFormatMigrationId, out var v2Checksum) ||
-                !StringComparer.Ordinal.Equals(v2Checksum, RuleFormatMigrationChecksum))))
+        if (!StringComparer.Ordinal.Equals(checksum, MigrationChecksum) ||
+            rows.Count != 1)
         {
             throw new ProjectStorageException(
                 ProjectStorageErrorCode.MigrationMismatch,
                 "The SQLite schema migration ID or checksum does not match this application build.");
         }
-    }
-
-    public static string RuleFormatMigrationChecksum { get; } = Convert.ToHexString(
-        SHA256.HashData(Encoding.UTF8.GetBytes("ValidatedWorld graph rule format v2; rules are versioned graph nodes")))
-        .ToLowerInvariant();
-
-    public static void UpgradeToV2(SqliteConnection connection, DateTimeOffset appliedUtc)
-    {
-        var version = Verify(connection);
-        if (version == CurrentVersion) return;
-        using var transaction = connection.BeginTransaction();
-        using (var migration = connection.CreateCommand())
-        {
-            migration.Transaction = transaction;
-            migration.CommandText = "INSERT INTO schema_migrations (migration_id, checksum, applied_utc) VALUES ($id, $checksum, $appliedUtc)";
-            migration.Parameters.AddWithValue("$id", RuleFormatMigrationId);
-            migration.Parameters.AddWithValue("$checksum", RuleFormatMigrationChecksum);
-            migration.Parameters.AddWithValue("$appliedUtc", FormatUtc(appliedUtc));
-            migration.ExecuteNonQuery();
-        }
-        ExecutePragma(connection, transaction, $"PRAGMA user_version = {CurrentVersion}");
-        transaction.Commit();
-        Verify(connection);
     }
 
     private static void VerifyObjects(SqliteConnection connection)
@@ -268,7 +222,7 @@ internal static class SqliteSchema
             if (!actual.TryGetValue((expected.Type, expected.Name), out var sql) ||
                 !StringComparer.Ordinal.Equals(NormalizeSql(sql), NormalizeSql(expected.Sql)))
             {
-                throw SchemaMismatch($"SQLite schema object '{expected.Name}' does not match schema v1.");
+                throw SchemaMismatch($"SQLite schema object '{expected.Name}' does not match this application build.");
             }
         }
     }

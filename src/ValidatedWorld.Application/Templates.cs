@@ -152,10 +152,10 @@ public sealed partial class ProjectApplication
     {
         var template = GraphTemplateCatalog.Resolve(nameOrPath);
         var graph = GraphTemplateCatalog.Instantiate(template, projectId, title, purposeText);
-        var validation = ValidateForFormat(graph, 2);
+        var validation = ValidateGraph(graph);
         if (!validation.IsValid)
             throw new ProjectStorageException(ProjectStorageErrorCode.InvalidGraph,
                 validation.Diagnostics.FirstOrDefault()?.Message ?? "The instantiated template is invalid.");
-        return _store.InitializeWithSchemaVersion(path, graph, 2);
+        return _store.Initialize(path, graph);
     }
 }

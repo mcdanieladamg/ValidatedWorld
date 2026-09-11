@@ -159,8 +159,7 @@ internal sealed record StoredProjectDto(
     int EdgeCount,
     string StateFingerprint,
     string CreatedUtc,
-    string UpdatedUtc,
-    int SchemaVersion);
+    string UpdatedUtc);
 internal sealed record LoadedProjectDto(StoredProjectDto Project, GraphDto Graph);
 internal sealed record ProjectStatusDto(
     string Path,
@@ -170,7 +169,6 @@ internal sealed record ProjectStatusDto(
     int NodeCount,
     int EdgeCount,
     string StateFingerprint,
-    int SchemaVersion,
     string SqliteVersion);
 internal sealed record ProjectVerificationDto(
     string Path,
@@ -438,12 +436,11 @@ internal static class CliDto
         value.Graph.Edges.Count,
         value.StateFingerprint,
         Utc(value.CreatedUtc),
-        Utc(value.UpdatedUtc),
-        value.SchemaVersion);
+        Utc(value.UpdatedUtc));
 
     public static ProjectStatusDto Status(ProjectStatus value) => new(
         value.Path, value.ProjectId.Value, value.Title, value.PurposeNodeId.Value,
-        value.NodeCount, value.EdgeCount, value.StateFingerprint, value.SchemaVersion, value.SqliteVersion);
+        value.NodeCount, value.EdgeCount, value.StateFingerprint, value.SqliteVersion);
 
     public static ProjectVerificationDto Verification(ProjectVerification value) => new(
         value.Path, value.IsValid, value.StateFingerprint, value.NodeCount, value.EdgeCount, value.Checks,

@@ -18,7 +18,6 @@ internal sealed record McpProjectSelection(
     int NodeCount,
     int EdgeCount,
     string StateFingerprint,
-    int SchemaVersion,
     string SqliteVersion);
 
 internal sealed record McpProjectSelectionResult(
@@ -341,7 +340,7 @@ internal sealed class McpProjectService(
             _selection = selected;
         }
         return new McpProjectInitializationResult(selected,
-            "The selected template was instantiated as a format-v2 project and selected. Attached active rules govern subsequent reviewed changes.");
+            "The selected template was instantiated and selected. Attached active rules govern subsequent reviewed changes.");
     }
 
     public McpProjectSelection Status()
@@ -723,7 +722,6 @@ internal sealed class McpProjectService(
         status.NodeCount,
         status.EdgeCount,
         status.StateFingerprint,
-        status.SchemaVersion,
         status.SqliteVersion);
 
     public static NodeDto Node(GraphNode node) => GraphProtocol.ToDto(node);

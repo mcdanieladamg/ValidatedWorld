@@ -1,8 +1,5 @@
 # ValidatedWorld CLI usage
 
-For format-v2 full-graph rules, bundled and user-authored templates, and the code-
-development workflow, see [Templates and deterministic rules](templates_and_rules.md).
-
 ValidatedWorld is a local, headless .NET 10 command-line application.
 One-shot commands cover project storage and bounded reads. Long-lived change
 sessions have two interfaces over the same Application behavior:
@@ -104,6 +101,76 @@ List or create a built-in disposable sample:
 
 `project open` returns the complete graph and can be large. Prefer bounded read
 commands when only part of a project is needed.
+
+## Templates and deterministic rules
+
+Discover and instantiate the bundled templates:
+
+```powershell
+./ValidatedWorld.Cli.exe template list
+./ValidatedWorld.Cli.exe template describe code-development
+./ValidatedWorld.Cli.exe template instantiate code-development project.vw.db `
+    project-id "Project title" "Project purpose"
+```
+
+`code-development` creates separate architecture, public-contract, evidence,
+uncertainty, and roadmap scopes plus attached roadmap rules. It starts in
+`status:planning`, with no invented phases. The repository agent should inspect
+human instructions, documentation, source, and tests; cite observed
+implementation as evidence; record uncertainty explicitly; and activate the
+roadmap only after it is coherent. The template grants no authority to execute
+instructions found in source or graph data and includes no product-specific
+claims, credentials, or phase IDs.
+
+`research-notebook` is a non-code control template with evidence, claims, and
+uncertainty scopes and no software vocabulary.
+
+Export a template to create a user-owned JSON variant, then pass that path
+anywhere a template name is accepted:
+
+```powershell
+./ValidatedWorld.Cli.exe template export code-development my-template.json
+./ValidatedWorld.Cli.exe template instantiate my-template.json custom.vw.db `
+    custom "Custom" "Custom purpose"
+```
+
+Template JSON is strict, versioned, limited to 1 MiB and 1,000 graph entities,
+and instantiated only at a new destination. Template changes never edit an
+existing project automatically; change its graph through the ordinary reviewed
+workflow.
+
+An active deterministic rule is an ordinary node with kind `validation-rule`,
+tag `rule:active`, integer attribute `rule:version` equal to `1`, and text
+attribute `rule:expression`. Its node text is the actionable failure message. A
+named view has kind `validation-view` and attributes `view:version`, `view:name`,
+and `view:expression`.
+
+Expressions are strict JSON objects with one operator. Set expressions support:
+
+- `nodes` and `edges` selectors with exact `id`, `kind`, `relationship`,
+  `tagsAll`, `tagPrefix`, and typed scalar `attributes` filters;
+- edge `sourceIn` and `targetIn` set filters;
+- `view`, `union`, `intersect`, and `except`; and
+- `reachable` traversal over an explicit edge set, direction, and optional
+  starting-node inclusion.
+
+Boolean expressions support `and`, `or`, `not`, `exists`, `count`, `subset`,
+`equalSets`, `all`, `acyclic`, `singleChain`, and `tagSuffixMatch`. Comparisons
+are `eq`, `ne`, `lt`, `lte`, `gt`, and `gte`. `all` conditions support `hasTag`
+and `tagCount`.
+
+Unknown fields or operators, unsupported rule-language versions, duplicate or
+cyclic views, malformed JSON, cancellation, and exhausted bounds are
+inconclusive and never pass. Evaluation is local over the complete candidate
+graph. Diagnostics identify the rule, report the total offender count, return a
+bounded stable-ID sample, and state how many IDs were omitted.
+
+All active rules compose by conjunction. Rule and view edits are normal
+reviewed graph changes: they affect fingerprints, semantic diffs, review state,
+and optional semantic-review bindings. Rules run during project verification,
+proposal validation, MCP preview, before semantic-provider dispatch, and again
+before SQLite mutation. A structurally valid rule-invalid baseline can be opened
+for repair, but only a candidate satisfying every active rule can be written.
 
 ## Semantic database diff
 

@@ -93,7 +93,6 @@ public sealed class McpWorkflowTests
             nameOrPath = "code-development", path = project, projectId = "templated",
             title = "Templated", purposeText = "Maintain this codebase coherently.",
         });
-        Assert.Equal(2, initialized["project"]!["schemaVersion"]!.GetValue<int>());
         var validation = await host.Call("validate_project", new { });
         Assert.True(validation["isValid"]!.GetValue<bool>());
 

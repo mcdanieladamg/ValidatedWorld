@@ -202,9 +202,9 @@ public sealed partial class ProjectApplication
             }
 
             var now = UtcNow();
-            var currentValidation = ValidateForFormat(project.Graph, project.SchemaVersion);
+            var currentValidation = ValidateGraph(project.Graph);
             var projection = new GraphProjector().Project(project.Graph, GraphOperationBatch.Empty,
-                graph => ValidateForFormat(graph, project.SchemaVersion));
+                ValidateGraph);
             var affected = new AffectedAnalyzer().Analyze(project.Graph, projection,
                 currentValidationOverride: currentValidation);
             var state = new ActiveChangeSession(
@@ -247,7 +247,7 @@ public sealed partial class ProjectApplication
                 operations,
                 scopeParents);
             var projection = new GraphProjector().Project(state.BaseProject.Graph, expanded,
-                graph => ValidateForFormat(graph, state.BaseProject.SchemaVersion));
+                ValidateGraph);
             return new ChangeFocusResult(
                 expanded,
                 GraphFingerprints.Operations(state.BaseProject.StateFingerprint, expanded),
@@ -299,7 +299,7 @@ public sealed partial class ProjectApplication
             var state = FindAndVerify(reference);
             VerifyBaseUnchanged(state);
             var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, state.Projection, options,
-                ValidateForFormat(state.BaseProject.Graph, state.BaseProject.SchemaVersion));
+                ValidateGraph(state.BaseProject.Graph));
             var refresh = state.Review.Refresh(affected);
             state.Affected = affected;
             state.UpdatedUtc = UtcNow();
@@ -486,8 +486,7 @@ public sealed partial class ProjectApplication
                 state.BaseProject.Graph.ProjectId,
                 state.BaseProject.StateFingerprint,
                 state.Projection.Operations,
-                GraphFingerprints.Proposed(state.Projection.Graph),
-                state.BaseProject.SchemaVersion));
+                GraphFingerprints.Proposed(state.Projection.Graph)));
             var result = new ChangeWriteResult(
                 write.Outcome switch
                 {
@@ -615,12 +614,6 @@ public sealed partial class ProjectApplication
                 "The canonical project changed after this session began; discard it and begin again.");
         }
 
-        if (current.SchemaVersion != state.BaseProject.SchemaVersion)
-        {
-            throw new ChangeSessionException(
-                ChangeSessionErrorCode.StaleBaseFingerprint,
-                "The canonical project format changed after this session began; discard it and begin again.");
-        }
     }
 
     private static void VerifyReviewUpdate(ActiveChangeSession state, ChangeReviewUpdate update)
@@ -745,9 +738,9 @@ public sealed partial class ProjectApplication
         AffectedAnalysisOptions? options)
     {
         var projection = new GraphProjector().Project(state.BaseProject.Graph, operations,
-            graph => ValidateForFormat(graph, state.BaseProject.SchemaVersion));
+            ValidateGraph);
         var affected = new AffectedAnalyzer().Analyze(state.BaseProject.Graph, projection, options,
-            ValidateForFormat(state.BaseProject.Graph, state.BaseProject.SchemaVersion));
+            ValidateGraph(state.BaseProject.Graph));
         var refresh = state.Review.Refresh(affected);
         state.Projection = projection;
         state.Affected = affected;

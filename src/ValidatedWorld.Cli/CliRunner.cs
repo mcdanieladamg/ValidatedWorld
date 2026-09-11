@@ -185,9 +185,6 @@ public static class CliRunner
             case "verify" when arguments.Length == 3:
                 result = CliDto.Verification(application.Verify(arguments[2]));
                 break;
-            case "upgrade-rules" when arguments.Length == 3:
-                result = CliDto.Stored(application.Upgrade(arguments[2]));
-                break;
             case "backup" when arguments.Length == 4:
                 result = CliDto.Stored(application.Backup(arguments[2], arguments[3]));
                 break;
@@ -203,7 +200,7 @@ public static class CliRunner
                         new QueryPageRequest(options.Limit, options.Cursor)));
                     break;
                 }
-            case "init" or "open" or "status" or "verify" or "upgrade-rules" or "backup" or "export-sql" or "diff":
+            case "init" or "open" or "status" or "verify" or "backup" or "export-sql" or "diff":
                 throw new CliUsageException($"Incorrect arguments for 'project {arguments[1]}'.");
             default:
                 throw new CliUsageException($"Unknown project command '{arguments[1]}'.");
@@ -419,7 +416,6 @@ public static class CliRunner
         await output.WriteLineAsync("  project open <database>");
         await output.WriteLineAsync("  project status <database>");
         await output.WriteLineAsync("  project verify <database>");
-        await output.WriteLineAsync("  project upgrade-rules <database>");
         await output.WriteLineAsync("  project backup <source-database> <new-destination-database>");
         await output.WriteLineAsync("  project export-sql <database>");
         await output.WriteLineAsync(
@@ -446,7 +442,7 @@ public static class CliRunner
         await output.WriteLineAsync("  template export <built-in-name-or-json-path> <new-json-path>");
         await output.WriteLineAsync("  template instantiate <built-in-name-or-json-path> <new-database> <project-id> <title> <purpose-text>");
         await output.WriteLineAsync();
-        await output.WriteLineAsync("Instantiation is non-overwriting and creates a format-v2 graph whose attached active rules are enforced.");
+        await output.WriteLineAsync("Instantiation is non-overwriting; attached active rules are enforced.");
     }
 
     private static async Task PrintReadHelp(TextWriter output)
