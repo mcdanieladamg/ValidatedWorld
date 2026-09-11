@@ -297,7 +297,10 @@ including the complete matching node or edge.
 `ranked-search` is an additive lexical discovery query. It tokenizes the input,
 recognizes quoted phrases (and an unquoted multi-token phrase), and ranks exact
 stable-ID matches above exact case-sensitive tag matches, phrases, text tokens,
-and metadata tokens. Metadata includes kinds, relationships, rationales, tags,
+and metadata tokens. Common English function words are ignored as standalone
+tokens so natural-language questions do not rank generic matches above their
+domain terms; exact IDs, exact tags, and quoted phrases remain unchanged.
+Metadata includes kinds, relationships, rationales, tags,
 and attribute names and values. Results are deterministically ordered by score,
 stable ID, and entity kind; every result includes `score` and `matches` with the
 field, term, match kind, and score contribution that explain the ranking. Its

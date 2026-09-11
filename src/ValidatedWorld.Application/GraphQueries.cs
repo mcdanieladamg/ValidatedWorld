@@ -728,7 +728,11 @@ public sealed partial class ProjectQueries
             {
                 if (current.Length == 0) return;
                 var token = current.ToString();
-                if (!tokens.Contains(token, StringComparer.OrdinalIgnoreCase)) tokens.Add(token);
+                if (!StopWords.Contains(token) &&
+                    !tokens.Contains(token, StringComparer.OrdinalIgnoreCase))
+                {
+                    tokens.Add(token);
+                }
                 current.Clear();
             }
 
@@ -759,6 +763,8 @@ public sealed partial class ProjectQueries
                 if (char.IsWhiteSpace(character))
                 {
                     FlushToken();
+                    if (quoted && phraseText.Length > 0 && phraseText[^1] != ' ')
+                        phraseText.Append(' ');
                     if (normalized.Length > 0 && normalized[^1] != ' ') normalized.Append(' ');
                     continue;
                 }
@@ -782,6 +788,18 @@ public sealed partial class ProjectQueries
                 .ToArray();
             return new RankedSearchTerms(normalizedText, exactCandidates, phrases, tokens);
         }
+
+        // Ranked discovery is hardcoded in English for the MVP. Function words
+        // otherwise receive the same score as domain terms and swamp useful hits
+        // for natural-language questions. Exact IDs, tags, and quoted phrases
+        // remain eligible even when they contain one of these words.
+        private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "does",
+            "for", "from", "how", "if", "in", "is", "it", "of", "on", "or", "that",
+            "the", "this", "to", "was", "what", "when", "where", "which", "who", "why",
+            "with",
+        };
 
         public static IReadOnlyList<string> Tokenize(string value)
         {
