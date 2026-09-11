@@ -9,7 +9,7 @@ internal static class SqliteSchema
 {
     public const int ApplicationId = 0x56574C44; // VWLD
     public const int CurrentVersion = 1;
-    public const string MigrationId = "sqlite-v1-current-state";
+    public const string MigrationId = "sqlite-current-state";
 
     private static readonly SchemaObject[] Objects =
     [
@@ -114,10 +114,6 @@ internal static class SqliteSchema
     // checkout settings cannot change the identity of the same SQLite schema.
     public static string MigrationChecksum { get; } = ComputeMigrationChecksum("\n");
 
-    // Earlier Windows builds hashed CRLF inside each statement (but LF between
-    // statements). Accept that exact v1 identity without rewriting existing files.
-    private static string LegacyCrLfMigrationChecksum { get; } = ComputeMigrationChecksum("\r\n");
-
     private static string ComputeMigrationChecksum(string lineEnding) => Convert.ToHexString(
         SHA256.HashData(Encoding.UTF8.GetBytes(string.Join(";\n",
             Objects.Select(value => value.Sql.ReplaceLineEndings(lineEnding))))))
@@ -170,7 +166,7 @@ internal static class SqliteSchema
         {
             throw new ProjectStorageException(
                 ProjectStorageErrorCode.UnsupportedVersion,
-                $"Unsupported SQLite project schema version {version}; expected {CurrentVersion}.");
+                $"Unsupported SQLite project schema version {version}; this build requires version {CurrentVersion}.");
         }
 
         VerifyMigration(connection);
@@ -182,18 +178,17 @@ internal static class SqliteSchema
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT migration_id, checksum FROM schema_migrations ORDER BY migration_id";
         using var reader = command.ExecuteReader();
-        if (!reader.Read())
+        var rows = new Dictionary<string, string>(StringComparer.Ordinal);
+        while (reader.Read()) rows.Add(reader.GetString(0), reader.GetString(1));
+        if (!rows.TryGetValue(MigrationId, out var checksum))
         {
             throw new ProjectStorageException(
                 ProjectStorageErrorCode.MigrationMismatch,
                 "The required SQLite schema migration record is missing.");
         }
 
-        var id = reader.GetString(0);
-        var checksum = reader.GetString(1);
-        if (reader.Read() || !StringComparer.Ordinal.Equals(id, MigrationId) ||
-            (!StringComparer.Ordinal.Equals(checksum, MigrationChecksum) &&
-             !StringComparer.Ordinal.Equals(checksum, LegacyCrLfMigrationChecksum)))
+        if (!StringComparer.Ordinal.Equals(checksum, MigrationChecksum) ||
+            rows.Count != 1)
         {
             throw new ProjectStorageException(
                 ProjectStorageErrorCode.MigrationMismatch,
@@ -227,7 +222,7 @@ internal static class SqliteSchema
             if (!actual.TryGetValue((expected.Type, expected.Name), out var sql) ||
                 !StringComparer.Ordinal.Equals(NormalizeSql(sql), NormalizeSql(expected.Sql)))
             {
-                throw SchemaMismatch($"SQLite schema object '{expected.Name}' does not match schema v1.");
+                throw SchemaMismatch($"SQLite schema object '{expected.Name}' does not match this application build.");
             }
         }
     }

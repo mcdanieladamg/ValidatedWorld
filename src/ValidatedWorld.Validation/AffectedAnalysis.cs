@@ -361,13 +361,14 @@ public sealed class AffectedAnalyzer
     public AffectedAnalysis Analyze(
         ProjectGraph currentGraph,
         GraphProjectionResult projection,
-        AffectedAnalysisOptions? options = null)
+        AffectedAnalysisOptions? options = null,
+        GraphValidationResult? currentValidationOverride = null)
     {
         ArgumentNullException.ThrowIfNull(currentGraph);
         ArgumentNullException.ThrowIfNull(projection);
         options ??= new AffectedAnalysisOptions();
 
-        var currentValidation = new GraphValidator().Validate(currentGraph);
+        var currentValidation = currentValidationOverride ?? new GraphValidator().Validate(currentGraph);
         var proposedGraph = projection.Graph;
         var proposedValidation = projection.Validation;
         var currentIndex = currentValidation.Index;
@@ -781,7 +782,8 @@ public sealed class AffectedReviewSession
         var blockers = new List<string>();
         if (!_analysis.IsComplete) blockers.Add("Affected analysis is inconclusive.");
         if (!_analysis.ProposedValidation.IsValid) blockers.Add("The proposed graph is not structurally valid.");
-        if (!_analysis.CurrentValidation.IsValid) blockers.Add("The current graph is not structurally valid.");
+        // Storage admits only structurally valid graphs. A v2 baseline may violate
+        // an attached rule so a reviewed proposal can repair it.
         if (pending.Count > 0) blockers.Add("Affected nodes still have pending review dispositions.");
         if (missingContext.Length > 0) blockers.Add("Required scope context has not been presented.");
         return new ReviewReadinessResult(

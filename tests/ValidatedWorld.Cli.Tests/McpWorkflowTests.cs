@@ -32,6 +32,8 @@ public sealed class McpWorkflowTests
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "host_status");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "select_project");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "initialize_project");
+        Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "initialize_from_template");
+        Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "validate_project");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "read_context");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "begin_change");
         Assert.DoesNotContain(toolItems, tool => tool!["name"]!.GetValue<string>().Contains("bypass", StringComparison.OrdinalIgnoreCase));
@@ -67,6 +69,50 @@ public sealed class McpWorkflowTests
         var after = new SqliteProjectStore().Load(project);
         Assert.Equal(before.StateFingerprint, after.StateFingerprint);
         Assert.Equal(before.UpdatedUtc, after.UpdatedUtc);
+    }
+
+    [Fact]
+    public async Task Mcp_discovers_and_instantiates_governed_templates()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "templated.vw.db");
+        await using var host = await McpProcess.Start();
+        _ = await host.Request("initialize", new
+        {
+            protocolVersion = "2024-11-05",
+            capabilities = new { },
+            clientInfo = new { name = "ValidatedWorld tests", version = "1" },
+        });
+
+        var templates = await host.Call("list_templates", new { });
+        Assert.Contains(templates.AsArray(), item => item!["id"]!.GetValue<string>() == "code-development");
+        var description = await host.Call("describe_template", new { nameOrPath = "code-development" });
+        Assert.Equal("purpose", description["purposeNodeId"]!.GetValue<string>());
+        var initialized = await host.Call("initialize_from_template", new
+        {
+            nameOrPath = "code-development", path = project, projectId = "templated",
+            title = "Templated", purposeText = "Maintain this codebase coherently.",
+        });
+        var validation = await host.Call("validate_project", new { });
+        Assert.True(validation["isValid"]!.GetValue<bool>());
+
+        var begun = await host.Call("begin_change", new { intent = "Introduce an invalid phase outside any semantic dependency." });
+        var added = await host.Call("put_node", new
+        {
+            expectedRevision = begun["revision"]!.GetValue<int>(), mode = "add", id = "phase-bad",
+            text = "Bad phase", kind = "development-phase",
+            tags = new[] { "roadmap:phase", "phase:bad", "status:current" }, attributes = Array.Empty<object>(),
+        });
+        var edge = await host.Call("put_edge", new
+        {
+            expectedRevision = added["revision"]!.GetValue<int>(), mode = "add", id = "phase-bad-scope",
+            source = "phase-bad", target = "scope-roadmap", relationship = "scope-parent",
+            reviewDirection = "None", rationale = (string?)null, tags = Array.Empty<string>(), attributes = Array.Empty<object>(),
+        });
+        var preview = await host.Call("proposal_preview", new { expectedRevision = edge["revision"]!.GetValue<int>() });
+        Assert.Equal("Invalid", preview["proposedValidation"]!["status"]!.GetValue<string>());
+        Assert.Contains(preview["proposedValidation"]!["diagnostics"]!.AsArray(),
+            item => item!["code"]!.GetValue<string>() == "rule-violation");
     }
 
     [Fact]

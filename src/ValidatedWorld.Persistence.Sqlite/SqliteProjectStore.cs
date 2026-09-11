@@ -22,7 +22,7 @@ public enum SqliteWriteBoundary
     AfterFinalVerification,
 }
 
-/// <summary>SQLite v1 storage for one immutable current project graph.</summary>
+/// <summary>SQLite storage for one immutable current project graph.</summary>
 public sealed class SqliteProjectStore : IProjectStore
 {
     public const int MaximumNodeCount = 100_000;
@@ -109,7 +109,6 @@ public sealed class SqliteProjectStore : IProjectStore
                 project.Graph.Nodes.Count,
                 project.Graph.Edges.Count,
                 project.StateFingerprint,
-                SqliteSchema.CurrentVersion,
                 sqliteVersion);
         }
         catch (Exception exception)
@@ -121,9 +120,10 @@ public sealed class SqliteProjectStore : IProjectStore
     public ProjectVerification Verify(string path)
     {
         var project = Load(path);
+        var rules = ValidateRules(project.Graph);
         return new ProjectVerification(
             project.Path,
-            true,
+            rules.IsValid,
             project.StateFingerprint,
             project.Graph.Nodes.Count,
             project.Graph.Edges.Count,
@@ -136,8 +136,11 @@ public sealed class SqliteProjectStore : IProjectStore
                 "foreign-keys",
                 "strict-row-mapping",
                 "graph-validation",
+                "full-graph-rules",
                 "state-fingerprint",
-            ]);
+            ],
+            rules.Status,
+            rules.Diagnostics);
     }
 
     public StoredProject Backup(string sourcePath, string destinationPath)
@@ -231,6 +234,17 @@ public sealed class SqliteProjectStore : IProjectStore
         SqliteConnection? connection = null;
         try
         {
+            var preflight = Load(fullPath);
+            if (preflight.Graph.ProjectId != request.ProjectId ||
+                !StringComparer.Ordinal.Equals(preflight.StateFingerprint, request.BaseFingerprint))
+                return new ProjectWriteResult(ProjectWriteOutcome.Stale, null, null,
+                    "The canonical project changed after the reviewed session began.");
+            var preflightProjection = new GraphProjector().Project(preflight.Graph, request.Operations);
+            var preflightRules = ValidateRules(preflightProjection.Graph);
+            if (!preflightRules.IsValid)
+                return new ProjectWriteResult(ProjectWriteOutcome.Failed, null, ProjectStorageErrorCode.InvalidGraph,
+                    preflightRules.Diagnostics.FirstOrDefault()?.Message ?? "Full-graph rules did not pass before the write transaction.");
+
             connection = OpenConnection(fullPath, SqliteOpenMode.ReadWrite);
             ExecuteTransactionCommand(connection, "BEGIN IMMEDIATE");
             transactionStarted = true;
@@ -260,6 +274,14 @@ public sealed class SqliteProjectStore : IProjectStore
                     null,
                     ProjectStorageErrorCode.InvalidGraph,
                     "The proposal is not structurally valid at write time.");
+            }
+            var ruleValidation = ValidateRules(projection.Graph);
+            if (!ruleValidation.IsValid)
+            {
+                Rollback(connection);
+                transactionStarted = false;
+                return new ProjectWriteResult(ProjectWriteOutcome.Failed, null, ProjectStorageErrorCode.InvalidGraph,
+                    ruleValidation.Diagnostics.FirstOrDefault()?.Message ?? "Full-graph rules did not pass at write time.");
             }
 
             var expectedFingerprint = GraphFingerprints.Proposed(projection.Graph);
@@ -311,7 +333,7 @@ public sealed class SqliteProjectStore : IProjectStore
                 Rollback(connection);
             }
 
-            if (exception is SqliteException sqlite && IsBusy(sqlite))
+            if (FindSqliteException(exception) is { } sqlite && IsBusy(sqlite))
             {
                 return new ProjectWriteResult(
                     ProjectWriteOutcome.Busy,
@@ -365,6 +387,27 @@ public sealed class SqliteProjectStore : IProjectStore
             computedFingerprint,
             projectRow.CreatedUtc,
             projectRow.UpdatedUtc);
+    }
+
+    private static SqliteException? FindSqliteException(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+            if (current is SqliteException sqlite) return sqlite;
+        return null;
+    }
+
+    private static RuleValidationResult ValidateRules(ProjectGraph graph)
+    {
+        try
+        {
+            var document = RuleProtocol.Parse(graph);
+            return new GraphRuleValidator().Validate(graph, document);
+        }
+        catch (RuleFormatException exception)
+        {
+            return new RuleValidationResult(ValidationStatus.Inconclusive,
+                [new RuleDiagnostic(exception.Code, exception.Message, exception.EntityId, [], 0, 0)]);
+        }
     }
 
     private void InsertInitialGraph(SqliteConnection connection, ProjectGraph graph, DateTimeOffset now)

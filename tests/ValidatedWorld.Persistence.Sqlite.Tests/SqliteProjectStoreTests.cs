@@ -28,10 +28,9 @@ public sealed class SqliteProjectStoreTests
         Assert.Equal(FixedUtc, loaded.CreatedUtc);
         Assert.Equal(13, status.NodeCount);
         Assert.Equal(17, status.EdgeCount);
-        Assert.Equal(1, status.SchemaVersion);
         Assert.NotEmpty(status.SqliteVersion);
         Assert.True(verification.IsValid);
-        Assert.Equal(9, verification.Checks.Count);
+        Assert.Equal(10, verification.Checks.Count);
         Assert.Equal(bytesBeforeReads, bytesAfterReads);
         Assert.Equal(new[] { databasePath }, Directory.GetFiles(Path.GetDirectoryName(databasePath)!));
     }
@@ -43,7 +42,7 @@ public sealed class SqliteProjectStoreTests
         var application = CreateApplication();
 
         var versionPath = CreateSample(application, workspace, "unknown-version.vw.db");
-        Execute(versionPath, "PRAGMA user_version = 2");
+        Execute(versionPath, "PRAGMA user_version = 3");
         AssertStorageError(ProjectStorageErrorCode.UnsupportedVersion, () => application.Verify(versionPath));
 
         var migrationPath = CreateSample(application, workspace, "migration-mismatch.vw.db");
@@ -62,32 +61,16 @@ public sealed class SqliteProjectStoreTests
         AssertStorageError(ProjectStorageErrorCode.SchemaMismatch, () => application.Verify(schemaPath));
     }
 
-    [Theory]
-    [InlineData("a3bf0e7c2e27e7edaa9c53a6fe898164ba6b9950751be011a4d851e5434b768f")]
-    [InlineData("f2d836a9535cc1a868cc64f2721824c69e534c380edab75af4917d5a064dbe3c")]
-    public void V1_databases_from_LF_and_CRLF_builds_remain_readable_without_rewriting(string checksum)
+    [Fact]
+    public void Non_current_database_versions_are_rejected()
     {
         using var workspace = new TestWorkspace();
         var application = CreateApplication();
-        var path = CreateSample(application, workspace, "legacy-checksum.vw.db");
-        using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT checksum FROM schema_migrations";
-            Assert.Equal("a3bf0e7c2e27e7edaa9c53a6fe898164ba6b9950751be011a4d851e5434b768f",
-                command.ExecuteScalar());
-        }
+        var path = CreateSample(application, workspace, "non-current-version.vw.db");
 
-        Execute(path, "UPDATE schema_migrations SET checksum = $value", ("$value", checksum));
-        var bytes = File.ReadAllBytes(path);
-        Assert.True(application.Verify(path).IsValid);
-        Assert.Equal(13, application.Load(path).Graph.Nodes.Count);
-        Assert.Equal(bytes, File.ReadAllBytes(path));
+        Execute(path, "PRAGMA user_version = 2");
 
-        // A recognized legacy checksum must not excuse an altered schema.
-        Execute(path, "CREATE INDEX unexpected_index ON nodes(text)");
-        AssertStorageError(ProjectStorageErrorCode.SchemaMismatch, () => application.Verify(path));
+        AssertStorageError(ProjectStorageErrorCode.UnsupportedVersion, () => application.Verify(path));
     }
 
     [Fact]

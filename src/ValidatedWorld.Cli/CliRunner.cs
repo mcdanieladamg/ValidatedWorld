@@ -72,6 +72,7 @@ public static class CliRunner
                 "project" => await RunProject(application, arguments, output),
                 "read" => await RunRead(application, arguments, output, cancellationToken),
                 "sample" => await RunSample(application, arguments, output),
+                "template" => await RunTemplate(application, arguments, output),
                 "shell" when arguments.Length == 2 && IsHelp(arguments[1]) => await PrintShellHelp(output),
                 "shell" when arguments.Length == 2 => await new HumanShell(
                     application,
@@ -233,6 +234,29 @@ public static class CliRunner
         return SuccessExitCode;
     }
 
+    private static async Task<int> RunTemplate(ProjectApplication application, string[] arguments, TextWriter output)
+    {
+        if (arguments.Length < 2 || IsHelp(arguments[1]))
+        {
+            await PrintTemplateHelp(output);
+            return SuccessExitCode;
+        }
+
+        object result = arguments[1] switch
+        {
+            "list" when arguments.Length == 2 => application.ListTemplates(),
+            "describe" when arguments.Length == 3 => GraphTemplateCatalog.Describe(application.ReadTemplate(arguments[2])),
+            "export" when arguments.Length == 4 => new { path = application.ExportTemplate(arguments[2], arguments[3]) },
+            "instantiate" when arguments.Length == 7 => CliDto.Stored(application.InstantiateTemplate(
+                arguments[2], arguments[3], new ProjectId(arguments[4]), arguments[5], arguments[6])),
+            "list" or "describe" or "export" or "instantiate" => throw new CliUsageException(
+                $"Incorrect arguments for 'template {arguments[1]}'."),
+            _ => throw new CliUsageException($"Unknown template command '{arguments[1]}'."),
+        };
+        await WriteJson(output, result);
+        return SuccessExitCode;
+    }
+
     private static async Task<int> RunRead(
         ProjectApplication application,
         string[] arguments,
@@ -362,6 +386,7 @@ public static class CliRunner
         await output.WriteLineAsync("  project   Initialize, inspect, compare, verify, back up, or export a project");
         await output.WriteLineAsync("  read      Run bounded graph queries");
         await output.WriteLineAsync("  sample    List or create built-in disposable samples");
+        await output.WriteLineAsync("  template  Discover, export, customize, or instantiate graph templates");
         await output.WriteLineAsync("  shell     Run the stateful flag-based interface");
         await output.WriteLineAsync("  ai-assistant-shell  Converse with the bounded optional OpenAI authoring agent");
         await output.WriteLineAsync("  ndjson    Run the structured automation and AI host");
@@ -407,6 +432,17 @@ public static class CliRunner
         await output.WriteLineAsync("Sample commands:");
         await output.WriteLineAsync("  sample list");
         await output.WriteLineAsync("  sample create <sample-name> <new-database>");
+    }
+
+    private static async Task PrintTemplateHelp(TextWriter output)
+    {
+        await output.WriteLineAsync("Template commands:");
+        await output.WriteLineAsync("  template list");
+        await output.WriteLineAsync("  template describe <built-in-name-or-json-path>");
+        await output.WriteLineAsync("  template export <built-in-name-or-json-path> <new-json-path>");
+        await output.WriteLineAsync("  template instantiate <built-in-name-or-json-path> <new-database> <project-id> <title> <purpose-text>");
+        await output.WriteLineAsync();
+        await output.WriteLineAsync("Instantiation is non-overwriting; attached active rules are enforced.");
     }
 
     private static async Task PrintReadHelp(TextWriter output)

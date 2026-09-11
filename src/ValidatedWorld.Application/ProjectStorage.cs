@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using ValidatedWorld.Core;
+using ValidatedWorld.Serialization;
 using ValidatedWorld.Validation;
 
 namespace ValidatedWorld.Application;
@@ -49,7 +50,6 @@ public sealed record ProjectStatus(
     int NodeCount,
     int EdgeCount,
     string StateFingerprint,
-    int SchemaVersion,
     string SqliteVersion);
 
 public sealed record ProjectVerification(
@@ -58,7 +58,9 @@ public sealed record ProjectVerification(
     string StateFingerprint,
     int NodeCount,
     int EdgeCount,
-    IReadOnlyList<string> Checks);
+    IReadOnlyList<string> Checks,
+    ValidationStatus RuleStatus = ValidationStatus.Valid,
+    IReadOnlyList<RuleDiagnostic>? RuleDiagnostics = null);
 
 /// <summary>A deterministic SQL representation of one verified current project.</summary>
 public sealed record ProjectSqlExport(string Path, string StateFingerprint, string Sql);
@@ -210,6 +212,22 @@ public sealed partial class ProjectApplication
             throw new ProjectStorageException(
                 ProjectStorageErrorCode.InvalidGraph,
                 $"The project graph cannot be initialized: {first}");
+        }
+    }
+
+    private GraphValidationResult ValidateGraph(ProjectGraph graph)
+    {
+        var structural = _validator.Validate(graph);
+        if (!structural.IsValid) return structural;
+        try
+        {
+            return GraphValidator.CombineRules(structural,
+                new GraphRuleValidator().Validate(graph, RuleProtocol.Parse(graph)));
+        }
+        catch (RuleFormatException exception)
+        {
+            return GraphValidator.CombineRules(structural, new RuleValidationResult(ValidationStatus.Inconclusive,
+                [new RuleDiagnostic(exception.Code, exception.Message, exception.EntityId, [], 0, 0)]));
         }
     }
 }
