@@ -50,6 +50,9 @@ public sealed class McpWorkflowTests
         Assert.Equal(McpAssembly.ProductVersion, hostStatus["productVersion"]!.GetValue<string>());
         Assert.Equal("local-only", hostStatus["hostSupport"]!.GetValue<string>());
         Assert.Equal("stdio", hostStatus["transport"]!.GetValue<string>());
+        Assert.Equal("English", hostStatus["supportedProductLanguage"]!.GetValue<string>());
+        Assert.Contains("Unicode text", hostStatus["graphTextSupport"]!.GetValue<string>());
+        Assert.Contains("non-English workflows are unsupported", hostStatus["graphTextSupport"]!.GetValue<string>());
         Assert.False(hostStatus["semanticReview"]!["effective"]!.GetValue<bool>());
         Assert.Null(hostStatus["semanticReview"]!["apiKey"]);
 

@@ -381,6 +381,7 @@ public static class CliRunner
     {
         await output.WriteLineAsync("ValidatedWorld - local semantic graph change control");
         await output.WriteLineAsync($"Version {ProductVersion}");
+        await output.WriteLineAsync("Supported product language: English. Unicode graph text can be stored, but non-English workflows are unsupported and unvalidated.");
         await output.WriteLineAsync();
         await output.WriteLineAsync("Commands:");
         await output.WriteLineAsync("  project   Initialize, inspect, compare, verify, back up, or export a project");
@@ -401,6 +402,7 @@ public static class CliRunner
         await output.WriteLineAsync("Conversational AI authoring:");
         await output.WriteLineAsync("  ai-assistant-shell <database>");
         await output.WriteLineAsync();
+        await output.WriteLineAsync("The supported authoring language is English; non-English AI workflow quality is unvalidated.");
         await output.WriteLineAsync("The authoring agent uses bounded graph tools and one process-local change session.");
         await output.WriteLineAsync("It cannot use raw SQL, mark review dispositions, bypass semantic review, or write without");
         await output.WriteLineAsync("the shell showing the exact proposal and receiving your explicit 'yes'.");

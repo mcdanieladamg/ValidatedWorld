@@ -146,6 +146,27 @@ public sealed class ApplicationQueryAndSessionTests
     }
 
     [Fact]
+    public void Ranked_search_ignores_english_function_words_without_weakening_exact_or_phrase_matches()
+    {
+        var graph = SampleProjectCatalog.Create(SampleProjectCatalog.TechnicalProject);
+        var application = new ProjectApplication(new MutableStore(graph));
+        var queries = application.Queries("memory.vw.db");
+
+        var naturalLanguage = queries.SearchRanked("How is a battery verified on the device?");
+        Assert.Equal(
+            new[] { "runtime-test", "battery-assumption" },
+            naturalLanguage.Items.Take(2).Select(hit => hit.EntityId.Value));
+        Assert.DoesNotContain(
+            naturalLanguage.Items.SelectMany(hit => hit.Matches),
+            match => match.Term is "a" or "is" or "on" or "the" or "how");
+
+        var quoted = queries.SearchRanked("\"the battery\"");
+        Assert.Equal("battery-assumption", quoted.Items[0].EntityId.Value);
+        Assert.Contains(quoted.Items[0].Matches, match =>
+            match.Kind == SearchMatchKind.Phrase && match.Term == "the battery");
+    }
+
+    [Fact]
     public void Ranked_search_is_cursor_bound_and_literal_search_contract_is_preserved()
     {
         using var workspace = new TestWorkspace();

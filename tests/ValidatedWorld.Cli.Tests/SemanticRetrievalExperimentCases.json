@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "topK": 5,
+  "cases": [
+    {
+      "corpus": "blueprint",
+      "query": "How are partial saves avoided if persistence crashes?",
+      "relevantEntityIds": ["change-atomic-write"],
+      "expectedLexicalMissEntityIds": ["change-atomic-write"]
+    },
+    {
+      "corpus": "blueprint",
+      "query": "Do category labels create downstream review obligations?",
+      "relevantEntityIds": ["graph-metadata", "query-tag-search"],
+      "expectedLexicalMissEntityIds": ["graph-metadata", "query-tag-search"]
+    },
+    {
+      "corpus": "blueprint",
+      "query": "Which file is the durable source of truth for every design decision?",
+      "relevantEntityIds": ["repository-canonical-database"],
+      "expectedLexicalMissEntityIds": ["repository-canonical-database"]
+    },
+    {
+      "corpus": "blueprint",
+      "query": "What protects authors from overlooked conceptual links?",
+      "relevantEntityIds": ["gap-missing-edge-completeness", "recommend-hybrid-retrieval"],
+      "expectedLexicalMissEntityIds": ["recommend-hybrid-retrieval"]
+    },
+    {
+      "corpus": "blueprint",
+      "query": "Can pending work resume after reopening the program?",
+      "relevantEntityIds": ["gap-session-durability"],
+      "expectedLexicalMissEntityIds": ["gap-session-durability"]
+    },
+    {
+      "corpus": "blueprint",
+      "query": "Does passing inspection guarantee correctness?",
+      "relevantEntityIds": ["product-semantic-not-proof"],
+      "expectedLexicalMissEntityIds": ["product-semantic-not-proof"]
+    },
+    {
+      "corpus": "technical-project",
+      "query": "How long can it operate between charges?",
+      "relevantEntityIds": ["battery-assumption"],
+      "expectedLexicalMissEntityIds": ["battery-assumption"]
+    },
+    {
+      "corpus": "technical-project",
+      "query": "Which evidence covers field execution?",
+      "relevantEntityIds": ["runtime-test"],
+      "expectedLexicalMissEntityIds": ["runtime-test"]
+    },
+    {
+      "corpus": "technical-project",
+      "query": "How long may measurements be kept?",
+      "relevantEntityIds": ["retention-policy"],
+      "expectedLexicalMissEntityIds": ["retention-policy"]
+    },
+    {
+      "corpus": "technical-project",
+      "query": "What mechanism guarantees timely erasure?",
+      "relevantEntityIds": ["privacy-architecture"],
+      "expectedLexicalMissEntityIds": ["privacy-architecture"]
+    },
+    {
+      "corpus": "technical-project",
+      "query": "Where should operators read the data lifetime promise?",
+      "relevantEntityIds": ["privacy-documentation"],
+      "expectedLexicalMissEntityIds": ["privacy-documentation"]
+    },
+    {
+      "corpus": "technical-project",
+      "query": "What confirms setup works for users with disabilities?",
+      "relevantEntityIds": ["accessibility-acceptance"],
+      "expectedLexicalMissEntityIds": ["accessibility-acceptance"]
+    }
+  ]
+}

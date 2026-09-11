@@ -9,7 +9,7 @@ namespace ValidatedWorld.Mcp;
 [McpServerToolType]
 internal sealed class McpTools(McpProjectService projects)
 {
-    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reports the local MCP host version, runtime, installation path, transport, and effective semantic-review configuration without exposing credentials. This does not require a selected project.")]
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reports the local MCP host version, runtime, installation path, transport, English-only product support, Unicode graph-text boundary, and effective semantic-review configuration without exposing credentials. This does not require a selected project.")]
     public McpHostStatus HostStatus() => projects.HostStatus();
 
     [McpServerTool(UseStructuredContent = true, Destructive = false, OpenWorld = false), Description("Selects an existing local ValidatedWorld .vw.db project for this MCP session. Paths are interpreted by the host process and are never taken from graph text.")]

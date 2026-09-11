@@ -17,6 +17,15 @@ The same model can represent software architecture, requirements, research,
 patent outlines, novels, game lore, campaigns, or any other project whose facts
 and decisions depend on one another.
 
+**Language support:** The initial public release is supported in English only.
+Its CLI and MCP help, diagnostics, bundled templates and examples, documentation,
+ranked-search tuning, and optional AI instructions and responses are authored and
+tested in English. Graph text is stored as Unicode, and deterministic storage,
+validation, traversal, and exact lookup do not interpret its language, so text in
+other languages can be stored and round-tripped. Workflows using non-English
+content—especially AI authoring/review and ranked natural-language retrieval—are
+not currently supported or validated.
+
 ## Why it exists
 
 An AI can only read a fraction of a very large project at once. Ordinary search

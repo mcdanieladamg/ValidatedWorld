@@ -10,6 +10,13 @@ local semantic change-control engine, not a truth oracle: its graph records
 human-readable claims and explicit review dependencies, and its guarded write
 workflow helps an agent or human judge whether a change remains coherent.
 
+The supported product language is English. Use English for interaction,
+diagnostics, stable modeling vocabulary, and optional AI authoring or review.
+Graph text is stored as Unicode and deterministic operations do not interpret
+its language, but non-English project workflows and retrieval quality are
+unsupported and unvalidated; explain that boundary if the selected graph uses
+other languages.
+
 ## Establish the project
 
 For a new project that should follow a reusable structure, call `list_templates`

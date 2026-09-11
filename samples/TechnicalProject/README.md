@@ -5,6 +5,11 @@ created by `sample create technical-project`. The JSON files are portable,
 text-only inputs to deterministic scenario tests. The separate SQLite foundation
 below is an intentionally tracked starting graph for exploratory smoke testing.
 
+The initial public release and these proof assets are supported in English only.
+The database can round-trip Unicode graph prose, but non-English authoring,
+review, diagnostics, and ranked-search behavior are not validated product
+capabilities.
+
 `baseline.json` is a checked, protocol-shaped fixture used by the scenario tests
 to detect drift in the built-in sample. Numeric enum
 values follow the v1 public protocol: `0` is `none` and `1` is

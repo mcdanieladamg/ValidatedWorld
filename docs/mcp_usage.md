@@ -10,6 +10,15 @@ rule language and repository-bootstrap discipline.
 Application and SQLite use cases. Read tools are provider-free. Graph edits
 remain process-local until the complete proposal has been reviewed and written
 atomically through Application.
+
+The initial public release is supported in English only. MCP tool descriptions,
+messages, bundled workflow instructions, templates, examples, ranked-search
+tuning, and optional AI authoring/review are authored and tested in English.
+Graph text is Unicode and language-neutral storage and traversal can round-trip
+other languages, but non-English workflow and retrieval quality are unsupported
+and unvalidated. `host_status` reports both this product-language boundary and
+the graph-text storage capability.
+
 When `AiReview:Enabled` and the shared OpenAI review key are effectively
 configured through .NET User Secrets or the `VW_` environment variables, MCP
 writes use the same independent semantic reviewer as the CLI. The MCP host

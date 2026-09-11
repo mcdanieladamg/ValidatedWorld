@@ -4,6 +4,12 @@ ValidatedWorld's primary agent-facing surface is the local plugin. The CLI
 remains the durable manual, scripting, recovery, and source-checkout surface.
 Both use the same Application layer and `.vw.db` format.
 
+The initial public release is supported in English only. Product instructions,
+diagnostics, bundled content, search tuning, and optional AI workflows are
+authored and validated in English. The `.vw.db` format stores Unicode graph text
+without interpreting its language, but non-English workflows are not a supported
+release capability.
+
 For the normal two-command development loop, start with the
 [README](../README.md#build-and-install-the-local-plugin).
 
