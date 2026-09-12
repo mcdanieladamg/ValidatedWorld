@@ -34,6 +34,7 @@ public sealed class McpWorkflowTests
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "initialize_project");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "initialize_from_template");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "validate_project");
+        Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "merge_projects");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "read_context");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "begin_change");
         Assert.DoesNotContain(toolItems, tool => tool!["name"]!.GetValue<string>().Contains("bypass", StringComparison.OrdinalIgnoreCase));
@@ -45,6 +46,9 @@ public sealed class McpWorkflowTests
         Assert.Null(writeTool!["annotations"]!["readOnlyHint"]);
         Assert.True(writeTool["annotations"]!["destructiveHint"]!.GetValue<bool>());
         Assert.False(writeTool["annotations"]!["openWorldHint"]!.GetValue<bool>());
+        var mergeTool = toolItems.Single(tool => tool!["name"]!.GetValue<string>() == "merge_projects");
+        Assert.True(mergeTool!["annotations"]!["readOnlyHint"]!.GetValue<bool>());
+        Assert.False(mergeTool["annotations"]!["destructiveHint"]!.GetValue<bool>());
 
         var hostStatus = await host.Call("host_status", new { });
         Assert.Equal(McpAssembly.ProductVersion, hostStatus["productVersion"]!.GetValue<string>());
@@ -59,6 +63,18 @@ public sealed class McpWorkflowTests
         var status = await host.Call("project_status", new { });
         Assert.Equal("technical-project", status["projectId"]!.GetValue<string>());
         Assert.Equal(Path.GetFullPath(project), status["path"]!.GetValue<string>());
+
+        var merge = await host.Call("merge_projects", new
+        {
+            basePath = project,
+            oursPath = project,
+            theirsPath = project,
+        });
+        Assert.Equal("Clean", merge["status"]!.GetValue<string>());
+        Assert.True(merge["isReadyToApply"]!.GetValue<bool>());
+        Assert.Equal(0, merge["operationCount"]!.GetValue<int>());
+        Assert.NotNull(merge["mergedFingerprint"]);
+        Assert.Null(merge["mergedGraph"]);
 
         var page = await host.Call("list_nodes", new { limit = 1 });
         Assert.Single(page["items"]!.AsArray());

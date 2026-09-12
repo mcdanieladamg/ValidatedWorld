@@ -353,6 +353,31 @@ internal sealed class McpProjectService(
         return Selection();
     }
 
+    public object Merge(string basePath, string oursPath, string theirsPath)
+    {
+        var result = application.Merge(
+            ProjectPathPolicy.Existing(basePath),
+            ProjectPathPolicy.Existing(oursPath),
+            ProjectPathPolicy.Existing(theirsPath));
+        return Bound(new
+        {
+            result.BasePath,
+            result.OursPath,
+            result.TheirsPath,
+            projectId = result.ProjectId.Value,
+            result.BaseFingerprint,
+            result.OursFingerprint,
+            result.TheirsFingerprint,
+            result.Status,
+            result.IsReadyToApply,
+            result.MergedFingerprint,
+            operationCount = result.Operations.Operations.Count,
+            operations = GraphProtocol.ToDto(result.Operations),
+            validation = result.Validation is null ? null : ValidationProtocol.ToDto(result.Validation),
+            conflicts = result.Conflicts,
+        });
+    }
+
     public ProjectQueries Queries()
     {
         EnsureDefaultSelected();

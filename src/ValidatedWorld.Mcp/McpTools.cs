@@ -44,6 +44,13 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Returns the status and identity of the currently selected project, including its normalized path and state fingerprint.")]
     public McpProjectSelection ProjectStatus() => projects.Status();
 
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Computes a read-only graph-aware three-way merge for three explicit local .vw.db snapshots. A clean result returns operations relative to ours; conflicts and invalid merged graphs are never written. Apply a clean batch through a normal reviewed change session only when its base fingerprint equals the returned ours fingerprint.")]
+    public object MergeProjects(
+        [Description("Common-base .vw.db snapshot path.")] string basePath,
+        [Description("Ours .vw.db snapshot path; returned operations apply relative to this graph.")] string oursPath,
+        [Description("Theirs .vw.db snapshot path.")] string theirsPath) =>
+        projects.Merge(basePath, oursPath, theirsPath);
+
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Runs structural verification and every attached active full-graph rule for the selected project, returning bounded actionable diagnostics.")]
     public object ValidateProject() => projects.ValidateProject();
 

@@ -200,7 +200,10 @@ public static class CliRunner
                         new QueryPageRequest(options.Limit, options.Cursor)));
                     break;
                 }
-            case "init" or "open" or "status" or "verify" or "backup" or "export-sql" or "diff":
+            case "merge" when arguments.Length == 5:
+                result = CliDto.Merge(application.Merge(arguments[2], arguments[3], arguments[4]));
+                break;
+            case "init" or "open" or "status" or "verify" or "backup" or "export-sql" or "diff" or "merge":
                 throw new CliUsageException($"Incorrect arguments for 'project {arguments[1]}'.");
             default:
                 throw new CliUsageException($"Unknown project command '{arguments[1]}'.");
@@ -422,11 +425,15 @@ public static class CliRunner
         await output.WriteLineAsync("  project export-sql <database>");
         await output.WriteLineAsync(
             "  project diff <base-database> <target-database> [--limit N] [--cursor TOKEN]");
+        await output.WriteLineAsync(
+            "  project merge <base-database> <ours-database> <theirs-database>");
         await output.WriteLineAsync();
         await output.WriteLineAsync(
             "Quote arguments containing spaces. Existing database destinations are not overwritten.");
         await output.WriteLineAsync(
             "SQL export is deterministic UTF-8 text on stdout; redirect it to a new file if desired.");
+        await output.WriteLineAsync(
+            "Merge is read-only: inspect its operation batch, then submit it through a normal reviewed change session on ours.");
     }
 
     private static async Task PrintSampleHelp(TextWriter output)
