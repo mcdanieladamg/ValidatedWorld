@@ -38,6 +38,7 @@ internal sealed record ProjectDiffRequest(
     string TargetPath,
     int Limit = QueryPageRequest.DefaultLimit,
     string? Cursor = null);
+internal sealed record ProjectMergeRequest(string BasePath, string OursPath, string TheirsPath);
 internal sealed record SampleCreateRequest(string SampleName, string Path);
 internal sealed record ReadEntityRequest(string Path, string EntityId, string? ExpectedProjectId = null);
 internal sealed record ReadPageRequest(
@@ -214,6 +215,27 @@ internal sealed record ProjectDiffDto(
     int TotalCount,
     string? NextCursor,
     QueryOmissionDto? Omission);
+internal sealed record ProjectMergeConflictDto(
+    ProjectMergeConflictKind Kind,
+    string EntityId,
+    GraphEntityKind? EntityKind,
+    IReadOnlyList<string> ChangedFields,
+    string Message);
+internal sealed record ProjectMergeDto(
+    string BasePath,
+    string OursPath,
+    string TheirsPath,
+    string ProjectId,
+    string BaseFingerprint,
+    string OursFingerprint,
+    string TheirsFingerprint,
+    ProjectMergeStatus Status,
+    bool IsReadyToApply,
+    string? MergedFingerprint,
+    int OperationCount,
+    OperationBatchDto Operations,
+    ValidationResultDto? Validation,
+    IReadOnlyList<ProjectMergeConflictDto> Conflicts);
 internal sealed record PageDto<T>(
     IReadOnlyList<T> Items,
     int TotalCount,
@@ -479,6 +501,27 @@ internal static class CliDto
         value.Changes.TotalCount,
         value.Changes.NextCursor,
         value.Changes.Omission is null ? null : Omission(value.Changes.Omission));
+
+    public static ProjectMergeDto Merge(ProjectMergeResult value) => new(
+        value.BasePath,
+        value.OursPath,
+        value.TheirsPath,
+        value.ProjectId.Value,
+        value.BaseFingerprint,
+        value.OursFingerprint,
+        value.TheirsFingerprint,
+        value.Status,
+        value.IsReadyToApply,
+        value.MergedFingerprint,
+        value.Operations.Operations.Count,
+        GraphProtocol.ToDto(value.Operations),
+        value.Validation is null ? null : Validation(value.Validation),
+        value.Conflicts.Select(conflict => new ProjectMergeConflictDto(
+            conflict.Kind,
+            conflict.EntityId,
+            conflict.EntityKind,
+            conflict.ChangedFields,
+            conflict.Message)).ToArray());
 
     public static PageDto<NodeDto> Nodes(QueryPage<GraphNode> page) => new(
         page.Items.Select(GraphProtocol.ToDto).ToArray(), page.TotalCount, page.NextCursor,

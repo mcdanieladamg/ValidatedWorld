@@ -216,6 +216,44 @@ The NDJSON equivalent is:
 {"version":1,"command":"project.diff","payload":{"basePath":"base.vw.db","targetPath":"target.vw.db","limit":100}}
 ```
 
+## Graph-aware three-way merge
+
+`project merge` compares a common base with `ours` and `theirs` without
+modifying any database:
+
+```powershell
+./ValidatedWorld.Cli.exe project merge base.vw.db ours.vw.db theirs.vw.db
+```
+
+Each stable node and edge ID is merged with standard three-way rules. A value
+changed on only one side is selected; identical additions are compatible;
+divergent additions, divergent replacements, delete/modify pairs, and
+node/edge ID collisions are explicit conflicts. Project title and purpose-ID
+changes are also reported as conflicts because the current reviewed change
+session contract mutates graph entities, not project metadata.
+
+A clean result contains a `mergedFingerprint` and an `operations` batch
+relative to `ours`; it does not repeat the complete graph. The batch is a plan,
+not a write. Inspect it, begin a normal change session on `ours`, and require
+the session's base fingerprint to equal the returned `oursFingerprint` before
+applying the operations. Then review the affected/context set and write using
+the ordinary atomic workflow. A result with `status` of `conflicted` or
+`invalid` must not be applied. Validation is absent while conflicts prevent a
+candidate graph and contains diagnostics when a conflict-free combination is
+invalid.
+
+The NDJSON equivalent is:
+
+```json
+{"version":1,"command":"project.merge","payload":{"basePath":"base.vw.db","oursPath":"ours.vw.db","theirsPath":"theirs.vw.db"}}
+```
+
+This is intentionally a local semantic operation. It never merges SQLite
+pages, invokes Git, or writes a branch file. Git revisions can be materialized
+as verified `.vw.db` snapshots and passed to the same command; a native Git
+driver remains outside this phase until the standalone merge contract has
+proved useful in practice.
+
 Use a `project backup` made before editing as the base, then diff it against the
 result. A Git revision materialized as a `.vw.db` file is equally valid. Diff
 output is not stored in either database.

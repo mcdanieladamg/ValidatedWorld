@@ -17,7 +17,7 @@ internal sealed class NdjsonHost(
     [
         "host.help", "host.exit",
         "project.init", "project.open", "project.status", "project.verify", "project.backup", "project.export-sql",
-        "project.diff",
+        "project.diff", "project.merge",
         "sample.list", "sample.create",
         "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope",
         "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report",
@@ -83,6 +83,7 @@ internal sealed class NdjsonHost(
         "project.backup" => (ProjectBackup(payload), false),
         "project.export-sql" => (ProjectExportSql(payload), false),
         "project.diff" => (ProjectDiff(payload), false),
+        "project.merge" => (ProjectMerge(payload), false),
         "sample.list" => (SampleList(payload), false),
         "sample.create" => (SampleCreate(payload), false),
         "read.node" => (ReadNode(payload), false),
@@ -131,7 +132,8 @@ internal sealed class NdjsonHost(
             {
                 project = "init {path,projectId,title,purposeNodeId,purposeText}; open|status|verify|export-sql {path}; " +
                     "backup {sourcePath,destinationPath}; " +
-                    "diff {basePath,targetPath,limit?,cursor?}",
+                    "diff {basePath,targetPath,limit?,cursor?}; " +
+                    "merge {basePath,oursPath,theirsPath}",
                 sample = "list {}; create {sampleName,path}",
                 read = "node|edge {path,entityId,expectedProjectId?}; " +
                     "nodes|edges {path,limit?,cursor?,expectedProjectId?}; " +
@@ -219,6 +221,12 @@ internal sealed class NdjsonHost(
             request.BasePath,
             request.TargetPath,
             CliDto.Page(request.Limit, request.Cursor)));
+    }
+
+    private object ProjectMerge(JsonElement payload)
+    {
+        var request = CliJson.Payload<ProjectMergeRequest>(payload);
+        return CliDto.Merge(application.Merge(request.BasePath, request.OursPath, request.TheirsPath));
     }
 
     private static object SampleList(JsonElement payload)

@@ -65,6 +65,18 @@ stale and choose review direction deliberately:
 
 Use rationales where the reason for an edge is not obvious.
 
+When reconciling two project branches, use the read-only `merge_projects` tool
+with an explicit common-base, ours, and theirs `.vw.db` snapshot. It applies
+standard three-way rules per stable node and edge ID and reports divergent
+additions, divergent replacements, delete/modify pairs, node/edge ID
+collisions, and project metadata changes as explicit conflicts. A clean result
+returns an operation batch relative to ours. Inspect that batch, then apply it
+through the normal change session only when its base fingerprint exactly
+matches the merge result's `oursFingerprint`, so affected analysis, context
+review, and atomic write remain in control. Never merge SQLite pages or write a
+branch file directly; Git remains optional and snapshots must be materialized
+by the caller.
+
 ## Make one coherent previewed change
 
 1. Call `begin_change` with a concrete intent and retain its revision.
