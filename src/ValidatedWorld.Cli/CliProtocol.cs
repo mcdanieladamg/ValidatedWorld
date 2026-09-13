@@ -39,6 +39,11 @@ internal sealed record ProjectDiffRequest(
     int Limit = QueryPageRequest.DefaultLimit,
     string? Cursor = null);
 internal sealed record ProjectMergeRequest(string BasePath, string OursPath, string TheirsPath);
+internal sealed record ProjectBulkPlanRequest(
+    string Path,
+    string ManifestPath,
+    int ChunkSize = BulkImportContract.DefaultChunkSize,
+    string? Cursor = null);
 internal sealed record ArtifactCheckRequest(
     string Path,
     string? NodeId = null,
@@ -241,6 +246,20 @@ internal sealed record ProjectMergeDto(
     OperationBatchDto Operations,
     ValidationResultDto? Validation,
     IReadOnlyList<ProjectMergeConflictDto> Conflicts);
+internal sealed record ProjectBulkPlanDto(
+    string ManifestPath,
+    string ProjectId,
+    string BaseFingerprint,
+    string ManifestFingerprint,
+    string Intent,
+    int OperationCount,
+    int ChunkSize,
+    int ChunkIndex,
+    int OperationStart,
+    int ChunkOperationCount,
+    int ChunkCount,
+    OperationBatchDto Operations,
+    string? NextCursor);
 internal sealed record ArtifactCheckItemDto(
     string NodeId,
     string? Path,
@@ -551,6 +570,21 @@ internal static class CliDto
             conflict.EntityKind,
             conflict.ChangedFields,
             conflict.Message)).ToArray());
+
+    public static ProjectBulkPlanDto BulkPlan(BulkImportPlan value) => new(
+        value.ManifestPath,
+        value.ProjectId,
+        value.BaseFingerprint,
+        value.ManifestFingerprint,
+        value.Intent,
+        value.OperationCount,
+        value.ChunkSize,
+        value.ChunkIndex,
+        value.OperationStart,
+        value.ChunkOperationCount,
+        value.ChunkCount,
+        GraphProtocol.ToDto(value.Operations),
+        value.NextCursor);
 
     public static ArtifactCheckDto Artifacts(ArtifactCheckReport value) => new(
         value.ProjectPath,

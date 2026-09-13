@@ -35,6 +35,7 @@ public sealed class McpWorkflowTests
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "initialize_from_template");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "validate_project");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "check_artifacts");
+        Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "plan_bulk_import");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "merge_projects");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "read_context");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "begin_change");

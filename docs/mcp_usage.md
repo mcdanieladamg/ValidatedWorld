@@ -49,6 +49,14 @@ limits are enforced by Application. Results include cursors and omission
 metadata where a query is incomplete; the host also applies a 512 KiB encoded
 result bound.
 
+For large imports, `plan_bulk_import` scans an explicit local JSONL manifest
+and returns one bounded operation chunk plus a state-bound continuation cursor.
+The first line must use the `validated-world-bulk-manifest` header and match the
+selected project’s current fingerprint. Each checkpoint is validated before it
+is returned. Apply successive chunks through the existing `patch_change` call
+in one session, inspect the final preview, and call `write_change` once; the
+planner is read-only and never creates partial database writes.
+
 `host_status` requires no selected project and reports the product version,
 local-only stdio support, operating system/process architecture, .NET runtime,
 installation directory, and effective optional semantic-review configuration.

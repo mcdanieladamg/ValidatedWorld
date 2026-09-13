@@ -19,6 +19,7 @@ public enum ProjectStorageErrorCode
     MappingFailure,
     FingerprintMismatch,
     InvalidGraph,
+    InvalidBulkManifest,
     ResourceLimitExceeded,
     StorageFailure,
 }

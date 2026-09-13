@@ -17,7 +17,7 @@ internal sealed class NdjsonHost(
     [
         "host.help", "host.exit",
         "project.init", "project.open", "project.status", "project.verify", "project.backup", "project.export-sql",
-        "project.diff", "project.merge",
+        "project.diff", "project.merge", "project.bulk_plan",
         "artifact.check",
         "sample.list", "sample.create",
         "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope",
@@ -85,6 +85,7 @@ internal sealed class NdjsonHost(
         "project.export-sql" => (ProjectExportSql(payload), false),
         "project.diff" => (ProjectDiff(payload), false),
         "project.merge" => (ProjectMerge(payload), false),
+        "project.bulk_plan" => (ProjectBulkPlan(payload), false),
         "artifact.check" => (ArtifactCheck(payload), false),
         "sample.list" => (SampleList(payload), false),
         "sample.create" => (SampleCreate(payload), false),
@@ -135,7 +136,8 @@ internal sealed class NdjsonHost(
                 project = "init {path,projectId,title,purposeNodeId,purposeText}; open|status|verify|export-sql {path}; " +
                     "backup {sourcePath,destinationPath}; " +
                     "diff {basePath,targetPath,limit?,cursor?}; " +
-                    "merge {basePath,oursPath,theirsPath}",
+                    "merge {basePath,oursPath,theirsPath}; " +
+                    "bulk_plan {path,manifestPath,chunkSize?,cursor?}",
                 artifact = "check {path,nodeId?,maxAnchors?,maxSampleBytes?}",
                 sample = "list {}; create {sampleName,path}",
                 read = "node|edge {path,entityId,expectedProjectId?}; " +
@@ -230,6 +232,16 @@ internal sealed class NdjsonHost(
     {
         var request = CliJson.Payload<ProjectMergeRequest>(payload);
         return CliDto.Merge(application.Merge(request.BasePath, request.OursPath, request.TheirsPath));
+    }
+
+    private object ProjectBulkPlan(JsonElement payload)
+    {
+        var request = CliJson.Payload<ProjectBulkPlanRequest>(payload);
+        return CliDto.BulkPlan(application.PlanBulkImport(
+            request.Path,
+            request.ManifestPath,
+            new BulkImportPlanOptions(request.ChunkSize, request.Cursor),
+            cancellationToken));
     }
 
     private object ArtifactCheck(JsonElement payload)

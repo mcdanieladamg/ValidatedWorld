@@ -29,6 +29,21 @@ internal sealed record McpProjectInitializationResult(
     McpProjectSelection Project,
     string Message);
 
+internal sealed record McpBulkImportPlan(
+    string ManifestPath,
+    string ProjectId,
+    string BaseFingerprint,
+    string ManifestFingerprint,
+    string Intent,
+    int OperationCount,
+    int ChunkSize,
+    int ChunkIndex,
+    int OperationStart,
+    int ChunkOperationCount,
+    int ChunkCount,
+    OperationBatchDto Operations,
+    string? NextCursor);
+
 internal sealed record McpArtifactCheckItem(
     string NodeId,
     string? Path,
@@ -402,6 +417,34 @@ internal sealed class McpProjectService(
             validation = result.Validation is null ? null : ValidationProtocol.ToDto(result.Validation),
             conflicts = result.Conflicts,
         });
+    }
+
+    public object PlanBulkImport(
+        string manifestPath,
+        int chunkSize,
+        string? cursor,
+        CancellationToken cancellationToken)
+    {
+        var selection = Status();
+        var plan = application.PlanBulkImport(
+            selection.Path,
+            manifestPath,
+            new BulkImportPlanOptions(chunkSize, cursor),
+            cancellationToken);
+        return Bound(new McpBulkImportPlan(
+            plan.ManifestPath,
+            plan.ProjectId,
+            plan.BaseFingerprint,
+            plan.ManifestFingerprint,
+            plan.Intent,
+            plan.OperationCount,
+            plan.ChunkSize,
+            plan.ChunkIndex,
+            plan.OperationStart,
+            plan.ChunkOperationCount,
+            plan.ChunkCount,
+            GraphProtocol.ToDto(plan.Operations),
+            plan.NextCursor));
     }
 
     public ProjectQueries Queries()
