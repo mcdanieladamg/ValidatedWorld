@@ -70,6 +70,7 @@ public static class CliRunner
             return arguments[0] switch
             {
                 "project" => await RunProject(application, arguments, output),
+                "artifact" => await RunArtifact(application, arguments, output, cancellationToken),
                 "read" => await RunRead(application, arguments, output, cancellationToken),
                 "sample" => await RunSample(application, arguments, output),
                 "template" => await RunTemplate(application, arguments, output),
@@ -237,6 +238,32 @@ public static class CliRunner
         return SuccessExitCode;
     }
 
+    private static async Task<int> RunArtifact(
+        ProjectApplication application,
+        string[] arguments,
+        TextWriter output,
+        CancellationToken cancellationToken)
+    {
+        if (arguments.Length < 2 || IsHelp(arguments[1]))
+        {
+            await PrintArtifactHelp(output);
+            return SuccessExitCode;
+        }
+
+        if (arguments[1] != "check")
+            throw new CliUsageException($"Unknown artifact command '{arguments[1]}'.");
+        if (arguments.Length < 3)
+            throw new CliUsageException("A database path is required for 'artifact check'.");
+
+        var options = CliArtifactCheckOptions.Parse(arguments);
+        var nodeId = options.NodeId is null ? (EntityId?)null : new EntityId(options.NodeId);
+        await WriteJson(output, CliDto.Artifacts(application.CheckArtifacts(
+            arguments[2], nodeId,
+            new ArtifactCheckOptions(options.MaxAnchors, options.MaxSampleBytes),
+            cancellationToken)));
+        return SuccessExitCode;
+    }
+
     private static async Task<int> RunTemplate(ProjectApplication application, string[] arguments, TextWriter output)
     {
         if (arguments.Length < 2 || IsHelp(arguments[1]))
@@ -388,6 +415,7 @@ public static class CliRunner
         await output.WriteLineAsync();
         await output.WriteLineAsync("Commands:");
         await output.WriteLineAsync("  project   Initialize, inspect, compare, verify, back up, or export a project");
+        await output.WriteLineAsync("  artifact  Check opt-in external artifact anchors");
         await output.WriteLineAsync("  read      Run bounded graph queries");
         await output.WriteLineAsync("  sample    List or create built-in disposable samples");
         await output.WriteLineAsync("  template  Discover, export, customize, or instantiate graph templates");
@@ -441,6 +469,16 @@ public static class CliRunner
         await output.WriteLineAsync("Sample commands:");
         await output.WriteLineAsync("  sample list");
         await output.WriteLineAsync("  sample create <sample-name> <new-database>");
+    }
+
+    private static async Task PrintArtifactHelp(TextWriter output)
+    {
+        await output.WriteLineAsync("Artifact commands:");
+        await output.WriteLineAsync("  artifact check <database> [node-id] [--max-anchors N] [--max-sample-bytes N]");
+        await output.WriteLineAsync();
+        await output.WriteLineAsync("Checks nodes tagged 'artifact' or having kind 'external-anchor'.");
+        await output.WriteLineAsync("Anchors use artifact.path and artifact.sha256 attributes; checks are read-only.");
+        await output.WriteLineAsync("The built-in filesystem adapter hashes bytes and returns a bounded base64 sample.");
     }
 
     private static async Task PrintTemplateHelp(TextWriter output)
@@ -535,6 +573,41 @@ public static class CliRunner
             }
 
             return new CliProjectDiffOptions(limit, cursor);
+        }
+    }
+
+    private sealed record CliArtifactCheckOptions(
+        string? NodeId,
+        int MaxAnchors,
+        int MaxSampleBytes)
+    {
+        public static CliArtifactCheckOptions Parse(string[] arguments)
+        {
+            string? nodeId = null;
+            var maxAnchors = ArtifactCheckerContract.DefaultMaxAnchors;
+            var maxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes;
+            var index = 3;
+            if (index < arguments.Length && !arguments[index].StartsWith("--", StringComparison.Ordinal))
+            {
+                nodeId = arguments[index++];
+            }
+
+            while (index < arguments.Length)
+            {
+                if (index + 1 >= arguments.Length)
+                    throw new CliUsageException($"Option '{arguments[index]}' requires a value.");
+                var value = arguments[index + 1];
+                switch (arguments[index])
+                {
+                    case "--max-anchors": maxAnchors = PositiveInt(value, "max-anchors"); break;
+                    case "--max-sample-bytes": maxSampleBytes = PositiveInt(value, "max-sample-bytes"); break;
+                    default: throw new CliUsageException($"Unknown option '{arguments[index]}'.");
+                }
+
+                index += 2;
+            }
+
+            return new(nodeId, maxAnchors, maxSampleBytes);
         }
     }
 

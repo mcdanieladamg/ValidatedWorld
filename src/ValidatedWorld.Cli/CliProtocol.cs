@@ -39,6 +39,11 @@ internal sealed record ProjectDiffRequest(
     int Limit = QueryPageRequest.DefaultLimit,
     string? Cursor = null);
 internal sealed record ProjectMergeRequest(string BasePath, string OursPath, string TheirsPath);
+internal sealed record ArtifactCheckRequest(
+    string Path,
+    string? NodeId = null,
+    int MaxAnchors = ArtifactCheckerContract.DefaultMaxAnchors,
+    int MaxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes);
 internal sealed record SampleCreateRequest(string SampleName, string Path);
 internal sealed record ReadEntityRequest(string Path, string EntityId, string? ExpectedProjectId = null);
 internal sealed record ReadPageRequest(
@@ -236,6 +241,30 @@ internal sealed record ProjectMergeDto(
     OperationBatchDto Operations,
     ValidationResultDto? Validation,
     IReadOnlyList<ProjectMergeConflictDto> Conflicts);
+internal sealed record ArtifactCheckItemDto(
+    string NodeId,
+    string? Path,
+    string? ResolvedPath,
+    string? AdapterId,
+    int? AdapterVersion,
+    ArtifactCheckStatus Status,
+    string Message,
+    string? ExpectedSha256,
+    string? ActualSha256,
+    string? ContentSampleBase64,
+    bool ContentSampleTruncated);
+internal sealed record ArtifactCheckDto(
+    string ProjectPath,
+    int TotalAnchorCount,
+    IReadOnlyList<ArtifactCheckItemDto> Items,
+    int MatchedCount,
+    int DriftedCount,
+    int MissingCount,
+    int InvalidAnchorCount,
+    int UnsupportedAdapterCount,
+    int UnreadableCount,
+    bool IsComplete,
+    string? OmissionMessage);
 internal sealed record PageDto<T>(
     IReadOnlyList<T> Items,
     int TotalCount,
@@ -522,6 +551,30 @@ internal static class CliDto
             conflict.EntityKind,
             conflict.ChangedFields,
             conflict.Message)).ToArray());
+
+    public static ArtifactCheckDto Artifacts(ArtifactCheckReport value) => new(
+        value.ProjectPath,
+        value.TotalAnchorCount,
+        value.Items.Select(item => new ArtifactCheckItemDto(
+            item.NodeId.Value,
+            item.Path,
+            item.ResolvedPath,
+            item.AdapterId,
+            item.AdapterVersion,
+            item.Status,
+            item.Message,
+            item.ExpectedSha256,
+            item.ActualSha256,
+            item.ContentSampleBase64,
+            item.ContentSampleTruncated)).ToArray(),
+        value.MatchedCount,
+        value.DriftedCount,
+        value.MissingCount,
+        value.InvalidAnchorCount,
+        value.UnsupportedAdapterCount,
+        value.UnreadableCount,
+        value.IsComplete,
+        value.OmissionMessage);
 
     public static PageDto<NodeDto> Nodes(QueryPage<GraphNode> page) => new(
         page.Items.Select(GraphProtocol.ToDto).ToArray(), page.TotalCount, page.NextCursor,

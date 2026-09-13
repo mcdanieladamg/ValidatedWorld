@@ -54,6 +54,14 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Runs structural verification and every attached active full-graph rule for the selected project, returning bounded actionable diagnostics.")]
     public object ValidateProject() => projects.ValidateProject();
 
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Checks selected-project nodes marked as artifact anchors against their declared path and SHA-256. The built-in filesystem adapter only reads and hashes bytes, returns a bounded base64 sample, and never executes graph text. Pass nodeId to check one anchor.")]
+    public object CheckArtifacts(
+        [Description("Optional stable artifact-anchor node identifier; omit to check all marked anchors.")] string? nodeId = null,
+        [Description("Maximum number of anchors to check, from 1 to 1000.")] int maxAnchors = ArtifactCheckerContract.DefaultMaxAnchors,
+        [Description("Maximum sample bytes per file, from 1 to 65536.")] int maxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes,
+        CancellationToken cancellationToken = default) =>
+        projects.CheckArtifacts(nodeId, maxAnchors, maxSampleBytes, cancellationToken);
+
     [McpServerTool(UseStructuredContent = true, Destructive = false, OpenWorld = false), Description("Begins one sequential, process-local MCP change session for the selected project. The returned revision is required for later mutations.")]
     public McpChangeSummary BeginChange(
         [Description("Human-readable intent for the proposed change.")] string intent) => projects.BeginChange(intent);

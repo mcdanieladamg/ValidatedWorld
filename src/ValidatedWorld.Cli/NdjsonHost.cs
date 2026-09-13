@@ -18,6 +18,7 @@ internal sealed class NdjsonHost(
         "host.help", "host.exit",
         "project.init", "project.open", "project.status", "project.verify", "project.backup", "project.export-sql",
         "project.diff", "project.merge",
+        "artifact.check",
         "sample.list", "sample.create",
         "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope",
         "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report",
@@ -84,6 +85,7 @@ internal sealed class NdjsonHost(
         "project.export-sql" => (ProjectExportSql(payload), false),
         "project.diff" => (ProjectDiff(payload), false),
         "project.merge" => (ProjectMerge(payload), false),
+        "artifact.check" => (ArtifactCheck(payload), false),
         "sample.list" => (SampleList(payload), false),
         "sample.create" => (SampleCreate(payload), false),
         "read.node" => (ReadNode(payload), false),
@@ -134,6 +136,7 @@ internal sealed class NdjsonHost(
                     "backup {sourcePath,destinationPath}; " +
                     "diff {basePath,targetPath,limit?,cursor?}; " +
                     "merge {basePath,oursPath,theirsPath}",
+                artifact = "check {path,nodeId?,maxAnchors?,maxSampleBytes?}",
                 sample = "list {}; create {sampleName,path}",
                 read = "node|edge {path,entityId,expectedProjectId?}; " +
                     "nodes|edges {path,limit?,cursor?,expectedProjectId?}; " +
@@ -227,6 +230,17 @@ internal sealed class NdjsonHost(
     {
         var request = CliJson.Payload<ProjectMergeRequest>(payload);
         return CliDto.Merge(application.Merge(request.BasePath, request.OursPath, request.TheirsPath));
+    }
+
+    private object ArtifactCheck(JsonElement payload)
+    {
+        var request = CliJson.Payload<ArtifactCheckRequest>(payload);
+        var nodeId = request.NodeId is null ? (EntityId?)null : new EntityId(request.NodeId);
+        return CliDto.Artifacts(application.CheckArtifacts(
+            request.Path,
+            nodeId,
+            new ArtifactCheckOptions(request.MaxAnchors, request.MaxSampleBytes),
+            cancellationToken));
     }
 
     private static object SampleList(JsonElement payload)

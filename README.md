@@ -196,6 +196,21 @@ dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
     read dependencies project.vw.db requirement-login --max-depth 4 --max-nodes 100
 ```
 
+Check opt-in external artifact anchors without changing the graph:
+
+```powershell
+dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
+    artifact check project.vw.db
+```
+
+Nodes marked with the `artifact` tag or `external-anchor` kind can declare
+`artifact.path` and `artifact.sha256` text attributes. Relative paths resolve
+from the database directory. The built-in version-1 `filesystem` checker only
+reads and hashes the file, returning a bounded base64 sample; adapter selection
+is host-owned and graph text is never executed. Use NDJSON command
+`artifact.check` or the selected-project MCP tool `check_artifacts` for the
+same read-only check.
+
 Use `read --help` for the complete query surface.
 
 ## Comparing project versions
