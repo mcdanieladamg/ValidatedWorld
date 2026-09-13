@@ -51,6 +51,14 @@ internal sealed class McpTools(McpProjectService projects)
         [Description("Theirs .vw.db snapshot path.")] string theirsPath) =>
         projects.Merge(basePath, oursPath, theirsPath);
 
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Scans a strict local JSONL bulk manifest and returns one bounded, resumable operation chunk. The manifest must be anchored to the selected project's ID and current state fingerprint; every chunk boundary is validated before the chunk is returned. Apply chunks through one ordinary reviewed change session and call write_change once at the end.")]
+    public object PlanBulkImport(
+        [Description("Explicit local JSONL manifest path. The first line is the validated-world-bulk-manifest header; later lines are complete graph operations.")] string manifestPath,
+        [Description("Operations returned per page, from 1 to 5000. Keep the same value when using nextCursor.")] int chunkSize = BulkImportContract.DefaultChunkSize,
+        [Description("Opaque continuation cursor returned by the preceding plan call.")] string? cursor = null,
+        CancellationToken cancellationToken = default) =>
+        projects.PlanBulkImport(manifestPath, chunkSize, cursor, cancellationToken);
+
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Runs structural verification and every attached active full-graph rule for the selected project, returning bounded actionable diagnostics.")]
     public object ValidateProject() => projects.ValidateProject();
 

@@ -258,6 +258,43 @@ Use a `project backup` made before editing as the base, then diff it against the
 result. A Git revision materialized as a `.vw.db` file is equally valid. Diff
 output is not stored in either database.
 
+### Large imports and bulk authoring
+
+Large graph additions and refactors can be staged from a local JSONL manifest
+without placing the complete operation list in an agent request. The planner is
+read-only and returns one bounded chunk at a time:
+
+```powershell
+./ValidatedWorld.Cli.exe project bulk-plan project.vw.db import.jsonl `
+    --chunk-size 100
+./ValidatedWorld.Cli.exe project bulk-plan project.vw.db import.jsonl `
+    --chunk-size 100 --cursor <nextCursor>
+```
+
+The first manifest line is a strict header. Every later line is one complete
+operation in the normal operation shape:
+
+```text
+{"version":1,"format":"validated-world-bulk-manifest","projectId":"demo","baseFingerprint":"<project state fingerprint>","intent":"Import the reviewed corpus."}
+{"kind":"add","entityKind":"node","entityId":"scope-a","node":{"id":"scope-a","text":"Area A","kind":"scope","tags":[],"attributes":[]},"edge":null}
+{"kind":"add","entityKind":"edge","entityId":"scope-a-parent","node":null,"edge":{"id":"scope-a-parent","source":"scope-a","target":"purpose","relationship":"scope-parent","reviewDirection":"none","rationale":null,"tags":[],"attributes":[]}}
+```
+
+The header must match the selected project and its current state fingerprint;
+the manifest has a bounded file size, line size, and total operation count.
+Each chunk boundary must also be a valid graph checkpoint, so scope edges and
+other operations needed to keep a partial graph valid belong in the same
+chunk. The returned cursor is bound to the normalized manifest contents,
+project identity, base fingerprint, and chunk size. If any of those change,
+start a new plan.
+
+Apply the returned `operations` from each page to one normal `change.begin` /
+`change.patch` session, keeping the exact reference returned after every
+mutation. Review the final affected/context set and call `change.write` once.
+The planner never writes, persists drafts, bypasses review, or commits partial
+chunks. NDJSON exposes the same operation as `project.bulk_plan`; the MCP
+surface exposes it as `plan_bulk_import` for a selected project.
+
 ### Repository review procedure
 
 For a repository-backed project, treat a graph change and its matching source,

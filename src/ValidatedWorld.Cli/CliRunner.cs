@@ -204,7 +204,16 @@ public static class CliRunner
             case "merge" when arguments.Length == 5:
                 result = CliDto.Merge(application.Merge(arguments[2], arguments[3], arguments[4]));
                 break;
-            case "init" or "open" or "status" or "verify" or "backup" or "export-sql" or "diff" or "merge":
+            case "bulk-plan" when arguments.Length >= 4:
+            {
+                var options = CliBulkPlanOptions.Parse(arguments);
+                result = CliDto.BulkPlan(application.PlanBulkImport(
+                    arguments[2],
+                    arguments[3],
+                    new BulkImportPlanOptions(options.ChunkSize, options.Cursor)));
+                break;
+            }
+            case "init" or "open" or "status" or "verify" or "backup" or "export-sql" or "diff" or "merge" or "bulk-plan":
                 throw new CliUsageException($"Incorrect arguments for 'project {arguments[1]}'.");
             default:
                 throw new CliUsageException($"Unknown project command '{arguments[1]}'.");
@@ -357,6 +366,8 @@ public static class CliRunner
         JsonException value => ("malformed-json", value.Message, UsageExitCode),
         ProjectStorageException value =>
             ($"storage-{Kebab(value.Code.ToString())}", value.Message, DomainErrorExitCode),
+        BulkImportException value =>
+            ($"storage-{Kebab(value.Code.ToString())}", value.Message, DomainErrorExitCode),
         ProjectQueryException value =>
             ($"query-{Kebab(value.Code.ToString())}", value.Message, DomainErrorExitCode),
         ChangeSessionException value =>
@@ -455,6 +466,8 @@ public static class CliRunner
             "  project diff <base-database> <target-database> [--limit N] [--cursor TOKEN]");
         await output.WriteLineAsync(
             "  project merge <base-database> <ours-database> <theirs-database>");
+        await output.WriteLineAsync(
+            "  project bulk-plan <database> <jsonl-manifest> [--chunk-size N] [--cursor TOKEN]");
         await output.WriteLineAsync();
         await output.WriteLineAsync(
             "Quote arguments containing spaces. Existing database destinations are not overwritten.");
@@ -462,6 +475,8 @@ public static class CliRunner
             "SQL export is deterministic UTF-8 text on stdout; redirect it to a new file if desired.");
         await output.WriteLineAsync(
             "Merge is read-only: inspect its operation batch, then submit it through a normal reviewed change session on ours.");
+        await output.WriteLineAsync(
+            "Bulk planning is read-only: apply each returned chunk to one reviewed session, then write once; JSONL cursors are resumable and state-bound.");
     }
 
     private static async Task PrintSampleHelp(TextWriter output)
@@ -573,6 +588,35 @@ public static class CliRunner
             }
 
             return new CliProjectDiffOptions(limit, cursor);
+        }
+    }
+
+    private sealed record CliBulkPlanOptions(int ChunkSize, string? Cursor)
+    {
+        public static CliBulkPlanOptions Parse(string[] arguments)
+        {
+            var chunkSize = BulkImportContract.DefaultChunkSize;
+            string? cursor = null;
+            for (var index = 4; index < arguments.Length; index++)
+            {
+                switch (arguments[index])
+                {
+                    case "--chunk-size":
+                        if (++index >= arguments.Length)
+                            throw new CliUsageException("Option '--chunk-size' requires a value.");
+                        chunkSize = PositiveInt(arguments[index], "chunk-size");
+                        break;
+                    case "--cursor":
+                        if (++index >= arguments.Length)
+                            throw new CliUsageException("Option '--cursor' requires a value.");
+                        cursor = arguments[index];
+                        break;
+                    default:
+                        throw new CliUsageException($"Unknown bulk-plan option '{arguments[index]}'.");
+                }
+            }
+
+            return new CliBulkPlanOptions(chunkSize, cursor);
         }
     }
 
