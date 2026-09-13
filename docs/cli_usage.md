@@ -316,6 +316,41 @@ generates project artifacts.
 ./ValidatedWorld.Cli.exe read health world.vw.db --limit 25
 ```
 
+### External artifact checks
+
+Artifact checking is an optional, read-only companion to paired graph-and-file
+review. Mark a node with the `artifact` tag or `external-anchor` kind and add
+these text attributes:
+
+```text
+artifact.path = docs/design.md
+artifact.sha256 = <64 lowercase hexadecimal SHA-256>
+```
+
+Relative paths resolve from the `.vw.db` directory. The built-in `filesystem`
+adapter is contract version `1`; it hashes file bytes and returns a bounded
+base64 sample for review. An anchor may select another registered adapter with
+`artifact.adapter` and `artifact.adapter-version`, but adapters are supplied by
+the host and are never loaded or executed from graph text. Missing files,
+invalid metadata, unsupported adapters, and byte drift are reported as results;
+the database is never changed.
+
+```powershell
+./ValidatedWorld.Cli.exe artifact check world.vw.db
+./ValidatedWorld.Cli.exe artifact check world.vw.db design-document `
+    --max-sample-bytes 1024
+```
+
+The NDJSON equivalent is:
+
+```json
+{"version":1,"command":"artifact.check","payload":{"path":"world.vw.db","maxAnchors":100,"maxSampleBytes":4096}}
+```
+
+The selected-project MCP tool is named `check_artifacts` and accepts the same
+optional node and bound arguments. Artifact checking detects byte-level drift;
+it does not rewrite, publish, or certify an external artifact.
+
 Paged results contain `nextCursor` and an explicit omission while more results
 exist. Pass that exact token back with `--cursor`. Traversal bounds return
 explicit omissions rather than silently reporting a complete result.

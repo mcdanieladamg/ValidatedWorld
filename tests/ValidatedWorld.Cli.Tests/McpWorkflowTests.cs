@@ -34,6 +34,7 @@ public sealed class McpWorkflowTests
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "initialize_project");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "initialize_from_template");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "validate_project");
+        Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "check_artifacts");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "merge_projects");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "read_context");
         Assert.Contains(toolItems, tool => tool!["name"]!.GetValue<string>() == "begin_change");
@@ -84,6 +85,11 @@ public sealed class McpWorkflowTests
         var search = await host.Call("search", new { text = "battery", limit = 1 });
         Assert.Equal(4, search["totalCount"]!.GetValue<int>());
         Assert.Equal("battery-assumption", search["items"]![0]!["entityId"]!.GetValue<string>());
+
+        var artifacts = await host.Call("check_artifacts", new { maxAnchors = 1 });
+        Assert.Equal(2, artifacts["totalAnchorCount"]!.GetValue<int>());
+        Assert.False(artifacts["isComplete"]!.GetValue<bool>());
+        Assert.Equal("InvalidAnchor", artifacts["items"]![0]!["status"]!.GetValue<string>());
 
         var after = new SqliteProjectStore().Load(project);
         Assert.Equal(before.StateFingerprint, after.StateFingerprint);

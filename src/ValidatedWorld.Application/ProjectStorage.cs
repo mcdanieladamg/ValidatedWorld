@@ -174,6 +174,21 @@ public sealed partial class ProjectApplication
 
     public ProjectSqlExport ExportSql(string path) => _store.ExportSql(path);
 
+    /// <summary>
+    /// Checks opt-in external artifact anchors without changing the project.
+    /// The built-in checker only reads bytes from the anchored file and hashes
+    /// them; adapter selection remains an explicit host-owned contract.
+    /// </summary>
+    public ArtifactCheckReport CheckArtifacts(
+        string path,
+        EntityId? nodeId = null,
+        ArtifactCheckOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var project = _store.Load(path);
+        return new ArtifactCheckService().Check(project.Path, project.Graph, nodeId, options, cancellationToken);
+    }
+
     public ProjectQueries Queries(string path, ProjectId? expectedProjectId = null)
     {
         var project = _store.Load(path);

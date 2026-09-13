@@ -29,6 +29,32 @@ internal sealed record McpProjectInitializationResult(
     McpProjectSelection Project,
     string Message);
 
+internal sealed record McpArtifactCheckItem(
+    string NodeId,
+    string? Path,
+    string? ResolvedPath,
+    string? AdapterId,
+    int? AdapterVersion,
+    string Status,
+    string Message,
+    string? ExpectedSha256,
+    string? ActualSha256,
+    string? ContentSampleBase64,
+    bool ContentSampleTruncated);
+
+internal sealed record McpArtifactCheckReport(
+    string ProjectPath,
+    int TotalAnchorCount,
+    IReadOnlyList<McpArtifactCheckItem> Items,
+    int MatchedCount,
+    int DriftedCount,
+    int MissingCount,
+    int InvalidAnchorCount,
+    int UnsupportedAdapterCount,
+    int UnreadableCount,
+    bool IsComplete,
+    string? OmissionMessage);
+
 internal sealed record McpSemanticReviewHostStatus(
     bool Enabled,
     bool Configured,
@@ -401,6 +427,39 @@ internal sealed class McpProjectService(
             }).ToArray(),
             result.Checks,
         };
+    }
+
+    public object CheckArtifacts(string? nodeId, int maxAnchors, int maxSampleBytes, CancellationToken cancellationToken)
+    {
+        var selection = Status();
+        var report = application.CheckArtifacts(
+            selection.Path,
+            nodeId is null ? null : new EntityId(nodeId),
+            new ArtifactCheckOptions(maxAnchors, maxSampleBytes),
+            cancellationToken);
+        return Bound(new McpArtifactCheckReport(
+            report.ProjectPath,
+            report.TotalAnchorCount,
+            report.Items.Select(item => new McpArtifactCheckItem(
+                item.NodeId.Value,
+                item.Path,
+                item.ResolvedPath,
+                item.AdapterId,
+                item.AdapterVersion,
+                item.Status.ToString(),
+                item.Message,
+                item.ExpectedSha256,
+                item.ActualSha256,
+                item.ContentSampleBase64,
+                item.ContentSampleTruncated)).ToArray(),
+            report.MatchedCount,
+            report.DriftedCount,
+            report.MissingCount,
+            report.InvalidAnchorCount,
+            report.UnsupportedAdapterCount,
+            report.UnreadableCount,
+            report.IsComplete,
+            report.OmissionMessage));
     }
 
     public McpChangeSummary BeginChange(string intent)

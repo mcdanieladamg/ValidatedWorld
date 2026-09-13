@@ -19,6 +19,33 @@ public sealed class CliWorkflowTests
     };
 
     [Fact]
+    public async Task Artifact_check_is_read_only_and_available_through_cli_and_ndjson()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "artifact-check.vw.db");
+        Assert.Equal(0, (await Run(["sample", "create", "technical-project", project])).ExitCode);
+        var before = new ValidatedWorld.Persistence.Sqlite.SqliteProjectStore().Load(project);
+
+        var checkedProject = await Run(["artifact", "check", project]);
+        Assert.Equal(0, checkedProject.ExitCode);
+        var report = JsonNode.Parse(checkedProject.Output)!;
+        Assert.Equal(2, report["totalAnchorCount"]!.GetValue<int>());
+        Assert.Equal(2, report["invalidAnchorCount"]!.GetValue<int>());
+        Assert.False(report["items"]![0]!["contentSampleBase64"] is not null);
+
+        await using var host = await NdjsonProcess.Start();
+        var ndjson = await host.Send("artifact.check", new { path = project, maxAnchors = 1 });
+        Assert.Equal("ok", ndjson["status"]!.GetValue<string>());
+        Assert.False(ndjson["payload"]!["isComplete"]!.GetValue<bool>());
+        _ = await host.Send("host.exit", new { });
+        Assert.Equal(0, await host.WaitForExit());
+
+        var after = new ValidatedWorld.Persistence.Sqlite.SqliteProjectStore().Load(project);
+        Assert.Equal(before.StateFingerprint, after.StateFingerprint);
+        Assert.Equal(before.UpdatedUtc, after.UpdatedUtc);
+    }
+
+    [Fact]
     public void Ai_review_default_requires_a_key_and_the_kill_switch_still_disables_it()
     {
         Assert.True(AiReviewConfiguration.DefaultEnabled);
