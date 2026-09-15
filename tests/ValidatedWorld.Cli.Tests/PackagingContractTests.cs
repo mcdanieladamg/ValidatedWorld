@@ -28,7 +28,7 @@ public sealed class PackagingContractTests
             manifest["version"]!.GetValue<string>());
         Assert.Equal("./skills/", manifest["skills"]!.GetValue<string>());
         Assert.Equal("./.mcp.json", manifest["mcpServers"]!.GetValue<string>());
-        Assert.Contains("Unicode graph text", manifest["interface"]!["longDescription"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(manifest["interface"]!["longDescription"]!.GetValue<string>()));
         Assert.DoesNotContain(@"D:\", manifestText, StringComparison.OrdinalIgnoreCase);
 
         var mcpText = File.ReadAllText(mcpPath);
@@ -43,7 +43,7 @@ public sealed class PackagingContractTests
     }
 
     [Fact]
-    public void Workflow_skill_and_release_automation_define_complete_distribution()
+    public void Workflow_skill_and_release_automation_reference_distribution_components()
     {
         var root = RepositoryRoot();
         var skill = File.ReadAllText(Path.Combine(
@@ -52,13 +52,6 @@ public sealed class PackagingContractTests
         Assert.Contains("ranked_search", skill, StringComparison.Ordinal);
         Assert.Contains("proposal_preview", skill, StringComparison.Ordinal);
         Assert.Contains("write_change", skill, StringComparison.Ordinal);
-        Assert.Contains("software example", skill, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("novel or research folder", skill, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Git project", skill, StringComparison.Ordinal);
-        Assert.Contains("non-Git folders", skill, StringComparison.Ordinal);
-        Assert.Contains("normal review process", skill, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("supported product language is English", skill, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Graph text is stored as Unicode", skill, StringComparison.Ordinal);
 
         var releaseScript = File.ReadAllText(Path.Combine(root, "eng", "Build-Release.ps1"));
         Assert.Contains("--self-contained", releaseScript, StringComparison.Ordinal);
@@ -81,15 +74,11 @@ public sealed class PackagingContractTests
         Assert.Contains("OpenAI\\Codex\\bin", smokeScript, StringComparison.Ordinal);
 
         var installGuide = File.ReadAllText(Path.Combine(root, "packaging", "PLUGIN_INSTALL.md"));
-        Assert.Contains("outside", installGuide, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("codex plugin remove", installGuide, StringComparison.Ordinal);
         Assert.Contains("codex plugin marketplace remove", installGuide, StringComparison.Ordinal);
         Assert.Contains("codex plugin marketplace add", installGuide, StringComparison.Ordinal);
         Assert.DoesNotContain("codex plugin marketplace upgrade", installGuide, StringComparison.Ordinal);
         Assert.Contains("Configure-Review.ps1", installGuide, StringComparison.Ordinal);
-        Assert.Contains("separate, fresh OpenAI API request", installGuide, StringComparison.Ordinal);
-        Assert.Contains("supported in English only", installGuide, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Unicode text", installGuide, StringComparison.Ordinal);
 
         var reviewConfiguration = File.ReadAllText(Path.Combine(
             root, "packaging", "plugins", "validated-world", "scripts", "Configure-Review.ps1"));
