@@ -20,6 +20,7 @@ public static class Protocol
         NumberHandling = JsonNumberHandling.Strict,
         RespectRequiredConstructorParameters = true,
         WriteIndented = false,
+        MaxDepth = int.MaxValue,
     };
 
     public static string Serialize<T>(T value)
@@ -92,7 +93,7 @@ public sealed record ValidationDto(ValidationStatus Status, IReadOnlyList<Diagno
 
 public static class ValidationProtocol
 {
-    public const int DefaultDiagnosticLimit = 10_000;
+    public const int DefaultDiagnosticLimit = int.MaxValue;
 
     public static ValidationDto ToDto(GraphValidationResult result, int maxDiagnostics = DefaultDiagnosticLimit)
     {

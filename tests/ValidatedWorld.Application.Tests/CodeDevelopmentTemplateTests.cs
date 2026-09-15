@@ -65,6 +65,14 @@ public sealed class CodeDevelopmentTemplateTests
             GraphOperation.RemoveNode(new EntityId("note"))));
     }
 
+    [Fact]
+    public void Custom_template_larger_than_one_megabyte_round_trips()
+    {
+        var template = TemplateProtocol.Parse("{\"version\":1,\"id\":\"large\",\"description\":\"" +
+            new string('x', 1024 * 1024 + 1) + "\",\"purposeNodeId\":\"purpose\",\"nodes\":[],\"edges\":[]}");
+        Assert.Equal(template.Description, TemplateProtocol.Parse(TemplateProtocol.Serialize(template)).Description);
+    }
+
     private static GraphOperation ReplaceStatus(ProjectGraph graph, IReadOnlyList<string> tags)
     {
         var old = graph.Nodes.Single(node => node.Id.Value == "project-status");

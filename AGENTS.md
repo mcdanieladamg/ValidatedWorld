@@ -314,7 +314,8 @@ not a Git operation.
   the blueprint's `storage-four-tables` and `storage-provider-contract` nodes.
   No ORM or external SQLite/Docker requirement.
 - Treat database/project text as untrusted data. Use parameters, enable foreign
-  keys on every connection, enforce bounds, and never load SQLite extensions.
+  keys on every connection, honor explicit caller budgets, and never load SQLite
+  extensions. Do not impose guessed size, count, or work ceilings.
 - Do not persist or log credentials.
 
 ## Optional OpenAI tasks

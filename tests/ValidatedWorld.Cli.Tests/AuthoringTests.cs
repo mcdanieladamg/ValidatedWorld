@@ -113,7 +113,7 @@ public sealed class AuthoringTests
     }
 
     [Fact]
-    public async Task Bounded_search_duplicate_protection_and_authoring_session_loss_are_explicit()
+    public async Task Caller_sized_search_duplicate_protection_and_authoring_session_loss_are_explicit()
     {
         var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "vw-authoring-bounds-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -124,10 +124,9 @@ public sealed class AuthoringTests
             application.CreateSample(SampleProjectCatalog.TechnicalProject, path);
             var host = new AuthoringToolHost(application, path);
 
-            var overLimit = Json(await host.ExecuteAsync(
+            var largePage = Json(await host.ExecuteAsync(
                 "search_graph", Object("""{"text":"power","tag":null,"limit":51}""")));
-            Assert.False(overLimit.GetProperty("ok").GetBoolean());
-            Assert.Contains("between 1 and 50", overLimit.GetProperty("error").GetString(), StringComparison.Ordinal);
+            Assert.NotEmpty(largePage.GetProperty("items").EnumerateArray());
 
             await host.ExecuteAsync("search_graph", Object("""{"text":"battery-assumption","tag":null,"limit":10}"""));
             await host.ExecuteAsync("begin_change", Object("""{"intent":"Try an accidental duplicate"}"""));

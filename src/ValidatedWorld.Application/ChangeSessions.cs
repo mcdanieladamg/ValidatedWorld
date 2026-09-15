@@ -849,7 +849,7 @@ public sealed partial class ProjectApplication
 
     private static string ValidateSessionId(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Length > GraphLimits.IdentifierMaxLength ||
+        if (string.IsNullOrWhiteSpace(value) ||
             value.Any(char.IsControl))
         {
             throw new ArgumentException("A generated session ID must be a bounded nonempty value.", nameof(value));
@@ -861,7 +861,7 @@ public sealed partial class ProjectApplication
     private static string ValidateSessionText(string? value, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(value, parameterName);
-        if (string.IsNullOrWhiteSpace(value) || value.Length > GraphLimits.TextMaxLength || value.Any(char.IsControl))
+        if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsControl))
         {
             throw new ArgumentException(
                 $"Session {parameterName} must be nonempty, contain no control characters, and fit the text bound.",

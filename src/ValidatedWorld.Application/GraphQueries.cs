@@ -36,15 +36,14 @@ public sealed record QueryOmission(QueryOmissionReason Reason, int? RemainingCou
 public sealed class QueryPageRequest
 {
     public const int DefaultLimit = 100;
-    public const int MaximumLimit = 1_000;
 
     public QueryPageRequest(int limit = DefaultLimit, string? cursor = null)
     {
-        if (limit is < 1 or > MaximumLimit)
+        if (limit < 1)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(limit),
-                $"A query page must contain between 1 and {MaximumLimit} items.");
+                "A query page size must be positive.");
         }
 
         Limit = limit;
@@ -58,8 +57,8 @@ public sealed class QueryPageRequest
 
 public sealed class QueryTraversalOptions
 {
-    private int _maxDepth = 10_000;
-    private int _maxVisitedNodes = 100_000;
+    private int _maxDepth = int.MaxValue;
+    private int _maxVisitedNodes = int.MaxValue;
 
     public int MaxDepth
     {
@@ -265,11 +264,11 @@ public sealed partial class ProjectQueries
 
     public QueryPage<GraphSearchHit> SearchByTag(string tag, QueryPageRequest? request = null)
     {
-        if (string.IsNullOrWhiteSpace(tag) || tag.Length > GraphLimits.MetadataNameMaxLength ||
+        if (string.IsNullOrWhiteSpace(tag) ||
             tag.Any(char.IsControl))
         {
             throw new ArgumentException(
-                "A tag query must be non-empty, bounded, and free of control characters.",
+                "A tag query must be non-empty and free of control characters.",
                 nameof(tag));
         }
 
@@ -536,12 +535,7 @@ public sealed partial class ProjectQueries
             throw new ArgumentException("Search text cannot be empty or whitespace-only.", nameof(text));
         }
 
-        if (text.Length > GraphLimits.TextMaxLength)
-        {
-            throw new ArgumentException(
-                $"Search text cannot exceed {GraphLimits.TextMaxLength} characters.",
-                nameof(text));
-        }
+
     }
 
     private static RankedGraphSearchHit? RankNode(GraphNode node, RankedSearchTerms terms)

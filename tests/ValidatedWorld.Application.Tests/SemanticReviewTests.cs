@@ -198,6 +198,23 @@ public sealed class SemanticReviewTests
     }
 
     [Fact]
+    public void Review_request_budgets_are_opt_in_even_above_former_default()
+    {
+        var (application, snapshot, _) = LoreSession(provider: null);
+        snapshot = application.PatchChange(snapshot.Reference, new GraphOperationBatch([
+            GraphOperation.ReplaceNode(new GraphNode(new EntityId("local-fact"), new string('x', 1_100_000), "local-fact"))]));
+        var plan = SemanticReviewPlanner.Plan(snapshot);
+        var options = new SemanticReviewRuntimeOptions();
+        var measurement = SemanticReviewPlanner.Measure(plan, options);
+        Assert.Null(options.MaxRequestBytes);
+        Assert.Null(options.MaxRequestItems);
+        Assert.Null(options.MaxRequestTokens);
+        Assert.True(measurement.SerializedRequestBytes > 1_000_000);
+        Assert.True(measurement.IsWithinLimits);
+        Assert.False(SemanticReviewPlanner.Measure(plan, options with { MaxRequestBytes = 1_000_000 }).IsWithinLimits);
+    }
+
+    [Fact]
     public async Task Responses_client_polls_once_parses_usage_and_never_logs_credentials()
     {
         var (_, snapshot, _) = LoreSession(provider: null);

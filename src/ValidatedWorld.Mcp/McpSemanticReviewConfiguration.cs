@@ -10,9 +10,9 @@ internal sealed record McpSemanticReviewConfiguration(
     int TimeoutSeconds,
     bool LiveTests,
     string? ApiKey,
-    int MaxRequestBytes = 1_000_000,
-    int MaxRequestItems = 20_000,
-    int MaxRequestTokens = 250_000)
+    int? MaxRequestBytes = null,
+    int? MaxRequestItems = null,
+    int? MaxRequestTokens = null)
 {
     private const bool DefaultEnabled = true;
     private const string DefaultProvider = "openai";
@@ -40,10 +40,13 @@ internal sealed record McpSemanticReviewConfiguration(
             PositiveInteger(section["TimeoutSeconds"], DefaultTimeoutSeconds, "AiReview:TimeoutSeconds"),
             Boolean(section["LiveTests"], false, "AiReview:LiveTests"),
             apiKey,
-            PositiveInteger(section["MaxRequestBytes"], 1_000_000, "AiReview:MaxRequestBytes"),
-            PositiveInteger(section["MaxRequestItems"], 20_000, "AiReview:MaxRequestItems"),
-            PositiveInteger(section["MaxRequestTokens"], 250_000, "AiReview:MaxRequestTokens"));
+            OptionalBudget(section["MaxRequestBytes"], "AiReview:MaxRequestBytes"),
+            OptionalBudget(section["MaxRequestItems"], "AiReview:MaxRequestItems"),
+            OptionalBudget(section["MaxRequestTokens"], "AiReview:MaxRequestTokens"));
     }
+
+    private static int? OptionalBudget(string? value, string setting) =>
+        string.IsNullOrWhiteSpace(value) ? null : PositiveInteger(value, 1, setting);
 
     public SemanticReviewRuntimeOptions RuntimeOptions() => new(
         IsEffectivelyEnabled,

@@ -5,11 +5,170 @@ using ValidatedWorld.Application;
 using ValidatedWorld.Core;
 using ValidatedWorld.Mcp;
 using ValidatedWorld.Persistence.Sqlite;
+using ValidatedWorld.Serialization;
 
 namespace ValidatedWorld.Cli.Tests;
 
 public sealed class McpWorkflowTests
 {
+    [Fact]
+    public async Task Large_atomic_import_and_read_pages_are_not_limited_by_adapter_ceilings()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "large-import.vw.db");
+        var application = new ProjectApplication(new SqliteProjectStore());
+        application.Initialize(project, new ProjectId("large"), "Large", new EntityId("purpose"), "Maintain the corpus.");
+        var operations = Enumerable.Range(0, 5_001).SelectMany(index => new[]
+        {
+            GraphOperation.AddNode(new GraphNode(new EntityId($"claim-{index}"),
+                $"Requirement {index}: " + new string('x', 110), "claim")),
+            GraphOperation.AddEdge(new GraphEdge(new EntityId($"parent-{index}"), new EntityId($"claim-{index}"),
+                new EntityId("purpose"), "scope-parent", ReviewDirection.None)),
+        });
+        await using var host = await InitializedHost(project);
+        var begun = await host.Call("begin_change", new { intent = "Import one coherent corpus atomically." });
+        var staged = await host.Call("patch_change", new
+        {
+            expectedRevision = begun["revision"]!.GetValue<int>(),
+            operations = GraphProtocol.ToDto(new GraphOperationBatch(operations)),
+        });
+        var revision = staged["revision"]!.GetValue<int>();
+        Assert.Equal(10_002, staged["operationCount"]!.GetValue<int>());
+        var preview = await host.Call("proposal_preview", new { expectedRevision = revision });
+        // Added scope edges also select their existing purpose endpoint.
+        Assert.Equal(5_002, preview["affectedNodes"]!.AsArray().Count);
+        Assert.Empty(preview["omissions"]!.AsArray());
+        Assert.Equal(1, application.Status(project).NodeCount);
+        var result = await host.Call("write_change", new { expectedRevision = revision });
+        Assert.Equal("Written", result["status"]!.GetValue<string>());
+        var page = await host.Call("list_nodes", new { limit = int.MaxValue });
+        Assert.Equal(5_002, page["items"]!.AsArray().Count);
+        Assert.Null(page["nextCursor"]);
+        Assert.Null(page["omission"]);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(page.ToJsonString()) > 512 * 1024);
+        Assert.Equal(5_002, application.Status(project).NodeCount);
+    }
+
+    [Fact]
+    public async Task Revisions_from_discarded_or_written_sessions_cannot_authorize_a_later_change()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "revision-lifetime.vw.db");
+        var application = new ProjectApplication(new SqliteProjectStore());
+        application.Initialize(project, new ProjectId("revisions"), "Revisions", new EntityId("purpose"), "Original purpose.");
+        await using var host = await InitializedHost(project);
+
+        var first = await ReplacePurpose(host, "Abandoned purpose.");
+        var oldRevision = first["revision"]!.GetValue<int>();
+        await host.Call("discard_change", new { expectedRevision = oldRevision });
+        var second = await ReplacePurpose(host, "Intended purpose.");
+        var revision = second["revision"]!.GetValue<int>();
+        var stale = await host.CallResult("write_change", new { expectedRevision = oldRevision });
+        Assert.True(stale["isError"]?.GetValue<bool>() == true);
+        Assert.Equal("Original purpose.", application.Queries(project).GetNode(new EntityId("purpose")).Text);
+
+        await host.Call("proposal_preview", new { expectedRevision = revision });
+        await host.Call("write_change", new { expectedRevision = revision });
+        var third = await ReplacePurpose(host, "Next purpose.");
+        var staleDiscard = await host.CallResult("discard_change", new { expectedRevision = revision });
+        Assert.True(staleDiscard["isError"]?.GetValue<bool>() == true);
+        await host.Call("discard_change", new { expectedRevision = third["revision"]!.GetValue<int>() });
+    }
+
+    [Fact]
+    public async Task Project_status_refreshes_after_an_external_write()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "external-write.vw.db");
+        var store = new SqliteProjectStore();
+        var application = new ProjectApplication(store);
+        var original = application.Initialize(project, new ProjectId("external"), "External", new EntityId("purpose"), "Original purpose.");
+        await using var host = await InitializedHost(project);
+        var before = await host.Call("project_status", new { });
+
+        var operations = new GraphOperationBatch([GraphOperation.ReplaceNode(
+            new GraphNode(new EntityId("purpose"), "Externally updated purpose.", "purpose"))]);
+        var proposed = new ValidatedWorld.Validation.GraphProjector().Project(original.Graph, operations).Graph;
+        var write = store.Write(new ProjectWriteRequest(project, original.Graph.ProjectId,
+            original.StateFingerprint, operations, GraphFingerprints.Proposed(proposed)));
+        Assert.Equal(ProjectWriteOutcome.Written, write.Outcome);
+
+        var after = await host.Call("project_status", new { });
+        Assert.NotEqual(before["stateFingerprint"]!.GetValue<string>(), after["stateFingerprint"]!.GetValue<string>());
+        Assert.Equal(application.Status(project).StateFingerprint, after["stateFingerprint"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Mcp_can_repair_a_rule_invalid_baseline_without_disabling_its_rule()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "repair.vw.db");
+        var purpose = new GraphNode(new EntityId("purpose"), "Maintain confirmed claims.", "purpose");
+        var claim = new GraphNode(new EntityId("claim"), "A confirmed claim.", "claim");
+        var rule = new GraphNode(new EntityId("rule"), "Every claim must be confirmed.", RuleProtocol.RuleKind,
+            [RuleProtocol.ActiveTag], [
+                new("rule:version", GraphValue.FromInteger(1)),
+                new("rule:expression", GraphValue.FromText("{\"all\":{\"set\":{\"nodes\":{\"kind\":\"claim\"}},\"condition\":{\"hasTag\":\"confirmed\"}}}"))]);
+        var store = new SqliteProjectStore();
+        store.Initialize(project, new ProjectGraph(new ProjectId("repair"), "Repair", purpose.Id, [purpose, claim, rule], [
+            new GraphEdge(new EntityId("claim-scope"), claim.Id, purpose.Id, "scope-parent", ReviewDirection.None),
+            new GraphEdge(new EntityId("rule-scope"), rule.Id, purpose.Id, "scope-parent", ReviewDirection.None)]));
+        Assert.False(store.Verify(project).IsValid);
+        await using var host = await InitializedHost(project);
+        var begun = await host.Call("begin_change", new { intent = "Confirm the claim while preserving the rule." });
+        var patched = await host.Call("put_node", new
+        {
+            expectedRevision = begun["revision"]!.GetValue<int>(), mode = "replace", id = "claim",
+            text = claim.Text, kind = "claim", tags = new[] { "confirmed" }, attributes = Array.Empty<object>(),
+        });
+        var revision = patched["revision"]!.GetValue<int>();
+        var preview = await host.Call("proposal_preview", new { expectedRevision = revision });
+        Assert.Equal("Invalid", preview["currentValidation"]!["status"]!.GetValue<string>());
+        Assert.Equal("Valid", preview["proposedValidation"]!["status"]!.GetValue<string>());
+        var result = await host.Call("write_change", new { expectedRevision = revision });
+        Assert.Equal("Written", result["status"]!.GetValue<string>());
+        Assert.True(store.Verify(project).IsValid);
+    }
+
+    [Fact]
+    public async Task Workflow_mistakes_return_actionable_diagnostics()
+    {
+        await using var host = await InitializedHost();
+        var unselected = await host.CallResult("project_status", new { });
+        Assert.Contains("select_project", unselected["content"]![0]!["text"]!.GetValue<string>());
+        var noSession = await host.CallResult("write_change", new { expectedRevision = 1 });
+        Assert.Contains("begin_change", noSession["content"]![0]!["text"]!.GetValue<string>());
+    }
+
+    private static async Task<McpProcess> InitializedHost(string? project = null)
+    {
+        var host = await McpProcess.Start(project);
+        try
+        {
+            await host.Request("initialize", new
+            {
+                protocolVersion = "2024-11-05", capabilities = new { },
+                clientInfo = new { name = "Release review regression", version = "1" },
+            });
+            return host;
+        }
+        catch
+        {
+            await host.DisposeAsync();
+            throw;
+        }
+    }
+
+    private static async Task<JsonNode> ReplacePurpose(McpProcess host, string text)
+    {
+        var begun = await host.Call("begin_change", new { intent = text });
+        return await host.Call("put_node", new
+        {
+            expectedRevision = begun["revision"]!.GetValue<int>(), mode = "replace", id = "purpose",
+            text, kind = "purpose", tags = Array.Empty<string>(), attributes = Array.Empty<object>(),
+        });
+    }
+
     [Fact]
     public async Task Stdio_initializes_discovers_bounded_read_tools_and_keeps_reads_read_only()
     {

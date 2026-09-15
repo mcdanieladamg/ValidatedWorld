@@ -664,8 +664,8 @@ public static class CliRunner
 
             var limit = QueryPageRequest.DefaultLimit;
             string? cursor = null;
-            var maxDepth = 10_000;
-            var maxNodes = 100_000;
+            var maxDepth = int.MaxValue;
+            var maxNodes = int.MaxValue;
             var index = requiredPositionals;
             while (index < arguments.Length)
             {

@@ -58,6 +58,7 @@ return 0;
 
 static bool IsExpectedToolFailure(Exception exception) => exception is
     ArgumentException or
+    McpWorkflowException or
     ChangeSessionException or
     ProjectQueryException or
     ProjectStorageException or

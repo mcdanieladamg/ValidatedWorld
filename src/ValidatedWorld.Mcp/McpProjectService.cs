@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using ValidatedWorld.Application;
 using ValidatedWorld.Core;
 using ValidatedWorld.Serialization;
@@ -92,11 +91,6 @@ internal sealed record McpHostStatus(
 
 internal sealed record McpReadResult<T>(
     T? Item,
-    bool Complete,
-    McpOmission? Omission);
-
-internal sealed record McpBoundedResult<T>(
-    T? Data,
     bool Complete,
     McpOmission? Omission);
 
@@ -285,13 +279,14 @@ internal sealed record McpDiscardResult(
 
 internal sealed record McpAttributeInput(string Name, string Kind, string Value);
 
+// Only deliberately user-facing workflow failures cross the MCP error boundary.
+internal sealed class McpWorkflowException(string message) : InvalidOperationException(message);
+
 internal sealed class McpProjectService(
     ProjectApplication application,
     McpHostOptions hostOptions,
     McpSemanticReviewConfiguration reviewConfiguration)
 {
-    private const int MaximumPathLength = 4_096;
-    private const int MaximumOutputBytes = 512 * 1_024;
     private readonly object _gate = new();
     private McpProjectSelection? _selection;
     private bool _defaultWasAttempted;
@@ -391,7 +386,16 @@ internal sealed class McpProjectService(
     public McpProjectSelection Status()
     {
         EnsureDefaultSelected();
-        return Selection();
+        lock (_gate)
+        {
+            var selected = Selection();
+            var current = ToSelection(application.Status(selected.Path));
+            if (!StringComparer.Ordinal.Equals(current.ProjectId, selected.ProjectId))
+                throw new ProjectQueryException(ProjectQueryErrorCode.ProjectMismatch,
+                    "The selected file now contains a different project. Call select_project explicitly.");
+            _selection = current;
+            return current;
+        }
     }
 
     public object Merge(string basePath, string oursPath, string theirsPath)
@@ -400,7 +404,7 @@ internal sealed class McpProjectService(
             ProjectPathPolicy.Existing(basePath),
             ProjectPathPolicy.Existing(oursPath),
             ProjectPathPolicy.Existing(theirsPath));
-        return Bound(new
+        return new
         {
             result.BasePath,
             result.OursPath,
@@ -416,7 +420,7 @@ internal sealed class McpProjectService(
             operations = GraphProtocol.ToDto(result.Operations),
             validation = result.Validation is null ? null : ValidationProtocol.ToDto(result.Validation),
             conflicts = result.Conflicts,
-        });
+        };
     }
 
     public object PlanBulkImport(
@@ -431,7 +435,7 @@ internal sealed class McpProjectService(
             manifestPath,
             new BulkImportPlanOptions(chunkSize, cursor),
             cancellationToken);
-        return Bound(new McpBulkImportPlan(
+        return new McpBulkImportPlan(
             plan.ManifestPath,
             plan.ProjectId,
             plan.BaseFingerprint,
@@ -444,7 +448,7 @@ internal sealed class McpProjectService(
             plan.ChunkOperationCount,
             plan.ChunkCount,
             GraphProtocol.ToDto(plan.Operations),
-            plan.NextCursor));
+            plan.NextCursor);
     }
 
     public ProjectQueries Queries()
@@ -480,7 +484,7 @@ internal sealed class McpProjectService(
             nodeId is null ? null : new EntityId(nodeId),
             new ArtifactCheckOptions(maxAnchors, maxSampleBytes),
             cancellationToken);
-        return Bound(new McpArtifactCheckReport(
+        return new McpArtifactCheckReport(
             report.ProjectPath,
             report.TotalAnchorCount,
             report.Items.Select(item => new McpArtifactCheckItem(
@@ -502,7 +506,7 @@ internal sealed class McpProjectService(
             report.UnsupportedAdapterCount,
             report.UnreadableCount,
             report.IsComplete,
-            report.OmissionMessage));
+            report.OmissionMessage);
     }
 
     public McpChangeSummary BeginChange(string intent)
@@ -517,7 +521,9 @@ internal sealed class McpProjectService(
                 new ProjectId(selected.ProjectId),
                 "mcp-agent",
                 intent);
-            _revision = 1;
+            // Revisions identify proposals across the entire MCP process, including
+            // discarded sessions and project switches. Never reuse an old token.
+            _revision = checked(_revision + 1);
             return Summary(_session, "The in-memory MCP change session has begun.");
         }
     }
@@ -527,19 +533,12 @@ internal sealed class McpProjectService(
         lock (_gate)
         {
             var session = RequireRevision(expectedRevision);
-            if (operations.Operations.Count > 100)
-                throw new ArgumentException("One MCP proposal batch cannot contain more than 100 operations.", nameof(operations));
-            if (session.Operations.Operations.Count + operations.Operations.Count > 1_000 &&
-                operations.Operations.Any(operation => !session.Operations.Operations.Any(
-                    existing => existing.EntityId == operation.EntityId)))
-                throw new ArgumentException("A proposal cannot exceed 1,000 operations.", nameof(operations));
-
             _session = application.PatchChange(
                 session.Reference,
                 operations,
                 AnalysisOptions(cancellationToken));
-            _revision++;
-            return Summary(_session, "The bounded operation batch was applied to the in-memory proposal.");
+            _revision = checked(_revision + 1);
+            return Summary(_session, "The operation batch was applied to the in-memory proposal.");
         }
     }
 
@@ -549,7 +548,7 @@ internal sealed class McpProjectService(
         {
             var session = RequireRevision(expectedRevision);
             _session = application.ExpandChange(session.Reference, AnalysisOptions(cancellationToken));
-            _revision++;
+            _revision = checked(_revision + 1);
             return Summary(_session, "Affected analysis was refreshed for the current proposal.");
         }
     }
@@ -580,7 +579,6 @@ internal sealed class McpProjectService(
             if (result.Status == ChangeWriteStatus.Written)
             {
                 _session = null;
-                _revision = 0;
                 _selection = ToSelection(application.Status(session.Path));
             }
 
@@ -609,7 +607,6 @@ internal sealed class McpProjectService(
             var session = RequireRevision(expectedRevision);
             var discarded = application.DiscardChange(session.Reference);
             _session = null;
-            _revision = 0;
             return new McpDiscardResult(
                 discarded.ProjectId.Value,
                 expectedRevision,
@@ -622,7 +619,7 @@ internal sealed class McpProjectService(
     {
         lock (_gate)
         {
-            return _selection ?? throw new InvalidOperationException(
+            return _selection ?? throw new McpWorkflowException(
                 "No project is selected. Call select_project with an existing .vw.db path, or initialize_project first.");
         }
     }
@@ -652,7 +649,7 @@ internal sealed class McpProjectService(
     {
         if (expectedRevision <= 0)
             throw new ArgumentOutOfRangeException(nameof(expectedRevision), "The proposal revision must be positive.");
-        var session = _session ?? throw new InvalidOperationException(
+        var session = _session ?? throw new McpWorkflowException(
             "No MCP change session is active. Call begin_change first.");
         if (expectedRevision != _revision)
             throw new ChangeSessionException(
@@ -663,9 +660,6 @@ internal sealed class McpProjectService(
 
     private static AffectedAnalysisOptions AnalysisOptions(CancellationToken cancellationToken) => new()
     {
-        MaxTraversalDepth = 10_000,
-        MaxAffectedNodes = 100_000,
-        MaxOutputItems = 5_000,
         CancellationToken = cancellationToken,
     };
 
@@ -734,11 +728,12 @@ internal sealed class McpProjectService(
     private ChangeSessionSnapshot CompleteReviewForWrite(ChangeSessionSnapshot session)
     {
         if (session.Operations.Operations.Count == 0)
-            throw new InvalidOperationException("There is no proposal to write.");
-        if (!session.Affected.IsComplete || !session.Affected.ProposedValidation.IsValid ||
-            !session.Affected.CurrentValidation.IsValid)
-            throw new InvalidOperationException(
-                "The proposal cannot be written while affected analysis is incomplete or graph validation is invalid.");
+            throw new McpWorkflowException("There is no proposal to write. Add changes or call discard_change.");
+        // A structurally valid baseline may violate an attached rule. Require
+        // the complete candidate to pass, so the agent can repair that baseline.
+        if (!session.Affected.IsComplete || !session.Affected.ProposedValidation.IsValid)
+            throw new McpWorkflowException(
+                "The proposal cannot be written while affected analysis is incomplete or proposed graph validation is invalid. Call proposal_preview to inspect diagnostics and repair the proposal.");
 
         var direct = session.Affected.AffectedNodes
             .Where(node => node.IsDirectChange)
@@ -759,7 +754,7 @@ internal sealed class McpProjectService(
                 dispositions,
                 session.Affected.ScopeContext.Select(value => value.NodeId)));
         if (!reviewed.Readiness.IsReady)
-            throw new InvalidOperationException(string.Join(" ", reviewed.Readiness.Blockers));
+            throw new McpWorkflowException(string.Join(" ", reviewed.Readiness.Blockers));
         return reviewed;
     }
 
@@ -859,34 +854,10 @@ internal sealed class McpProjectService(
 
     public static EdgeDto Edge(GraphEdge edge) => GraphProtocol.ToDto(edge);
 
-    public static McpPage<TOut> ProjectPage<TIn, TOut>(QueryPage<TIn> page, Func<TIn, TOut> projection)
-    {
-        var items = page.Items.Select(projection).ToArray();
-        var result = new McpPage<TOut>(items, page.TotalCount, page.NextCursor, Omission(page.Omission));
-        return Fits(result)
-            ? result
-            : new McpPage<TOut>([], page.TotalCount, null, new McpOmission(
-                "output-byte-limit", page.TotalCount,
-                $"The result exceeded the {MaximumOutputBytes} byte MCP output bound; request a narrower query."));
-    }
+    public static McpPage<TOut> ProjectPage<TIn, TOut>(QueryPage<TIn> page, Func<TIn, TOut> projection) =>
+        new(page.Items.Select(projection).ToArray(), page.TotalCount, page.NextCursor, Omission(page.Omission));
 
-    public static McpReadResult<T> Read<T>(T item)
-    {
-        var result = new McpReadResult<T>(item, true, null);
-        return Fits(result)
-            ? result
-            : new McpReadResult<T>(default, false, new McpOmission(
-                "output-byte-limit", null,
-                $"The result exceeded the {MaximumOutputBytes} byte MCP output bound; request a narrower query."));
-    }
-
-    public static object Bound<T>(T item)
-    {
-        if (Fits(item)) return item!;
-        return new McpBoundedResult<T>(default, false, new McpOmission(
-            "output-byte-limit", null,
-            $"The result exceeded the {MaximumOutputBytes} byte MCP output bound; request a narrower query."));
-    }
+    public static McpReadResult<T> Read<T>(T item) => new(item, true, null);
 
     public static McpOmission? Omission(QueryOmission? omission) => omission is null
         ? null
@@ -896,8 +867,6 @@ internal sealed class McpProjectService(
         omissions.Select(omission => new McpOmission(
             omission.Reason.ToString(), omission.RemainingCount, omission.Message)).ToArray();
 
-    private static bool Fits<T>(T value) =>
-        JsonSerializer.SerializeToUtf8Bytes(value, Protocol.CreateJsonOptions()).Length <= MaximumOutputBytes;
 }
 
 internal static class ProjectPathPolicy
@@ -926,8 +895,8 @@ internal static class ProjectPathPolicy
 
     private static string Normalize(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || path.Length > 4_096 || path.Any(char.IsControl))
-            throw new ArgumentException("A project path must be non-empty, bounded, and free of control characters.", nameof(path));
+        if (string.IsNullOrWhiteSpace(path) || path.Any(char.IsControl))
+            throw new ArgumentException("A project path must be non-empty and free of control characters.", nameof(path));
 
         var fullPath = Path.GetFullPath(path);
         if (Path.GetPathRoot(fullPath) is null ||

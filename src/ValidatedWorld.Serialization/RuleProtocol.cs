@@ -7,9 +7,6 @@ namespace ValidatedWorld.Serialization;
 public static class RuleProtocol
 {
     public const int CurrentVersion = 1;
-    public const int MaximumRules = 128;
-    public const int MaximumViews = 128;
-    public const int MaximumExpressionDepth = 32;
     public const string RuleKind = "validation-rule";
     public const string ViewKind = "validation-view";
     public const string ActiveTag = "rule:active";
@@ -19,8 +16,6 @@ public static class RuleProtocol
         ArgumentNullException.ThrowIfNull(graph);
         var rules = graph.Nodes.Where(node => node.Kind == RuleKind && node.Tags.Contains(ActiveTag, StringComparer.Ordinal)).ToArray();
         var views = graph.Nodes.Where(node => node.Kind == ViewKind).ToArray();
-        if (rules.Length > MaximumRules) throw new RuleFormatException("rule-count-limit", $"The graph contains {rules.Length} active rules; the limit is {MaximumRules}.");
-        if (views.Length > MaximumViews) throw new RuleFormatException("view-count-limit", $"The graph contains {views.Length} views; the limit is {MaximumViews}.");
 
         var parsedViews = new Dictionary<string, RuleSetExpression>(StringComparer.Ordinal);
         var viewOwners = new Dictionary<string, EntityId>(StringComparer.Ordinal);
@@ -62,20 +57,20 @@ public static class RuleProtocol
     private static RuleSetExpression ParseSet(string json, EntityId owner)
     {
         using var document = ParseJson(json, owner);
-        return ParseSet(document.RootElement, owner, 1);
+        return ParseSet(document.RootElement, owner);
     }
 
     private static RuleBooleanExpression ParseBoolean(string json, EntityId owner)
     {
         using var document = ParseJson(json, owner);
-        return ParseBoolean(document.RootElement, owner, 1);
+        return ParseBoolean(document.RootElement, owner);
     }
 
     private static JsonDocument ParseJson(string json, EntityId owner)
     {
         try
         {
-            return JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = MaximumExpressionDepth, CommentHandling = JsonCommentHandling.Disallow });
+            return JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = int.MaxValue, CommentHandling = JsonCommentHandling.Disallow });
         }
         catch (JsonException exception)
         {
@@ -83,45 +78,43 @@ public static class RuleProtocol
         }
     }
 
-    private static RuleSetExpression ParseSet(JsonElement element, EntityId owner, int depth)
+    private static RuleSetExpression ParseSet(JsonElement element, EntityId owner)
     {
-        EnsureDepth(depth, owner);
         var property = SingleProperty(element, owner);
         return property.Name switch
         {
-            "nodes" => new EntitySelectorExpression(GraphEntityKind.Node, ParseFilter(property.Value, owner, depth + 1)),
-            "edges" => new EntitySelectorExpression(GraphEntityKind.Edge, ParseFilter(property.Value, owner, depth + 1)),
+            "nodes" => new EntitySelectorExpression(GraphEntityKind.Node, ParseFilter(property.Value, owner)),
+            "edges" => new EntitySelectorExpression(GraphEntityKind.Edge, ParseFilter(property.Value, owner)),
             "view" when property.Value.ValueKind == JsonValueKind.String => new ViewReferenceExpression(property.Value.GetString()!),
-            "union" => new SetCompositionExpression(SetOperator.Union, ParseSetArray(property.Value, owner, depth + 1)),
-            "intersect" => new SetCompositionExpression(SetOperator.Intersect, ParseSetArray(property.Value, owner, depth + 1)),
-            "except" => new SetCompositionExpression(SetOperator.Except, ParseSetArray(property.Value, owner, depth + 1)),
-            "reachable" => ParseReachable(property.Value, owner, depth + 1),
+            "union" => new SetCompositionExpression(SetOperator.Union, ParseSetArray(property.Value, owner)),
+            "intersect" => new SetCompositionExpression(SetOperator.Intersect, ParseSetArray(property.Value, owner)),
+            "except" => new SetCompositionExpression(SetOperator.Except, ParseSetArray(property.Value, owner)),
+            "reachable" => ParseReachable(property.Value, owner),
             _ => throw Unknown(property.Name, "set", owner),
         };
     }
 
-    private static RuleBooleanExpression ParseBoolean(JsonElement element, EntityId owner, int depth)
+    private static RuleBooleanExpression ParseBoolean(JsonElement element, EntityId owner)
     {
-        EnsureDepth(depth, owner);
         var property = SingleProperty(element, owner);
         return property.Name switch
         {
-            "and" => new BooleanCompositionExpression(BooleanOperator.And, ParseBooleanArray(property.Value, owner, depth + 1)),
-            "or" => new BooleanCompositionExpression(BooleanOperator.Or, ParseBooleanArray(property.Value, owner, depth + 1)),
-            "not" => new NotExpression(ParseBoolean(property.Value, owner, depth + 1)),
-            "exists" => new CountExpression(ParseSet(property.Value, owner, depth + 1), ComparisonOperator.GreaterThan, 0),
-            "count" => ParseCount(property.Value, owner, depth + 1),
-            "subset" => new SetComparisonExpression(SetComparisonOperator.Subset, ParseSetPair(property.Value, owner, depth + 1)),
-            "equalSets" => new SetComparisonExpression(SetComparisonOperator.Equal, ParseSetPair(property.Value, owner, depth + 1)),
-            "all" => ParseAll(property.Value, owner, depth + 1),
-            "acyclic" => ParseTopology(property.Value, owner, depth + 1, requireChain: false),
-            "singleChain" => ParseTopology(property.Value, owner, depth + 1, requireChain: true),
-            "tagSuffixMatch" => ParseTagSuffixMatch(property.Value, owner, depth + 1),
+            "and" => new BooleanCompositionExpression(BooleanOperator.And, ParseBooleanArray(property.Value, owner)),
+            "or" => new BooleanCompositionExpression(BooleanOperator.Or, ParseBooleanArray(property.Value, owner)),
+            "not" => new NotExpression(ParseBoolean(property.Value, owner)),
+            "exists" => new CountExpression(ParseSet(property.Value, owner), ComparisonOperator.GreaterThan, 0),
+            "count" => ParseCount(property.Value, owner),
+            "subset" => new SetComparisonExpression(SetComparisonOperator.Subset, ParseSetPair(property.Value, owner)),
+            "equalSets" => new SetComparisonExpression(SetComparisonOperator.Equal, ParseSetPair(property.Value, owner)),
+            "all" => ParseAll(property.Value, owner),
+            "acyclic" => ParseTopology(property.Value, owner, requireChain: false),
+            "singleChain" => ParseTopology(property.Value, owner, requireChain: true),
+            "tagSuffixMatch" => ParseTagSuffixMatch(property.Value, owner),
             _ => throw Unknown(property.Name, "Boolean", owner),
         };
     }
 
-    private static EntityFilter ParseFilter(JsonElement element, EntityId owner, int depth)
+    private static EntityFilter ParseFilter(JsonElement element, EntityId owner)
     {
         EnsureObject(element, owner);
         string? id = null, kind = null, relationship = null, tagPrefix = null;
@@ -138,8 +131,8 @@ public static class RuleProtocol
                 case "tagPrefix": tagPrefix = String(property.Value, property.Name, owner); break;
                 case "tagsAll": tagsAll = StringArray(property.Value, property.Name, owner); break;
                 case "attributes": attributes = ParseAttributes(property.Value, owner); break;
-                case "sourceIn": sourceIn = ParseSet(property.Value, owner, depth + 1); break;
-                case "targetIn": targetIn = ParseSet(property.Value, owner, depth + 1); break;
+                case "sourceIn": sourceIn = ParseSet(property.Value, owner); break;
+                case "targetIn": targetIn = ParseSet(property.Value, owner); break;
                 default: throw Unknown(property.Name, "selector", owner);
             }
         }
@@ -188,7 +181,7 @@ public static class RuleProtocol
         return result.OrderBy(value => value.Name, StringComparer.Ordinal).ToArray();
     }
 
-    private static CountExpression ParseCount(JsonElement element, EntityId owner, int depth)
+    private static CountExpression ParseCount(JsonElement element, EntityId owner)
     {
         EnsureObject(element, owner);
         var set = Required(element, "set", owner);
@@ -196,13 +189,13 @@ public static class RuleProtocol
         var value = Required(element, "value", owner);
         if (!value.TryGetInt32(out var number) || number < 0) throw new RuleFormatException("invalid-rule-value", "Count values must be non-negative integers.", owner);
         EnsureOnly(element, owner, "set", "compare", "value");
-        return new CountExpression(ParseSet(set, owner, depth + 1), compare, number);
+        return new CountExpression(ParseSet(set, owner), compare, number);
     }
 
-    private static AllExpression ParseAll(JsonElement element, EntityId owner, int depth)
+    private static AllExpression ParseAll(JsonElement element, EntityId owner)
     {
         EnsureObject(element, owner);
-        var set = ParseSet(Required(element, "set", owner), owner, depth + 1);
+        var set = ParseSet(Required(element, "set", owner), owner);
         var condition = Required(element, "condition", owner);
         var property = SingleProperty(condition, owner);
         EntityCondition parsed = property.Name switch
@@ -226,20 +219,20 @@ public static class RuleProtocol
         return new TagCountCondition(prefix, compare, number);
     }
 
-    private static TopologyExpression ParseTopology(JsonElement element, EntityId owner, int depth, bool requireChain)
+    private static TopologyExpression ParseTopology(JsonElement element, EntityId owner, bool requireChain)
     {
         EnsureObject(element, owner);
-        var nodes = ParseSet(Required(element, "nodes", owner), owner, depth + 1);
-        var edges = ParseSet(Required(element, "edges", owner), owner, depth + 1);
+        var nodes = ParseSet(Required(element, "nodes", owner), owner);
+        var edges = ParseSet(Required(element, "edges", owner), owner);
         EnsureOnly(element, owner, "nodes", "edges");
         return new TopologyExpression(nodes, edges, requireChain);
     }
 
-    private static ReachableExpression ParseReachable(JsonElement element, EntityId owner, int depth)
+    private static ReachableExpression ParseReachable(JsonElement element, EntityId owner)
     {
         EnsureObject(element, owner);
-        var start = ParseSet(Required(element, "from", owner), owner, depth + 1);
-        var edges = ParseSet(Required(element, "edges", owner), owner, depth + 1);
+        var start = ParseSet(Required(element, "from", owner), owner);
+        var edges = ParseSet(Required(element, "edges", owner), owner);
         var direction = String(Required(element, "direction", owner), "direction", owner);
         if (direction is not "outgoing" and not "incoming") throw new RuleFormatException("invalid-rule-value", "Reachable direction must be outgoing or incoming.", owner);
         var includeStart = element.TryGetProperty("includeStart", out var include) && include.ValueKind switch
@@ -252,36 +245,36 @@ public static class RuleProtocol
         return new ReachableExpression(start, edges, direction == "incoming", includeStart);
     }
 
-    private static TagSuffixMatchExpression ParseTagSuffixMatch(JsonElement element, EntityId owner, int depth)
+    private static TagSuffixMatchExpression ParseTagSuffixMatch(JsonElement element, EntityId owner)
     {
         EnsureObject(element, owner);
-        var left = ParseSet(Required(element, "left", owner), owner, depth + 1);
-        var right = ParseSet(Required(element, "right", owner), owner, depth + 1);
+        var left = ParseSet(Required(element, "left", owner), owner);
+        var right = ParseSet(Required(element, "right", owner), owner);
         var leftPrefix = String(Required(element, "leftPrefix", owner), "leftPrefix", owner);
         var rightPrefix = String(Required(element, "rightPrefix", owner), "rightPrefix", owner);
         EnsureOnly(element, owner, "left", "right", "leftPrefix", "rightPrefix");
         return new TagSuffixMatchExpression(left, leftPrefix, right, rightPrefix);
     }
 
-    private static IReadOnlyList<RuleSetExpression> ParseSetPair(JsonElement element, EntityId owner, int depth)
+    private static IReadOnlyList<RuleSetExpression> ParseSetPair(JsonElement element, EntityId owner)
     {
-        var values = ParseSetArray(element, owner, depth);
+        var values = ParseSetArray(element, owner);
         if (values.Count != 2) throw new RuleFormatException("invalid-rule-arity", "Set comparisons require exactly two operands.", owner);
         return values;
     }
 
-    private static IReadOnlyList<RuleSetExpression> ParseSetArray(JsonElement element, EntityId owner, int depth)
+    private static IReadOnlyList<RuleSetExpression> ParseSetArray(JsonElement element, EntityId owner)
     {
         if (element.ValueKind != JsonValueKind.Array) throw new RuleFormatException("invalid-rule-type", "A set operand list must be an array.", owner);
-        var result = element.EnumerateArray().Select(item => ParseSet(item, owner, depth + 1)).ToArray();
+        var result = element.EnumerateArray().Select(item => ParseSet(item, owner)).ToArray();
         if (result.Length == 0) throw new RuleFormatException("invalid-rule-arity", "A set operand list cannot be empty.", owner);
         return result;
     }
 
-    private static IReadOnlyList<RuleBooleanExpression> ParseBooleanArray(JsonElement element, EntityId owner, int depth)
+    private static IReadOnlyList<RuleBooleanExpression> ParseBooleanArray(JsonElement element, EntityId owner)
     {
         if (element.ValueKind != JsonValueKind.Array) throw new RuleFormatException("invalid-rule-type", "A Boolean operand list must be an array.", owner);
-        var result = element.EnumerateArray().Select(item => ParseBoolean(item, owner, depth + 1)).ToArray();
+        var result = element.EnumerateArray().Select(item => ParseBoolean(item, owner)).ToArray();
         if (result.Length == 0) throw new RuleFormatException("invalid-rule-arity", "A Boolean operand list cannot be empty.", owner);
         return result;
     }
@@ -327,11 +320,6 @@ public static class RuleProtocol
         "gt" => ComparisonOperator.GreaterThan, "gte" => ComparisonOperator.GreaterThanOrEqual,
         _ => throw new RuleFormatException("unknown-rule-operator", $"Unknown comparison '{value}'.", owner),
     };
-
-    private static void EnsureDepth(int depth, EntityId owner)
-    {
-        if (depth > MaximumExpressionDepth) throw new RuleFormatException("rule-depth-limit", $"Rule expression exceeds depth {MaximumExpressionDepth}.", owner);
-    }
 
     private static RuleFormatException Unknown(string name, string context, EntityId owner) =>
         new("unknown-rule-operator", $"Unknown {context} operator or property '{name}'.", owner);

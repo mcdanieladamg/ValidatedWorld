@@ -35,6 +35,13 @@ public sealed class BulkImportPlanningTests
         };
         WriteManifest(manifest, stored, operations);
 
+        // A requested chunk larger than the input must neither preallocate that
+        // many entries nor overflow chunk-count arithmetic.
+        var whole = application.PlanBulkImport(path, manifest, new BulkImportPlanOptions(int.MaxValue));
+        Assert.Equal(4, whole.ChunkOperationCount);
+        Assert.Equal(1, whole.ChunkCount);
+        Assert.Null(whole.NextCursor);
+
         var first = application.PlanBulkImport(path, manifest, new BulkImportPlanOptions(2));
         Assert.Equal(4, first.OperationCount);
         Assert.Equal(2, first.ChunkCount);
@@ -59,6 +66,20 @@ public sealed class BulkImportPlanningTests
         Assert.Equal(ChangeWriteStatus.Written, written.Status);
         Assert.Equal(3, written.Project!.Graph.Nodes.Count);
         Assert.Equal(2, written.Project.Graph.Edges.Count);
+    }
+
+    [Fact]
+    public void Manifest_operation_lines_can_exceed_the_former_megabyte_ceiling()
+    {
+        using var workspace = new TestWorkspace();
+        var application = new ProjectApplication(new SqliteProjectStore());
+        var path = System.IO.Path.Combine(workspace.Path, "project.vw.db");
+        var stored = application.Initialize(path, new ProjectId("bulk-large"), "Bulk", new EntityId("purpose"), "Purpose");
+        var manifest = System.IO.Path.Combine(workspace.Path, "large.jsonl");
+        var text = new string('x', 1_048_577);
+        WriteManifest(manifest, stored, [GraphOperation.ReplaceNode(new GraphNode(new EntityId("purpose"), text))]);
+        var plan = application.PlanBulkImport(path, manifest);
+        Assert.Equal(text, plan.Operations.Operations.Single().Node!.Text);
     }
 
     [Fact]

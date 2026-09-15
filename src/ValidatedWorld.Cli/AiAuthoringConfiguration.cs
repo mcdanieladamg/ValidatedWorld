@@ -39,10 +39,10 @@ public sealed record AiAuthoringConfiguration(
             Boolean(section["Enabled"], DefaultEnabled, "AiAuthoring:Enabled"),
             Text(section["Provider"], DefaultProvider),
             Text(section["Model"], DefaultModel),
-            PositiveInteger(section["TimeoutSeconds"], DefaultTimeoutSeconds, "AiAuthoring:TimeoutSeconds", 3600),
+            PositiveInteger(section["TimeoutSeconds"], DefaultTimeoutSeconds, "AiAuthoring:TimeoutSeconds", int.MaxValue),
             Boolean(section["LiveTests"], DefaultLiveTests, "AiAuthoring:LiveTests"),
             PositiveInteger(section["MaxToolCallsPerTurn"], DefaultMaxToolCallsPerTurn,
-                "AiAuthoring:MaxToolCallsPerTurn", 128),
+                "AiAuthoring:MaxToolCallsPerTurn", int.MaxValue),
             apiKey);
     }
 

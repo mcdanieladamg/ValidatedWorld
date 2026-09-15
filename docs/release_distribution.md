@@ -68,7 +68,7 @@ registration and compares the cached executable with the verified archive.
 Checksums must cover both archives and the release notes; an empty or partial
 checksum list fails. Checksums detect accidental changes, not publisher identity.
 
-## Offline checks and manual CI packaging
+## Offline checks
 
 PRs and pushes to `main` run only restore, build and the offline .NET tests.
 Their pass/fail result appears in GitHub Checks; CI uploads no artifacts and
@@ -88,7 +88,8 @@ The unfiltered test command still honors the existing live-test opt-ins.
 public CLI reads. It is repository tooling, not an implemented custom-rule
 feature of the product.
 
-To use downloaded workflow artifacts, extract them to a folder and run:
+To use downloaded release archives, place the archives, release notes, and
+checksum file together in a folder. From a source checkout, run:
 
 ```powershell
 .\eng\Test-Release.ps1 -Version <version> -ArtifactsDirectory <folder> -RequireCodex
@@ -97,7 +98,7 @@ To use downloaded workflow artifacts, extract them to a folder and run:
 
 ## Versions and reproducibility
 
-Prepare, Build-Release, and the manual workflow share one version resolver:
+Prepare and Build-Release share one version resolver:
 `VersionPrefix` in `Directory.Build.props` plus `-dev.g` and the full Git `HEAD`
 ID. It needs no tags, history depth, timestamp, machine name, or network lookup.
 Automatic versions require a clean checkout; explicit `-Version` is available
@@ -114,11 +115,6 @@ not proof. Build-Release always uses Windows PowerShell 5.1 for ZIP creation,
 including when invoked from PowerShell 7, because their ZIP encodings differ.
 Compare `SHA256SUMS.txt` from independent builds. Do not substitute
 locally rebuilt files for tested release files without comparing their hashes.
-
-Standard public GitHub runner time is free; retained artifact storage has an
-account allowance. This optional workflow uses one standard Windows runner,
-a 20-minute limit, three-day retention and read-only repository permission.
-[GitHub billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
 
 ## Other local agent hosts
 

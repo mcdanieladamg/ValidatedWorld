@@ -75,13 +75,6 @@ internal static class StableIdValidation
             throw new ArgumentException("An ID cannot be empty or whitespace-only.", parameterName);
         }
 
-        if (value.Length > GraphLimits.IdentifierMaxLength)
-        {
-            throw new ArgumentException(
-                $"An ID cannot exceed {GraphLimits.IdentifierMaxLength} characters.",
-                parameterName);
-        }
-
         if (value.Any(char.IsControl))
         {
             throw new ArgumentException("An ID cannot contain control characters.", parameterName);
