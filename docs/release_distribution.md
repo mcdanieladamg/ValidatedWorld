@@ -1,21 +1,17 @@
 # Release and local plugin distribution
 
-ValidatedWorld's primary agent-facing surface is the local plugin. The CLI
-remains the durable manual, scripting, recovery, and source-checkout surface.
-Both use the same Application layer and `.vw.db` format.
+ValidatedWorld provides a local agent plugin and a CLI for manual use and
+scripting. Both use the same `.vw.db` format.
 
-The initial public release is supported in English only. Product instructions,
-diagnostics, bundled content, search tuning, and optional AI workflows are
-authored and validated in English. The `.vw.db` format stores Unicode graph text
-without interpreting its language, but non-English workflows are not a supported
-release capability.
+Workflows are supported in English only. Graph text supports Unicode storage
+and round-tripping.
 
 For the normal two-command development loop, start with the
 [README](../README.md#build-and-install-the-local-plugin).
 
 `Prepare-LocalPlugin.ps1 -NoRestore` reuses already restored solution and win-x64
 CLI/MCP dependencies. It still builds and runs all offline checks; use it only
-after those restores have succeeded. It also builds and tests archives for Github
+after those restores have succeeded. It also builds and tests archives for GitHub
 releases, producing files in the artifacts folder that you can tag and upload.
 When Codex is absent, its host lifecycle check is explicitly skipped; run
 `Test-Release.ps1 -RequireCodex` locally before accepting a release.
@@ -72,8 +68,8 @@ checksum list fails. Checksums detect accidental changes, not publisher identity
 
 PRs and pushes to `main` run only restore, build and the offline .NET tests.
 Their pass/fail result appears in GitHub Checks; CI uploads no artifacts and
-does not run packaging, installation or blueprint checks. Build is necessary
-to compile the tests. The README badge links to that same status.
+does not run packaging, installation or blueprint checks. The README badge links
+to that same status.
 
 Run tests without live OpenAI calls or changing saved preferences:
 
@@ -85,8 +81,7 @@ dotnet test ValidatedWorld.slnx --no-build --no-restore --filter "Category!=Live
 
 The unfiltered test command still honors the existing live-test opt-ins.
 `Test-Blueprint.ps1` evaluates repository roadmap conventions through paginated
-public CLI reads. It is repository tooling, not an implemented custom-rule
-feature of the product.
+public CLI reads.
 
 To use downloaded release archives, place the archives, release notes, and
 checksum file together in a folder. From a source checkout, run:
@@ -130,16 +125,11 @@ For VS Code/Copilot, use **MCP: Add Server** and select a local command. Keep
 project-scoped configuration in source control with portable paths if sharing it;
 keep credentials out. See [VS Code's MCP setup](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
 Then call `host_status`, select a disposable graph, and perform your own smoke
-check. This is the generic integration route; Copilot acceptance is still pending
-T29. When developing this repository, follow `AGENTS.md` and use the source CLI
-for its blueprint regardless of host.
+check.
 
 ## Supported targets
 
-The prepared matrix currently contains only Windows x64. Self-contained .NET
-single-file outputs are runtime-specific, and the native SQLite provider must be
-smoke-tested on every added target before that operating system and architecture
-is listed as supported.
+The packages currently support Windows x64 only.
 
 The plugin runs locally over stdio. Its relative launch configuration supports
 installation under any stable user-owned directory. Project databases, settings,
@@ -147,14 +137,12 @@ and credentials remain outside the plugin installation directory.
 
 ## Publishing a GitHub release
 
-GitHub Releases can host the four generated files. The current documented limit
-is 1,000 assets per release and less than 2 GiB per asset; the prepared set is
-well below both. Create a matching version tag and release, attach the two
+Create a matching version tag and GitHub release, attach the two
 archives, notes, and checksum file, and verify the uploaded checksums.
 
 Publishing and authentication remain manual. A GitHub release does not register
-the plugin in a searchable catalog. Client packaging, catalog eligibility and
-submission requirements are planned under `phase:t29` in the blueprint.
+the plugin in a searchable catalog. Public catalog distribution is still in
+preparation.
 
 Official references:
 

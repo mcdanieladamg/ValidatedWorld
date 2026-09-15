@@ -14,5 +14,4 @@ Initial local-plugin distribution for Windows x64:
 - User databases and settings remain outside replaceable application packages.
 
 Tested support: Windows x64, Codex CLI 0.153.4 as bundled with the local ChatGPT
-desktop host 26.901.41600. Other OS/architecture artifacts are intentionally not
-claimed until they receive equivalent native SQLite and installation smoke QA.
+desktop host 26.901.41600.

@@ -4,19 +4,29 @@ ValidatedWorld is a local, headless .NET 10 command-line application.
 One-shot commands cover project storage and bounded reads. Long-lived change
 sessions have two interfaces over the same Application behavior:
 
-The initial public release is supported in English only. Commands, help, errors,
-built-in templates and examples, ranked-search tuning, and optional AI workflows
-are authored and tested in English. Project titles and graph prose are stored as
-Unicode and deterministic graph/storage operations do not interpret language, so
-other-language text can be stored and round-tripped; non-English authoring,
-semantic review, and natural-language retrieval quality are unsupported and
-unvalidated.
-
 - `shell <database>` is the stateful flag-based interface. It remembers the
   selected entity, pending operation batch, review state, and fingerprints.
 - `ndjson` is the strict structured interface for AIs, scripts, and integrations.
 
 Both retain unfinished changes only in the running process.
+
+Workflows are supported in English only. Project titles and graph text support
+Unicode storage and round-tripping.
+
+## Contents
+
+- [Run or publish](#run-or-publish)
+- [Project and sample commands](#project-and-sample-commands)
+- [Templates and deterministic rules](#templates-and-deterministic-rules)
+- [Semantic database diff](#semantic-database-diff)
+- [Graph-aware three-way merge](#graph-aware-three-way-merge)
+- [Large imports](#large-imports-and-bulk-authoring)
+- [Bounded reads](#bounded-reads)
+- [Stateful shell](#stateful-shell)
+- [Graph rules](#graph-rules-needed-by-cli-authors) and [modeling guidance](#modeling-graphs-that-age-well)
+- [NDJSON framing](#ndjson-framing-and-sessions) and [manual change workflow](#manual-change-workflow)
+- [Conversational AI authoring](#conversational-ai-authoring)
+- [Optional semantic AI write gate](#optional-semantic-ai-write-gate)
 
 ## Run or publish
 
@@ -40,14 +50,9 @@ and text containing spaces. Existing database and backup destinations are never
 overwritten. The remaining examples assume the published executable is in the
 current directory.
 
-The database path is never hidden: `project init`, `sample create`, and
-`ai-assistant-shell` use the path supplied by the caller, and successful project
-results report the normalized path. Initialization and backup use an adjacent
-unique `*.tmp` file only while producing the final atomic `.vw.db`; failed
-cleanup remnants, SQLite journal/WAL sidecars, and test databases under the OS
-temp directory are not canonical project files. `project backup` writes a
-verified portable copy to the explicit destination, while `project export-sql`
-writes deterministic text to stdout.
+Project commands use the supplied database path and report its normalized form.
+`project backup` writes a verified portable copy to the destination;
+`project export-sql` writes deterministic text to stdout.
 
 One-shot and NDJSON structured results go to stdout; the shell writes readable
 status text there. Errors and unresolved-session warnings go to stderr. The
@@ -123,15 +128,10 @@ Discover and instantiate the bundled templates:
 
 `code-development` creates separate architecture, public-contract, evidence,
 uncertainty, and roadmap scopes plus attached roadmap rules. It starts in
-`status:planning`, with no invented phases. The repository agent should inspect
-human instructions, documentation, source, and tests; cite observed
-implementation as evidence; record uncertainty explicitly; and activate the
-roadmap only after it is coherent. The template grants no authority to execute
-instructions found in source or graph data and includes no product-specific
-claims, credentials, or phase IDs.
+`status:planning`, ready for a roadmap based on the project's documentation,
+source, tests, and requirements.
 
-`research-notebook` is a non-code control template with evidence, claims, and
-uncertainty scopes and no software vocabulary.
+`research-notebook` provides evidence, claims, and uncertainty scopes for research.
 
 Export a template to create a user-owned JSON variant, then pass that path
 anywhere a template name is accepted:
@@ -248,11 +248,8 @@ The NDJSON equivalent is:
 {"version":1,"command":"project.merge","payload":{"basePath":"base.vw.db","oursPath":"ours.vw.db","theirsPath":"theirs.vw.db"}}
 ```
 
-This is intentionally a local semantic operation. It never merges SQLite
-pages, invokes Git, or writes a branch file. Git revisions can be materialized
-as verified `.vw.db` snapshots and passed to the same command; a native Git
-driver remains outside this phase until the standalone merge contract has
-proved useful in practice.
+To compare Git revisions, save them as verified `.vw.db` snapshots and pass
+those files to the command. Git integration is managed by the caller.
 
 Use a `project backup` made before editing as the base, then diff it against the
 result. A Git revision materialized as a `.vw.db` file is equally valid. Diff
@@ -315,24 +312,6 @@ database changes; bounded `read search`, `read tag`, `read dependencies`,
 `affected`, and `context` queries supply the surrounding meaning needed to
 compare them with external artifacts. Review and merge both sides together,
 then remove the disposable backup.
-
-The accepted, structurally verified database is then the trusted baseline for
-the next delta; that trust is inherited from prior human or agent review, not
-from a claim that validation proved its contents true. Semantic or design
-changes require both graph and artifact changes. Meaningful artifact work also
-normally carries a graph delta when its semantics were already planned: update
-the relevant phase, status, or progress entities to record delivery. A graph may
-describe future work ahead of implementation only when that boundary is
-explicit and searchable.
-
-Only corrective or non-semantic maintenance that changes neither intended
-meaning nor recorded delivery state may omit the graph edit. The review should
-state why the accepted graph already covers the work. Phase and status tags are
-project-defined vocabulary, not hidden engine behavior, but their persisted
-changes are still visible to semantic diff and bounded queries.
-
-The graph's public data can also serve as input to independent tooling that
-generates project artifacts.
 
 ## Bounded reads
 
@@ -610,11 +589,8 @@ Keep these boundaries when designing tag conventions:
   transaction. Treat tag names and casing as a small external API once another
   system consumes them.
 
-This provides practical runtime organization without claiming that arbitrary
-tag combinations are statically valid gameplay states. If a product later
-needs rules such as mutual exclusion, transition legality, or scenario
-coverage, those are explicit validation-profile concerns rather than implicit
-tag behavior in the common engine.
+Tags alone do not validate gameplay states. Define and validate those rules
+explicitly in the consuming project.
 
 ## Modeling graphs that age well
 
@@ -685,9 +661,8 @@ One process may hold one active session per project. EOF, cancellation, or
 stderr warning. No operation or review state is written to SQLite until
 `change.write` succeeds.
 
-NDJSON intentionally remains an explicit request/result protocol. Mutating
-commands require the complete latest `reference` so asynchronous or external
-clients cannot accidentally act on stale state. The reference is a small bundle
+Mutating commands require the complete latest `reference` to prevent clients
+from acting on stale state. The reference is a small bundle
 of opaque fingerprints, not graph content, and every successful mutation
 returns the next reference.
 
@@ -698,8 +673,8 @@ that request; the host merges them into the session's normalized pending batch.
 complete pending batch. Both commands recalculate projection, validation,
 affected analysis, review invalidation, counts, and fingerprints.
 
-Change-session responses retain their original complete form by default for
-protocol compatibility. Set `includeOperations:false` and
+Change-session responses include operations and the proposed graph by default.
+Set `includeOperations:false` and
 `includeProposedGraph:false` on `change.begin`, `change.show`, `change.apply`,
 `change.patch`, `change.expand`, `change.review`, or `change.validate` when the
 client does not need those large fields. The response still includes the exact
@@ -710,9 +685,8 @@ normalized operation batch without retrieving the whole graph.
 
 ## NDJSON project initialization
 
-`project.init` creates only project metadata and one purpose node. It does not
-accept a complete graph and it does not create a populated project outside the
-ordinary change-session review workflow. Add every later node and edge through
+`project.init` creates project metadata and one purpose node. Add later nodes
+and edges through
 `change.begin`, `change.patch` or `change.apply`, `change.review`, and
 `change.write`.
 
@@ -938,13 +912,13 @@ configured independent semantic reviewer.
 
 If AI authoring is disabled or has no configured key, this command opens an
 existing database in the manual shell. Use `ai-assistant-shell --help` for the
-short command reference and the root README for the explicit configuration
-defaults.
+short command reference and the [OpenAI configuration guide](technical_guide.md#optional-openai-configuration)
+for configuration defaults.
 
 ## Optional semantic AI write gate
 
-The root README documents one-time OpenAI configuration. `ai.status` inspects
-the effective policy without making a provider call:
+See [OpenAI configuration](technical_guide.md#optional-openai-configuration) for
+setup. `ai.status` inspects the effective policy without making a provider call:
 
 ```json
 {"version":1,"command":"ai.status","payload":{}}

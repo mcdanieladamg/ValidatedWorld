@@ -1,14 +1,11 @@
-# TechnicalProject proof assets
+# TechnicalProject test fixtures
 
-These reviewed source assets describe the disposable `technical-project` sample
+These fixtures describe the disposable `technical-project` sample
 created by `sample create technical-project`. The JSON files are portable,
 text-only inputs to deterministic scenario tests. The separate SQLite foundation
-below is an intentionally tracked starting graph for exploratory smoke testing.
+below is a starting graph for exploratory smoke testing.
 
-The initial public release and these proof assets are supported in English only.
-The database can round-trip Unicode graph prose, but non-English authoring,
-review, diagnostics, and ranked-search behavior are not validated product
-capabilities.
+The fixtures use English, the supported product language.
 
 `baseline.json` is a checked, protocol-shaped fixture used by the scenario tests
 to detect drift in the built-in sample. Numeric enum
@@ -17,8 +14,7 @@ values follow the v1 public protocol: `0` is `none` and `1` is
 an edge.
 
 The scenario files contain a complete operation batch, a user-facing goal, and
-the public affected/context result golden. They establish these intentional
-modeling expectations:
+the expected affected/context result. They cover:
 
 - A battery assumption change reaches its runtime check and power design anchor,
   but not privacy or accessibility work.
@@ -28,7 +24,7 @@ modeling expectations:
   its new accessibility consequence for review.
 - Direct power-scope and purpose changes select their expected scope subtree or
   entire project, respectively.
-- The test suite additionally uses these batches to prove incomplete-review,
+- The test suite additionally uses these batches to check incomplete-review,
   stale-write, injected-rollback, backup, bounded-diagnostic, and
   unrelated-control behavior.
 
@@ -37,9 +33,7 @@ that the human-readable content is semantically correct.
 
 ## Exploratory smoke-test foundations
 
-Use either starting point in a disposable folder. Choose your own realistic
-changes, mistakes and recovery paths; no fixed walkthrough or expected outcome
-is prescribed here. The automated scenarios above remain a separate check.
+Create either starting point in a disposable folder:
 
 From the repository root in PowerShell:
 
@@ -54,7 +48,6 @@ dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.cspr
 
 Open either copy in the CLI shell or select its path through any configured
 local MCP client. `semantic-review-foundation.vw.db` contains only fictional
-data (five nodes and five edges), not credentials or saved review decisions.
-Keep the tracked foundation unchanged during a trial. After recording useful
-findings in the blueprint or tests, delete the disposable copies/folder.
-Live independent review remains optional and needs its usual authorization.
+data (five nodes and five edges). Delete the disposable folder after testing.
+Optional independent review sends evidence to OpenAI and incurs API charges
+when enabled and configured.

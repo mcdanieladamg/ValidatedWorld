@@ -4,10 +4,8 @@ This archive is a local Codex marketplace containing the ValidatedWorld plugin
 and its self-contained Windows x64 MCP host. It runs in local Codex hosts over
 stdio.
 
-This initial release is supported in English only. The graph format stores
-Unicode text, but instructions, diagnostics, bundled content, search tuning, and
-optional AI workflows are authored and validated only in English; non-English
-workflow quality is unsupported.
+Workflows are supported in English only. Graph text supports Unicode storage
+and round-tripping.
 
 After extracting the complete archive to a stable user-owned directory:
 
@@ -27,7 +25,8 @@ in scope.
 The plugin's author is the Codex agent in your task. Independent semantic
 review is a separate, fresh OpenAI API request containing the bounded proposed
 transaction and its review evidence, not the authoring conversation. It runs
-before `write_change` only when review is enabled and an API key is configured.
+before `write_change` only when review is enabled and an API key is configured,
+and incurs API charges.
 
 To enable it with your own OpenAI API key, run this from the extracted plugin
 directory:
@@ -55,6 +54,8 @@ To disable review while retaining the configured key:
 Without an effective reviewer, the normal previewed and atomic MCP workflow
 still works. Reviewer credentials are configured independently of the Codex
 host, and the review request is sent directly to OpenAI.
+
+## Update or uninstall
 
 To replace an installed copy, extract the newer complete marketplace archive to
 a new stable directory. Then remove the cached plugin and old marketplace
