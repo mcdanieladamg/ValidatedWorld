@@ -17,9 +17,9 @@ public enum GraphValueKind
 public readonly struct GraphValue : IEquatable<GraphValue>
 {
     private static readonly Regex CanonicalDecimal = new(
-        "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled,
-        TimeSpan.FromSeconds(1));
+        "\\A-?(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?\\z",
+        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
+        Regex.InfiniteMatchTimeout);
 
     private readonly string? _text;
     private readonly long _integer;
@@ -84,7 +84,7 @@ public readonly struct GraphValue : IEquatable<GraphValue>
     {
         ArgumentNullException.ThrowIfNull(value);
 
-        if (value.Length == 0 || value.Length > GraphLimits.DecimalMaxLength || !CanonicalDecimal.IsMatch(value))
+        if (value.Length == 0 || !CanonicalDecimal.IsMatch(value))
         {
             throw new ArgumentException("The decimal is not in canonical base-10 form.", nameof(value));
         }

@@ -16,7 +16,7 @@ public sealed class GraphModelTests
         Assert.Equal("A", upper.Value);
         Assert.Throws<ArgumentException>(() => new EntityId("  "));
         Assert.Throws<ArgumentException>(() => new EntityId("a\n"));
-        Assert.Throws<ArgumentException>(() => new EntityId(new string('x', GraphLimits.IdentifierMaxLength + 1)));
+        Assert.Equal(new string('x', 1024), new EntityId(new string('x', 1024)).Value);
         Assert.Throws<ArgumentException>(() => new ProjectId(""));
         Assert.Throws<ArgumentNullException>(() => new ProjectId(null!));
     }
@@ -28,6 +28,8 @@ public sealed class GraphModelTests
         Assert.Equal(42, GraphValue.FromInteger(42).IntegerValue);
         Assert.Equal("0.25", GraphValue.FromDecimal("0.25").DecimalValue);
         Assert.True(GraphValue.FromBoolean(true).BooleanValue);
+        var largeDecimal = "1" + new string('0', 4096);
+        Assert.Equal(largeDecimal, GraphValue.FromDecimal(largeDecimal).DecimalValue);
         Assert.Equal("requirement", GraphValue.FromSymbol("requirement").SymbolValue);
 
         var instant = new DateTimeOffset(2026, 8, 13, 12, 0, 0, TimeSpan.Zero);
@@ -35,7 +37,7 @@ public sealed class GraphModelTests
         Assert.Equal("true", GraphValue.FromBoolean(true).ToString());
         Assert.Equal("42", GraphValue.FromInteger(42).ToString());
 
-        foreach (var value in new[] { "01", "+1", "1.0", "1e2", "-0", "-0.0", "00.5" })
+        foreach (var value in new[] { "01", "+1", "1.0", "1e2", "-0", "-0.0", "00.5", "1\n" })
         {
             Assert.Throws<ArgumentException>(() => GraphValue.FromDecimal(value));
         }

@@ -5,8 +5,8 @@ namespace ValidatedWorld.Validation;
 
 public sealed class RuleValidationOptions
 {
-    public int MaxEvaluationWork { get; init; } = 1_000_000;
-    public int MaxOffendingEntityIds { get; init; } = 20;
+    public long? MaxEvaluationWork { get; init; }
+    public int MaxOffendingEntityIds { get; init; } = int.MaxValue;
     public CancellationToken CancellationToken { get; init; }
 }
 
@@ -74,12 +74,12 @@ public sealed class GraphRuleValidator
         RuleValidationOptions options)
     {
         private readonly Dictionary<string, HashSet<EntityId>> _viewCache = new(StringComparer.Ordinal);
-        private int _work;
+        private long _work;
 
         public void ThrowIfStopped()
         {
             options.CancellationToken.ThrowIfCancellationRequested();
-            if (++_work > options.MaxEvaluationWork)
+            if (options.MaxEvaluationWork is { } maximum && ++_work > maximum)
                 throw new RuleEvaluationException("rule-work-limit", $"Rule evaluation exceeded the work limit of {options.MaxEvaluationWork}.");
         }
 

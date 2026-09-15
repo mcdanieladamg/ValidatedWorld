@@ -5,26 +5,19 @@ internal static class GraphTextValidation
     public static string Validate(string? value, string parameterName, bool allowEmpty = true)
     {
         ArgumentNullException.ThrowIfNull(value, parameterName);
-        if ((!allowEmpty && string.IsNullOrWhiteSpace(value)) || value.Length > GraphLimits.TextMaxLength)
-        {
-            throw new ArgumentException(
-                allowEmpty
-                    ? $"Text cannot exceed {GraphLimits.TextMaxLength} characters."
-                    : $"Text must be non-empty and cannot exceed {GraphLimits.TextMaxLength} characters.",
-                parameterName);
-        }
-
+        if (!allowEmpty && string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Text must be non-empty.", parameterName);
         return value;
     }
 
     public static string ValidateMetadata(string? value, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(value, parameterName);
-        if (string.IsNullOrWhiteSpace(value) || value.Length > GraphLimits.MetadataNameMaxLength ||
+        if (string.IsNullOrWhiteSpace(value) ||
             value.Any(char.IsControl))
         {
             throw new ArgumentException(
-                "Metadata text must be non-empty, bounded, and free of control characters.",
+                "Metadata text must be non-empty and free of control characters.",
                 parameterName);
         }
 
@@ -34,10 +27,10 @@ internal static class GraphTextValidation
     public static string ValidateRelationship(string? value, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(value, parameterName);
-        if (string.IsNullOrWhiteSpace(value) || value.Length > GraphLimits.RelationshipLabelMaxLength ||
+        if (string.IsNullOrWhiteSpace(value) ||
             value.Any(char.IsControl))
         {
-            throw new ArgumentException("A relationship label must be non-empty and bounded.", parameterName);
+            throw new ArgumentException("A relationship label must be non-empty and free of control characters.", parameterName);
         }
 
         return value;

@@ -69,9 +69,9 @@ public sealed record AffectedOmissionPage(
 
 public sealed class AffectedAnalysisOptions
 {
-    private int _maxTraversalDepth = 100_000;
-    private int _maxAffectedNodes = 1_000_000;
-    private int _maxOutputItems = 1_000_000;
+    private int _maxTraversalDepth = int.MaxValue;
+    private int _maxAffectedNodes = int.MaxValue;
+    private int _maxOutputItems = int.MaxValue;
 
     public int MaxTraversalDepth
     {
@@ -299,8 +299,8 @@ public sealed class AffectedAnalysis
     {
         if (string.IsNullOrWhiteSpace(fingerprint))
             throw new ArgumentException("A detail fingerprint is required.", nameof(fingerprint));
-        if (limit is < 1 or > 1_000)
-            throw new ArgumentOutOfRangeException(nameof(limit), "The detail-page limit must be between 1 and 1,000.");
+        if (limit < 1)
+            throw new ArgumentOutOfRangeException(nameof(limit), "The detail-page size must be positive.");
 
         var group = Omissions.SingleOrDefault(item => item.DetailsFingerprint == fingerprint)
             ?? throw new ArgumentException("The omission fingerprint is not current for this analysis.", nameof(fingerprint));

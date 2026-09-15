@@ -54,7 +54,7 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Scans a strict local JSONL bulk manifest and returns one bounded, resumable operation chunk. The manifest must be anchored to the selected project's ID and current state fingerprint; every chunk boundary is validated before the chunk is returned. Apply chunks through one ordinary reviewed change session and call write_change once at the end.")]
     public object PlanBulkImport(
         [Description("Explicit local JSONL manifest path. The first line is the validated-world-bulk-manifest header; later lines are complete graph operations.")] string manifestPath,
-        [Description("Operations returned per page, from 1 to 5000. Keep the same value when using nextCursor.")] int chunkSize = BulkImportContract.DefaultChunkSize,
+        [Description("Operations returned per page, positive. Keep the same value when using nextCursor.")] int chunkSize = BulkImportContract.DefaultChunkSize,
         [Description("Opaque continuation cursor returned by the preceding plan call.")] string? cursor = null,
         CancellationToken cancellationToken = default) =>
         projects.PlanBulkImport(manifestPath, chunkSize, cursor, cancellationToken);
@@ -65,8 +65,8 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Checks selected-project nodes marked as artifact anchors against their declared path and SHA-256. The built-in filesystem adapter only reads and hashes bytes, returns a bounded base64 sample, and never executes graph text. Pass nodeId to check one anchor.")]
     public object CheckArtifacts(
         [Description("Optional stable artifact-anchor node identifier; omit to check all marked anchors.")] string? nodeId = null,
-        [Description("Maximum number of anchors to check, from 1 to 1000.")] int maxAnchors = ArtifactCheckerContract.DefaultMaxAnchors,
-        [Description("Maximum sample bytes per file, from 1 to 65536.")] int maxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes,
+        [Description("Maximum number of anchors to check, positive.")] int maxAnchors = ArtifactCheckerContract.DefaultMaxAnchors,
+        [Description("Requested sample bytes per file; must be positive.")] int maxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes,
         CancellationToken cancellationToken = default) =>
         projects.CheckArtifacts(nodeId, maxAnchors, maxSampleBytes, cancellationToken);
 
@@ -74,10 +74,10 @@ internal sealed class McpTools(McpProjectService projects)
     public McpChangeSummary BeginChange(
         [Description("Human-readable intent for the proposed change.")] string intent) => projects.BeginChange(intent);
 
-    [McpServerTool(UseStructuredContent = true, Destructive = false, OpenWorld = false), Description("Applies one bounded batch of complete graph operations to the in-memory proposal. The application owns validation, affected analysis, and exact stale-state checks.")]
+    [McpServerTool(UseStructuredContent = true, Destructive = false, OpenWorld = false), Description("Applies one batch of complete graph operations to the in-memory proposal. The application owns validation, affected analysis, and exact stale-state checks.")]
     public object PatchChange(
         [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision,
-        [Description("One batch of add, replace, or remove operations. A batch is limited to 100 operations and a proposal to 1,000.")] OperationBatchDto operations) =>
+        [Description("One batch of add, replace, or remove operations. Choose a coherent batch size appropriate to the host.")] OperationBatchDto operations) =>
         projects.PatchChange(expectedRevision, McpProjectService.ParseOperations(operations));
 
     [McpServerTool(UseStructuredContent = true, Destructive = false, OpenWorld = false), Description("Refreshes affected/context analysis for the current in-memory proposal using bounded application limits.")]
@@ -136,24 +136,24 @@ internal sealed class McpTools(McpProjectService projects)
         [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision) =>
         projects.DiscardChange(expectedRevision);
 
-    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reads one node from the selected project. The result is bounded and marked incomplete if the byte bound is exceeded.")]
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reads one node from the selected project. Returns the complete entity.")]
     public object ReadNode([Description("Stable node identifier.")] string nodeId) =>
         McpProjectService.Read(McpProjectService.Node(projects.Queries().GetNode(new EntityId(nodeId))));
 
-    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reads one edge from the selected project. The result is bounded and marked incomplete if the byte bound is exceeded.")]
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reads one edge from the selected project. Returns the complete entity.")]
     public object ReadEdge([Description("Stable edge identifier.")] string edgeId) =>
         McpProjectService.Read(McpProjectService.Edge(projects.Queries().GetEdge(new EntityId(edgeId))));
 
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Lists a bounded page of nodes from the selected project. Use nextCursor for the exact snapshot continuation.")]
     public object ListNodes(
-        [Description("Maximum number of nodes to return, from 1 to 1000.")] int limit = 100,
+        [Description("Maximum number of nodes to return, positive.")] int limit = 100,
         [Description("Exact continuation cursor returned by the preceding call.")] string? cursor = null) =>
         McpProjectService.ProjectPage(
             projects.Queries().ListNodes(new QueryPageRequest(limit, cursor)), McpProjectService.Node);
 
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Lists a bounded page of edges from the selected project. Use nextCursor for the exact snapshot continuation.")]
     public object ListEdges(
-        [Description("Maximum number of edges to return, from 1 to 1000.")] int limit = 100,
+        [Description("Maximum number of edges to return, positive.")] int limit = 100,
         [Description("Exact continuation cursor returned by the preceding call.")] string? cursor = null) =>
         McpProjectService.ProjectPage(
             projects.Queries().ListEdges(new QueryPageRequest(limit, cursor)), McpProjectService.Edge);
@@ -161,7 +161,7 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Performs bounded case-insensitive discovery across node and edge identifiers, text, metadata, tags, relationships, and rationales.")]
     public object Search(
         [Description("Non-empty search text.")] string text,
-        [Description("Maximum number of hits to return, from 1 to 1000.")] int limit = 100,
+        [Description("Maximum number of hits to return, positive.")] int limit = 100,
         [Description("Exact continuation cursor returned by the preceding call.")] string? cursor = null) =>
         McpProjectService.ProjectPage(
             projects.Queries().Search(text, new QueryPageRequest(limit, cursor)),
@@ -172,7 +172,7 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Performs bounded deterministic ranked lexical discovery with match explanations.")]
     public object RankedSearch(
         [Description("Non-empty ranked search text.")] string text,
-        [Description("Maximum number of hits to return, from 1 to 1000.")] int limit = 100,
+        [Description("Maximum number of hits to return, positive.")] int limit = 100,
         [Description("Exact continuation cursor returned by the preceding call.")] string? cursor = null) =>
         McpProjectService.ProjectPage(
             projects.Queries().SearchRanked(text, new QueryPageRequest(limit, cursor)),
@@ -189,7 +189,7 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Finds entities carrying an exact case-sensitive tag.")]
     public object ReadTag(
         [Description("Exact case-sensitive tag.")] string tag,
-        [Description("Maximum number of hits to return, from 1 to 1000.")] int limit = 100,
+        [Description("Maximum number of hits to return, positive.")] int limit = 100,
         [Description("Exact continuation cursor returned by the preceding call.")] string? cursor = null) =>
         McpProjectService.ProjectPage(
             projects.Queries().SearchByTag(tag, new QueryPageRequest(limit, cursor)),
@@ -200,26 +200,26 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reads one node's scope ancestor lineage and a bounded descendant page.")]
     public object ReadScope(
         [Description("Stable node identifier.")] string nodeId,
-        [Description("Maximum descendant items to return, from 1 to 1000.")] int limit = 100,
+        [Description("Maximum descendant items to return, positive.")] int limit = 100,
         [Description("Exact descendant continuation cursor.")] string? cursor = null,
-        [Description("Positive traversal depth bound.")] int maxDepth = 10_000,
-        [Description("Positive visited-node bound.")] int maxVisitedNodes = 100_000)
+        [Description("Positive traversal depth bound.")] int maxDepth = int.MaxValue,
+        [Description("Positive visited-node bound.")] int maxVisitedNodes = int.MaxValue)
     {
         var result = projects.Queries().GetScope(
             new EntityId(nodeId),
             new QueryPageRequest(limit, cursor),
             new QueryTraversalOptions { MaxDepth = maxDepth, MaxVisitedNodes = maxVisitedNodes });
-        return McpProjectService.Bound(new McpScopeResult(
+        return new McpScopeResult(
             McpProjectService.Node(result.Node),
             result.Upstream.Select(McpProjectService.Node).ToArray(),
             McpProjectService.ProjectPage(result.Descendants, McpProjectService.Node),
-            McpProjectService.Omissions(result.Omissions)));
+            McpProjectService.Omissions(result.Omissions));
     }
 
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reads stored graph neighbors for one selected-project node.")]
     public object ReadNeighbors(
         [Description("Stable node identifier.")] string nodeId,
-        [Description("Maximum number of entries to return, from 1 to 1000.")] int limit = 100,
+        [Description("Maximum number of entries to return, positive.")] int limit = 100,
         [Description("Exact continuation cursor returned by the preceding call.")] string? cursor = null) =>
         McpProjectService.ProjectPage(
             projects.Queries().GetNeighbors(new EntityId(nodeId), new QueryPageRequest(limit, cursor)),
@@ -228,7 +228,7 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reads expanded review dependencies for one selected-project node.")]
     public object ReadDependencies(
         [Description("Stable node identifier.")] string nodeId,
-        [Description("Maximum number of entries to return, from 1 to 1000.")] int limit = 100,
+        [Description("Maximum number of entries to return, positive.")] int limit = 100,
         [Description("Exact continuation cursor returned by the preceding call.")] string? cursor = null) =>
         McpProjectService.ProjectPage(
             projects.Queries().GetDependencies(new EntityId(nodeId), new QueryPageRequest(limit, cursor)),
@@ -238,33 +238,33 @@ internal sealed class McpTools(McpProjectService projects)
     public object ReadPath(
         [Description("Stable source node identifier.")] string sourceNodeId,
         [Description("Stable target node identifier.")] string targetNodeId,
-        [Description("Positive traversal depth bound.")] int maxDepth = 10_000,
-        [Description("Positive visited-node bound.")] int maxVisitedNodes = 100_000)
+        [Description("Positive traversal depth bound.")] int maxDepth = int.MaxValue,
+        [Description("Positive visited-node bound.")] int maxVisitedNodes = int.MaxValue)
     {
         var result = projects.Queries().FindDependencyPath(
             new EntityId(sourceNodeId), new EntityId(targetNodeId),
             new QueryTraversalOptions { MaxDepth = maxDepth, MaxVisitedNodes = maxVisitedNodes });
-        return McpProjectService.Bound(new McpPathResult(result.Found, result.Nodes.Select(id => id.Value).ToArray(),
-            result.Edges.Select(id => id.Value).ToArray(), McpProjectService.Omissions(result.Omissions)));
+        return new McpPathResult(result.Found, result.Nodes.Select(id => id.Value).ToArray(),
+            result.Edges.Select(id => id.Value).ToArray(), McpProjectService.Omissions(result.Omissions));
     }
 
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Returns the combined scope-upstream context for selected-project node identifiers without sibling fan-out.")]
     public object ReadContext(
         [Description("Stable node identifiers whose scope lineage should be included.")] IReadOnlyList<string> nodeIds,
-        [Description("Positive traversal depth bound.")] int maxDepth = 10_000,
-        [Description("Positive visited-node bound.")] int maxVisitedNodes = 100_000)
+        [Description("Positive traversal depth bound.")] int maxDepth = int.MaxValue,
+        [Description("Positive visited-node bound.")] int maxVisitedNodes = int.MaxValue)
     {
         var result = projects.Queries().GetContext(
             nodeIds.Select(id => new EntityId(id)),
             new QueryTraversalOptions { MaxDepth = maxDepth, MaxVisitedNodes = maxVisitedNodes });
-        return McpProjectService.Bound(new McpContextResult(
+        return new McpContextResult(
             result.RequestedNodeIds.Select(id => id.Value).ToArray(),
             result.ContextNodes.Select(McpProjectService.Node).ToArray(),
-            McpProjectService.Omissions(result.Omissions)));
+            McpProjectService.Omissions(result.Omissions));
     }
 
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Returns a bounded deterministic graph observability report for the selected project.")]
-    public object ReadHealth([Description("Maximum items per report section, from 1 to 1000.")] int limit = 100)
+    public object ReadHealth([Description("Maximum items per report section, positive.")] int limit = 100)
     {
         var report = projects.Queries().GetGraphHealth(new GraphObservabilityOptions { MaxItems = limit });
         var result = new McpHealthResult(
@@ -300,7 +300,7 @@ internal sealed class McpTools(McpProjectService projects)
             report.UntaggedEdgeCount,
             report.WasCancelled,
             McpProjectService.Omissions(report.Omissions));
-        return McpProjectService.Bound(result);
+        return result;
     }
 
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Alias for read_health; returns the same bounded graph observability report.")]

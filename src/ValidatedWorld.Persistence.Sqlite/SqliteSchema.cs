@@ -23,7 +23,7 @@ internal static class SqliteSchema
         new("table", "projects", """
             CREATE TABLE projects (
                 project_id TEXT PRIMARY KEY COLLATE BINARY,
-                title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 16384),
+                title TEXT NOT NULL CHECK (length(title) >= 1),
                 purpose_node_id TEXT NOT NULL COLLATE BINARY,
                 created_utc TEXT NOT NULL,
                 updated_utc TEXT NOT NULL,
@@ -36,12 +36,11 @@ internal static class SqliteSchema
             CREATE TABLE nodes (
                 node_id TEXT PRIMARY KEY COLLATE BINARY,
                 project_id TEXT NOT NULL COLLATE BINARY,
-                text TEXT NOT NULL CHECK (length(text) BETWEEN 1 AND 16384),
-                kind TEXT NULL CHECK (kind IS NULL OR length(kind) BETWEEN 1 AND 256),
+                text TEXT NOT NULL CHECK (length(text) >= 1),
+                kind TEXT NULL CHECK (kind IS NULL OR length(kind) >= 1),
                 tags_json TEXT NOT NULL CHECK (
-                    length(tags_json) <= 1048576 AND json_valid(tags_json) AND json_type(tags_json) = 'array'),
+                    json_valid(tags_json) AND json_type(tags_json) = 'array'),
                 attributes_json TEXT NOT NULL CHECK (
-                    length(attributes_json) <= 1048576 AND
                     json_valid(attributes_json) AND json_type(attributes_json) = 'array'),
                 FOREIGN KEY (project_id) REFERENCES projects(project_id)
                     ON UPDATE RESTRICT ON DELETE RESTRICT
@@ -53,13 +52,12 @@ internal static class SqliteSchema
                 project_id TEXT NOT NULL COLLATE BINARY,
                 source_node_id TEXT NOT NULL COLLATE BINARY,
                 target_node_id TEXT NOT NULL COLLATE BINARY,
-                relationship TEXT NOT NULL CHECK (length(relationship) BETWEEN 1 AND 1024),
+                relationship TEXT NOT NULL CHECK (length(relationship) >= 1),
                 review_direction INTEGER NOT NULL CHECK (review_direction BETWEEN 0 AND 3),
-                rationale TEXT NULL CHECK (rationale IS NULL OR length(rationale) <= 16384),
+                rationale TEXT NULL,
                 tags_json TEXT NOT NULL CHECK (
-                    length(tags_json) <= 1048576 AND json_valid(tags_json) AND json_type(tags_json) = 'array'),
+                    json_valid(tags_json) AND json_type(tags_json) = 'array'),
                 attributes_json TEXT NOT NULL CHECK (
-                    length(attributes_json) <= 1048576 AND
                     json_valid(attributes_json) AND json_type(attributes_json) = 'array'),
                 FOREIGN KEY (project_id) REFERENCES projects(project_id)
                     ON UPDATE RESTRICT ON DELETE RESTRICT,

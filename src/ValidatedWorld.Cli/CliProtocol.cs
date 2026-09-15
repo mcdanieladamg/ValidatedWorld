@@ -79,21 +79,21 @@ internal sealed record ScopeRequest(
     string NodeId,
     int Limit = QueryPageRequest.DefaultLimit,
     string? Cursor = null,
-    int MaxDepth = 10_000,
-    int MaxVisitedNodes = 100_000,
+    int MaxDepth = int.MaxValue,
+    int MaxVisitedNodes = int.MaxValue,
     string? ExpectedProjectId = null);
 internal sealed record PathQueryRequest(
     string Path,
     string SourceNodeId,
     string TargetNodeId,
-    int MaxDepth = 10_000,
-    int MaxVisitedNodes = 100_000,
+    int MaxDepth = int.MaxValue,
+    int MaxVisitedNodes = int.MaxValue,
     string? ExpectedProjectId = null);
 internal sealed record ContextRequest(
     string Path,
     IReadOnlyList<string> NodeIds,
-    int MaxDepth = 10_000,
-    int MaxVisitedNodes = 100_000,
+    int MaxDepth = int.MaxValue,
+    int MaxVisitedNodes = int.MaxValue,
     string? ExpectedProjectId = null);
 internal sealed record GraphObservabilityRequest(
     string Path,
@@ -140,16 +140,16 @@ internal sealed record FocusRequest(
 internal sealed record ChangeOperationsRequest(
     SessionReferenceDto Reference,
     OperationBatchDto Operations,
-    int MaxTraversalDepth = 100_000,
-    int MaxAffectedNodes = 1_000_000,
-    int MaxOutputItems = 1_000_000,
+    int MaxTraversalDepth = int.MaxValue,
+    int MaxAffectedNodes = int.MaxValue,
+    int MaxOutputItems = int.MaxValue,
     bool IncludeOperations = true,
     bool IncludeProposedGraph = true);
 internal sealed record ExpandRequest(
     SessionReferenceDto Reference,
-    int MaxTraversalDepth = 100_000,
-    int MaxAffectedNodes = 1_000_000,
-    int MaxOutputItems = 1_000_000,
+    int MaxTraversalDepth = int.MaxValue,
+    int MaxAffectedNodes = int.MaxValue,
+    int MaxOutputItems = int.MaxValue,
     bool IncludeOperations = true,
     bool IncludeProposedGraph = true);
 internal sealed record ReviewDispositionDto(string NodeId, ReviewDispositionKind Kind, string? Rationale = null);
@@ -458,9 +458,9 @@ internal sealed record AiReviewAvailabilityDto(
     int TimeoutSeconds,
     bool LiveTests,
     string Message,
-    int MaxRequestBytes,
-    int MaxRequestItems,
-    int MaxRequestTokens);
+    int? MaxRequestBytes,
+    int? MaxRequestItems,
+    int? MaxRequestTokens);
 internal sealed record SemanticReviewUsageDto(int InputTokens, int OutputTokens, int TotalTokens);
 internal sealed record SemanticReviewConcernResultDto(
     string Code,

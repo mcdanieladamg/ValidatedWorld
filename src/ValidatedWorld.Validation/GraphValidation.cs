@@ -13,9 +13,9 @@ public enum ValidationStatus
 /// <summary>Limits and cancellation used by deterministic graph validation.</summary>
 public sealed class GraphValidationOptions
 {
-    private int _maxTraversalDepth = 100_000;
-    private int _maxTraversalNodes = 1_000_000;
-    private int _maxDiagnostics = 10_000;
+    private int _maxTraversalDepth = int.MaxValue;
+    private long _maxTraversalNodes = long.MaxValue;
+    private int _maxDiagnostics = int.MaxValue;
 
     public int MaxTraversalDepth
     {
@@ -23,10 +23,10 @@ public sealed class GraphValidationOptions
         init => _maxTraversalDepth = ValidatePositive(value, nameof(MaxTraversalDepth));
     }
 
-    public int MaxTraversalNodes
+    public long MaxTraversalNodes
     {
         get => _maxTraversalNodes;
-        init => _maxTraversalNodes = ValidatePositive(value, nameof(MaxTraversalNodes));
+        init => _maxTraversalNodes = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(MaxTraversalNodes));
     }
 
     public int MaxDiagnostics
@@ -256,7 +256,7 @@ public sealed class GraphValidator
         DiagnosticCollector collector,
         ref bool inconclusive)
     {
-        var visitedNodes = 0;
+        long visitedNodes = 0;
         foreach (var node in index.Graph.Nodes)
         {
             if (options.CancellationToken.IsCancellationRequested)

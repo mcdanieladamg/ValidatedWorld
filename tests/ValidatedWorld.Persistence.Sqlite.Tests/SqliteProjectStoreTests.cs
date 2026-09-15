@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using ValidatedWorld.Application;
 using ValidatedWorld.Core;
+using ValidatedWorld.Validation;
 
 namespace ValidatedWorld.Persistence.Sqlite.Tests;
 
@@ -96,7 +97,7 @@ public sealed class SqliteProjectStoreTests
     }
 
     [Fact]
-    public void Corrupt_malformed_and_oversized_rows_are_rejected()
+    public void Corrupt_files_and_malformed_rows_are_rejected()
     {
         using var workspace = new TestWorkspace();
         var application = CreateApplication();
@@ -111,12 +112,28 @@ public sealed class SqliteProjectStoreTests
             "UPDATE nodes SET tags_json = '[\"duplicate\",\"duplicate\"]' WHERE node_id = 'purpose'");
         AssertStorageError(ProjectStorageErrorCode.MappingFailure, () => application.Verify(malformedPath));
 
-        var oversizedPath = CreateSample(application, workspace, "oversized-row.vw.db");
-        Execute(
-            oversizedPath,
-            "PRAGMA ignore_check_constraints = ON; UPDATE nodes SET text = $text WHERE node_id = 'purpose'",
-            ("$text", new string('x', GraphLimits.TextMaxLength + 1)));
-        AssertStorageError(ProjectStorageErrorCode.ResourceLimitExceeded, () => application.Verify(oversizedPath));
+    }
+
+    [Fact]
+    public async Task Large_graph_values_round_trip_without_product_size_ceilings()
+    {
+        using var workspace = new TestWorkspace();
+        var path = workspace.PathFor("large-values.vw.db");
+        var application = CreateApplication();
+        var id = new EntityId(new string('p', 1024));
+        var text = new string('x', 2 * 1024 * 1024);
+        var created = application.Initialize(path, new ProjectId(new string('i', 1024)), text, id, text);
+        var begun = application.BeginChange(path, created.Graph.ProjectId, "tester", "Preserve large metadata");
+        var node = new GraphNode(id, text, new string('k', 1024), [new string('t', 1024)],
+            [new(new string('a', 1024), GraphValue.FromText(text))]);
+        var patched = application.ApplyChange(begun.Reference, new GraphOperationBatch([GraphOperation.ReplaceNode(node)]));
+        var reviewed = application.ReviewChange(patched.Reference, new ChangeReviewUpdate(
+            [new ReviewDisposition(id, ReviewDispositionKind.Updated, null)], []));
+        await application.WriteChangeAsync(reviewed.Reference);
+        var loaded = application.Load(path);
+        Assert.Equal(node, loaded.Graph.Nodes.Single());
+        Assert.Equal(text, loaded.Graph.Title);
+        Assert.True(application.Verify(path).IsValid);
     }
 
     [Fact]

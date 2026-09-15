@@ -57,6 +57,23 @@ public sealed class RuleValidationTests
         Assert.True(new GraphRuleValidator().Validate(graph, RuleProtocol.Parse(graph)).IsValid);
     }
 
+    [Fact]
+    public void Rule_counts_and_nesting_have_no_guessed_caps_but_explicit_work_budget_is_honored()
+    {
+        var expression = "{\"exists\":{\"nodes\":{}}}";
+        for (var depth = 0; depth < 80; depth++) expression = "{\"not\":" + expression + "}";
+        var children = Enumerable.Range(0, 129).Select(i => Rule("rule-" + i, "Some nodes exist", expression))
+            .Concat(Enumerable.Range(0, 129).Select(i => View("view-" + i, "{\"nodes\":{}}"))).ToArray();
+        var graph = Graph(children);
+        var rules = RuleProtocol.Parse(graph);
+        Assert.Equal(129, rules.Rules.Count);
+        Assert.Equal(129, rules.Views.Count);
+        var validator = new GraphRuleValidator();
+        Assert.True(validator.Validate(graph, rules).IsValid);
+        Assert.Equal(ValidationStatus.Inconclusive,
+            validator.Validate(graph, rules, new RuleValidationOptions { MaxEvaluationWork = 1 }).Status);
+    }
+
     private static ProjectGraph Graph(params GraphNode[] children)
     {
         var purpose = Node("purpose", "Purpose", "purpose");

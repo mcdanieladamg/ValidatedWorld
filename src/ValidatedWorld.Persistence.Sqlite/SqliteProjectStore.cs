@@ -25,11 +25,7 @@ public enum SqliteWriteBoundary
 /// <summary>SQLite storage for one immutable current project graph.</summary>
 public sealed class SqliteProjectStore : IProjectStore
 {
-    public const int MaximumNodeCount = 100_000;
-    public const int MaximumEdgeCount = 1_000_000;
-    public const int MaximumMetadataJsonLength = 1_048_576;
 
-    private const long MaximumDatabaseFileLength = 16L * 1024 * 1024 * 1024;
     private const int CommandTimeoutSeconds = 10;
     private static readonly object NativeInitializationLock = new();
     private static bool _nativeInitialized;
@@ -626,11 +622,11 @@ public sealed class SqliteProjectStore : IProjectStore
         }
 
         var row = new ProjectRow(
-            ReadBoundedString(reader, 0, GraphLimits.IdentifierMaxLength, "project_id"),
-            ReadBoundedString(reader, 1, GraphLimits.TextMaxLength, "title"),
-            ReadBoundedString(reader, 2, GraphLimits.IdentifierMaxLength, "purpose_node_id"),
-            ParseUtc(ReadBoundedString(reader, 3, 64, "created_utc"), "created_utc"),
-            ParseUtc(ReadBoundedString(reader, 4, 64, "updated_utc"), "updated_utc"),
+            ReadString(reader, 0, "project_id"),
+            ReadString(reader, 1, "title"),
+            ReadString(reader, 2, "purpose_node_id"),
+            ParseUtc(ReadString(reader, 3, "created_utc"), "created_utc"),
+            ParseUtc(ReadString(reader, 4, "updated_utc"), "updated_utc"),
             ReadFingerprint(reader, 5));
         if (reader.Read())
         {
@@ -642,8 +638,8 @@ public sealed class SqliteProjectStore : IProjectStore
 
     private static ProjectGraph ReadGraph(SqliteConnection connection, ProjectRow project)
     {
-        var nodeCount = ReadCount(connection, "nodes", MaximumNodeCount);
-        var edgeCount = ReadCount(connection, "edges", MaximumEdgeCount);
+        var nodeCount = ReadCount(connection, "nodes");
+        var edgeCount = ReadCount(connection, "edges");
         var nodes = new List<GraphNode>(nodeCount);
         var edges = new List<GraphEdge>(edgeCount);
 
@@ -656,15 +652,15 @@ public sealed class SqliteProjectStore : IProjectStore
         {
             while (reader.Read())
             {
-                var projectId = ReadBoundedString(reader, 1, GraphLimits.IdentifierMaxLength, "nodes.project_id");
+                var projectId = ReadString(reader, 1, "nodes.project_id");
                 EnsureProjectId(project.ProjectId, projectId, "node");
-                var tagsJson = ReadBoundedString(reader, 4, MaximumMetadataJsonLength, "nodes.tags_json");
-                var attributesJson = ReadBoundedString(
-                    reader, 5, MaximumMetadataJsonLength, "nodes.attributes_json");
+                var tagsJson = ReadString(reader, 4, "nodes.tags_json");
+                var attributesJson = ReadString(
+                    reader, 5, "nodes.attributes_json");
                 var node = new GraphNode(
-                    new EntityId(ReadBoundedString(reader, 0, GraphLimits.IdentifierMaxLength, "node_id")),
-                    ReadBoundedString(reader, 2, GraphLimits.TextMaxLength, "nodes.text"),
-                    ReadNullableBoundedString(reader, 3, GraphLimits.MetadataNameMaxLength, "nodes.kind"),
+                    new EntityId(ReadString(reader, 0, "node_id")),
+                    ReadString(reader, 2, "nodes.text"),
+                    ReadNullableString(reader, 3, "nodes.kind"),
                     DecodeTags(tagsJson),
                     DecodeAttributes(attributesJson));
                 EnsureCanonicalMetadata(tagsJson, attributesJson, node.Tags, node.Attributes, node.Id.Value);
@@ -682,7 +678,7 @@ public sealed class SqliteProjectStore : IProjectStore
         {
             while (reader.Read())
             {
-                var projectId = ReadBoundedString(reader, 1, GraphLimits.IdentifierMaxLength, "edges.project_id");
+                var projectId = ReadString(reader, 1, "edges.project_id");
                 EnsureProjectId(project.ProjectId, projectId, "edge");
                 var reviewDirectionValue = reader.GetInt32(5);
                 if (!Enum.IsDefined((ReviewDirection)reviewDirectionValue))
@@ -690,19 +686,19 @@ public sealed class SqliteProjectStore : IProjectStore
                     throw MappingFailure("An edge has an unknown review direction.");
                 }
 
-                var tagsJson = ReadBoundedString(reader, 7, MaximumMetadataJsonLength, "edges.tags_json");
-                var attributesJson = ReadBoundedString(
-                    reader, 8, MaximumMetadataJsonLength, "edges.attributes_json");
+                var tagsJson = ReadString(reader, 7, "edges.tags_json");
+                var attributesJson = ReadString(
+                    reader, 8, "edges.attributes_json");
                 var edge = new GraphEdge(
-                    new EntityId(ReadBoundedString(reader, 0, GraphLimits.IdentifierMaxLength, "edge_id")),
-                    new EntityId(ReadBoundedString(
-                        reader, 2, GraphLimits.IdentifierMaxLength, "source_node_id")),
-                    new EntityId(ReadBoundedString(
-                        reader, 3, GraphLimits.IdentifierMaxLength, "target_node_id")),
-                    ReadBoundedString(
-                        reader, 4, GraphLimits.RelationshipLabelMaxLength, "edges.relationship"),
+                    new EntityId(ReadString(reader, 0, "edge_id")),
+                    new EntityId(ReadString(
+                        reader, 2, "source_node_id")),
+                    new EntityId(ReadString(
+                        reader, 3, "target_node_id")),
+                    ReadString(
+                        reader, 4, "edges.relationship"),
                     (ReviewDirection)reviewDirectionValue,
-                    ReadNullableBoundedString(reader, 6, GraphLimits.TextMaxLength, "edges.rationale"),
+                    ReadNullableString(reader, 6, "edges.rationale"),
                     DecodeTags(tagsJson),
                     DecodeAttributes(attributesJson));
                 EnsureCanonicalMetadata(tagsJson, attributesJson, edge.Tags, edge.Attributes, edge.Id.Value);
@@ -732,13 +728,6 @@ public sealed class SqliteProjectStore : IProjectStore
 
     private void EnsureGraphCanBeStored(ProjectGraph graph)
     {
-        if (graph.Nodes.Count > MaximumNodeCount || graph.Edges.Count > MaximumEdgeCount)
-        {
-            throw new ProjectStorageException(
-                ProjectStorageErrorCode.ResourceLimitExceeded,
-                $"A SQLite project may contain at most {MaximumNodeCount} nodes and {MaximumEdgeCount} edges.");
-        }
-
         var validation = _validator.Validate(graph);
         if (!validation.IsValid)
         {
@@ -747,21 +736,6 @@ public sealed class SqliteProjectStore : IProjectStore
                 "Only a structurally valid complete graph can initialize a SQLite project.");
         }
 
-        foreach (var json in graph.Nodes.SelectMany(node => new[]
-                 {
-                     EncodeTags(node.Tags), EncodeAttributes(node.Attributes),
-                 }).Concat(graph.Edges.SelectMany(edge => new[]
-                 {
-                     EncodeTags(edge.Tags), EncodeAttributes(edge.Attributes),
-                 })))
-        {
-            if (json.Length > MaximumMetadataJsonLength)
-            {
-                throw new ProjectStorageException(
-                    ProjectStorageErrorCode.ResourceLimitExceeded,
-                    "A graph entity's canonical metadata exceeds the SQLite row limit.");
-            }
-        }
     }
 
     private static void VerifyIntegrity(SqliteConnection connection)
@@ -795,17 +769,6 @@ public sealed class SqliteProjectStore : IProjectStore
     private static SqliteConnection OpenConnection(string fullPath, SqliteOpenMode mode)
     {
         EnsureNativeProvider();
-        if (mode == SqliteOpenMode.ReadOnly)
-        {
-            var fileLength = new FileInfo(fullPath).Length;
-            if (fileLength > MaximumDatabaseFileLength)
-            {
-                throw new ProjectStorageException(
-                    ProjectStorageErrorCode.ResourceLimitExceeded,
-                    "The SQLite project file exceeds the configured size limit.");
-            }
-        }
-
         var connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = fullPath,
@@ -985,21 +948,14 @@ public sealed class SqliteProjectStore : IProjectStore
         }
     }
 
-    private static int ReadCount(SqliteConnection connection, string tableName, int maximum)
+    private static int ReadCount(SqliteConnection connection, string tableName)
     {
         using var command = CreateCommand(connection, $"SELECT count(*) FROM {tableName}");
         var count = Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
-        if (count > maximum)
-        {
-            throw new ProjectStorageException(
-                ProjectStorageErrorCode.ResourceLimitExceeded,
-                $"Table '{tableName}' exceeds its configured row limit of {maximum}.");
-        }
-
         return checked((int)count);
     }
 
-    private static string ReadBoundedString(SqliteDataReader reader, int ordinal, int maximum, string columnName)
+    private static string ReadString(SqliteDataReader reader, int ordinal, string columnName)
     {
         if (reader.IsDBNull(ordinal))
         {
@@ -1007,27 +963,19 @@ public sealed class SqliteProjectStore : IProjectStore
         }
 
         var value = reader.GetString(ordinal);
-        if (value.Length > maximum)
-        {
-            throw new ProjectStorageException(
-                ProjectStorageErrorCode.ResourceLimitExceeded,
-                $"Column '{columnName}' exceeds its configured length limit of {maximum}.");
-        }
-
         return value;
     }
 
-    private static string? ReadNullableBoundedString(
+    private static string? ReadNullableString(
         SqliteDataReader reader,
         int ordinal,
-        int maximum,
         string columnName) => reader.IsDBNull(ordinal)
             ? null
-            : ReadBoundedString(reader, ordinal, maximum, columnName);
+            : ReadString(reader, ordinal, columnName);
 
     private static string ReadFingerprint(SqliteDataReader reader, int ordinal)
     {
-        var value = ReadBoundedString(reader, ordinal, 64, "state_fingerprint");
+        var value = ReadString(reader, ordinal, "state_fingerprint");
         if (value.Length != 64 || value.Any(character =>
                 !char.IsAsciiHexDigit(character) || char.IsAsciiLetterUpper(character)))
         {

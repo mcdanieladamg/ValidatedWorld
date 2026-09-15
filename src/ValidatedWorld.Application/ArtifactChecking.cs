@@ -17,9 +17,8 @@ public static class ArtifactCheckerContract
 {
     public const int CurrentVersion = 1;
     public const string FileSystemAdapterId = "filesystem";
-    public const int DefaultMaxAnchors = 1_000;
+    public const int DefaultMaxAnchors = int.MaxValue;
     public const int DefaultMaxSampleBytes = 4_096;
-    public const int MaximumSampleBytes = 64 * 1_024;
 }
 
 public sealed record ArtifactAnchor(
@@ -136,12 +135,12 @@ public sealed record ArtifactCheckOptions(
 {
     public ArtifactCheckOptions Validate()
     {
-        if (MaxAnchors <= 0 || MaxAnchors > ArtifactCheckerContract.DefaultMaxAnchors)
+        if (MaxAnchors <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxAnchors),
-                $"The maximum artifact anchor count must be between 1 and {ArtifactCheckerContract.DefaultMaxAnchors}.");
-        if (MaxSampleBytes <= 0 || MaxSampleBytes > ArtifactCheckerContract.MaximumSampleBytes)
+                "The requested artifact anchor count must be positive.");
+        if (MaxSampleBytes <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxSampleBytes),
-                $"The maximum artifact sample size must be between 1 and {ArtifactCheckerContract.MaximumSampleBytes} bytes.");
+                "The requested artifact sample size must be positive.");
         return this;
     }
 }
@@ -207,7 +206,7 @@ public sealed class FileSystemArtifactChecker : IArtifactChecker
                 resolvedPath, FileMode.Open, FileAccess.Read, FileShare.Read,
                 bufferSize: 64 * 1_024, options: FileOptions.SequentialScan);
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var sample = new MemoryStream(capacity: request.MaxSampleBytes);
+            using var sample = new MemoryStream(capacity: Math.Min(request.MaxSampleBytes, ArtifactCheckerContract.DefaultMaxSampleBytes));
             var buffer = new byte[64 * 1_024];
             var totalBytes = 0L;
             int read;

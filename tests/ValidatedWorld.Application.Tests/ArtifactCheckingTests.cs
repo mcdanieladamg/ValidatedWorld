@@ -8,6 +8,21 @@ namespace ValidatedWorld.Application.Tests;
 public sealed class ArtifactCheckingTests
 {
     [Fact]
+    public void Caller_selected_sample_size_does_not_preallocate_the_requested_capacity()
+    {
+        using var temporary = new TemporaryDirectory();
+        var file = Path.Combine(temporary.Path, "small.txt");
+        File.WriteAllText(file, "Small artifact.");
+        var report = new ArtifactCheckService().Check(Path.Combine(temporary.Path, "project.vw.db"),
+            Graph(Anchor("sample", "small.txt", Hash(file))),
+            options: new ArtifactCheckOptions(int.MaxValue, int.MaxValue));
+        var item = Assert.Single(report.Items);
+        Assert.Equal(ArtifactCheckStatus.Matched, item.Status);
+        Assert.Equal("Small artifact.", Encoding.UTF8.GetString(Convert.FromBase64String(item.ContentSampleBase64!)));
+        Assert.False(item.ContentSampleTruncated);
+    }
+
+    [Fact]
     public void Filesystem_checker_distinguishes_match_drift_and_missing_artifacts()
     {
         using var temporary = new TemporaryDirectory();

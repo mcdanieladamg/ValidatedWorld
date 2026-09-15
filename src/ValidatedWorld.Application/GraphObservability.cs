@@ -12,11 +12,11 @@ public sealed class GraphObservabilityOptions
     public int MaxItems
     {
         get => _maxItems;
-        init => _maxItems = value is >= 1 and <= QueryPageRequest.MaximumLimit
+        init => _maxItems = value >= 1
             ? value
             : throw new ArgumentOutOfRangeException(
                 nameof(MaxItems),
-                $"An observability report must return between 1 and {QueryPageRequest.MaximumLimit} items per section.");
+                "The report size must be positive.");
     }
 
     public CancellationToken CancellationToken { get; init; }

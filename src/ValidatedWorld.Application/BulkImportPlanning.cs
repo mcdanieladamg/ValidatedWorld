@@ -14,10 +14,6 @@ public static class BulkImportContract
     public const int Version = 1;
     public const string Format = "validated-world-bulk-manifest";
     public const int DefaultChunkSize = 100;
-    public const int MaximumChunkSize = 5_000;
-    public const int MaximumOperations = 1_000_000;
-    public const int MaximumManifestLineLength = 1_048_576;
-    public const long MaximumManifestBytes = 256L * 1_024 * 1_024;
 }
 
 public sealed record BulkImportPlanOptions(
@@ -26,11 +22,11 @@ public sealed record BulkImportPlanOptions(
 {
     public BulkImportPlanOptions Validate()
     {
-        if (ChunkSize is < 1 or > BulkImportContract.MaximumChunkSize)
+        if (ChunkSize < 1)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(ChunkSize),
-                $"Bulk chunk size must be between 1 and {BulkImportContract.MaximumChunkSize}.");
+                "Bulk chunk size must be positive.");
         }
 
         return this;
@@ -87,13 +83,6 @@ public sealed partial class ProjectApplication
             throw InvalidManifest($"Bulk manifest '{normalizedManifestPath}' does not exist.");
         }
 
-        var fileInfo = new FileInfo(normalizedManifestPath);
-        if (fileInfo.Length > BulkImportContract.MaximumManifestBytes)
-        {
-            throw InvalidManifest(
-                $"Bulk manifest exceeds the {BulkImportContract.MaximumManifestBytes} byte bound.");
-        }
-
         var cursor = ParseCursor(options.Cursor);
         if (cursor is not null && cursor.ChunkSize != options.ChunkSize)
         {
@@ -106,8 +95,8 @@ public sealed partial class ProjectApplication
             throw InvalidManifest("The bulk continuation cursor has an invalid operation boundary.");
         }
 
-        var selected = new List<GraphOperation>(options.ChunkSize);
-        var currentChunk = new List<GraphOperation>(options.ChunkSize);
+        var selected = new List<GraphOperation>();
+        var currentChunk = new List<GraphOperation>();
         var seenIds = new HashSet<EntityId>();
         var currentGraph = project.Graph;
         var operationCount = 0;
@@ -144,17 +133,12 @@ public sealed partial class ProjectApplication
                 cancellationToken.ThrowIfCancellationRequested();
                 var line = reader.ReadLine();
                 if (line is null) break;
-                if (line.Length == 0 || line.Length > BulkImportContract.MaximumManifestLineLength)
+                if (line.Length == 0)
                 {
                     throw InvalidManifest(
-                        $"Bulk manifest operation lines must contain 1 to {BulkImportContract.MaximumManifestLineLength} characters.");
+                        "Bulk manifest operation lines must not be empty.");
                 }
 
-                if (operationCount == BulkImportContract.MaximumOperations)
-                {
-                    throw InvalidManifest(
-                        $"Bulk manifest exceeds the {BulkImportContract.MaximumOperations} operation bound.");
-                }
 
                 var operation = DeserializeOperation(line);
                 if (!seenIds.Add(operation.EntityId))
@@ -168,7 +152,7 @@ public sealed partial class ProjectApplication
                     JsonSerializer.SerializeToUtf8Bytes(GraphProtocol.ToDto(operation), JsonOptions));
 
                 if (operationCount >= selectedStart &&
-                    operationCount < selectedStart + options.ChunkSize)
+                    operationCount - selectedStart < options.ChunkSize)
                 {
                     selected.Add(operation);
                 }
@@ -245,7 +229,7 @@ public sealed partial class ProjectApplication
             selectedStart / options.ChunkSize,
             selectedStart,
             selectedCount,
-            (operationCount + options.ChunkSize - 1) / options.ChunkSize,
+            1 + (operationCount - 1) / options.ChunkSize,
             new GraphOperationBatch(selected),
             nextStart < operationCount
                 ? CreateCursor(manifestFingerprint, project.Graph.ProjectId.Value,
@@ -297,10 +281,9 @@ public sealed partial class ProjectApplication
         }
 
         if (string.IsNullOrWhiteSpace(header.Intent) ||
-            header.Intent.Length > GraphLimits.TextMaxLength ||
             header.Intent.Any(char.IsControl))
         {
-            throw InvalidManifest("The bulk manifest intent must be bounded, nonempty, and contain no control characters.");
+            throw InvalidManifest("The bulk manifest intent must be nonempty and contain no control characters.");
         }
     }
 

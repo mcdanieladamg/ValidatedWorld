@@ -142,7 +142,7 @@ anywhere a template name is accepted:
     custom "Custom" "Custom purpose"
 ```
 
-Template JSON is strict, versioned, limited to 1 MiB and 1,000 graph entities,
+Template JSON is strict and versioned,
 and instantiated only at a new destination. Template changes never edit an
 existing project automatically; change its graph through the ordinary reviewed
 workflow.
@@ -281,7 +281,8 @@ operation in the normal operation shape:
 ```
 
 The header must match the selected project and its current state fingerprint;
-the manifest has a bounded file size, line size, and total operation count.
+the manifest has file and line byte safeguards for untrusted input. Chunk size
+is a caller-selected positive integer, without a separate operation-count ceiling.
 Each chunk boundary must also be a valid graph checkpoint, so scope edges and
 other operations needed to keep a partial graph valid belong in the same
 chunk. The returned cursor is bound to the normalized manifest contents,
@@ -304,15 +305,16 @@ diff beside the ordinary source diff:
 
 ```powershell
 ./ValidatedWorld.Cli.exe project backup world.vw.db `
-    $env:TEMP/world-before.vw.db
-./ValidatedWorld.Cli.exe project diff $env:TEMP/world-before.vw.db `
+    world-before.vw.db
+./ValidatedWorld.Cli.exe project diff world-before.vw.db `
     world.vw.db --limit 100
 ```
 
 Continue `project diff` until `nextCursor` is null. The diff identifies exact
 database changes; bounded `read search`, `read tag`, `read dependencies`,
 `affected`, and `context` queries supply the surrounding meaning needed to
-compare them with external artifacts. Review and merge both sides together.
+compare them with external artifacts. Review and merge both sides together,
+then remove the disposable backup.
 
 The accepted, structurally verified database is then the trusted baseline for
 the next delta; that trust is inherited from prior human or agent review, not
@@ -980,10 +982,10 @@ unchanged write does not make another paid call; changing the session invalidate
 it.
 
 Before dispatch, the application measures the serialized request in bytes,
-estimated input tokens, and bounded component-item counts. The configured
-ceilings are `AiReview:MaxRequestBytes` (default `1000000`),
-`AiReview:MaxRequestItems` (default `20000`), and
-`AiReview:MaxRequestTokens` (default `250000`). An over-budget request is
+estimated input tokens, and component-item counts. Optional caller-configured
+ceilings are `AiReview:MaxRequestBytes`, `AiReview:MaxRequestItems`, and
+`AiReview:MaxRequestTokens`. They are unset by default; provider limits still
+apply. A request exceeding an explicitly configured budget is
 reported as inconclusive with component counts and guidance to split or
 remodel the change, or use the explicit manual bypass. The application never
 partitions one write or makes multiple paid review calls.

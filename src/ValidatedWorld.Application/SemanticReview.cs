@@ -74,9 +74,9 @@ public sealed record SemanticReviewAvailability(
     int TimeoutSeconds,
     bool LiveTests,
     string Message,
-    int MaxRequestBytes = 1_000_000,
-    int MaxRequestItems = 20_000,
-    int MaxRequestTokens = 250_000);
+    int? MaxRequestBytes = null,
+    int? MaxRequestItems = null,
+    int? MaxRequestTokens = null);
 
 public sealed record SemanticReviewRequestMeasurement(
     int SerializedRequestBytes,
@@ -95,9 +95,9 @@ public sealed record SemanticReviewRuntimeOptions(
     string Model = "gpt-5.6-terra",
     int TimeoutSeconds = 1200,
     bool LiveTests = false,
-    int MaxRequestBytes = 1_000_000,
-    int MaxRequestItems = 20_000,
-    int MaxRequestTokens = 250_000)
+    int? MaxRequestBytes = null,
+    int? MaxRequestItems = null,
+    int? MaxRequestTokens = null)
 {
     public SemanticReviewRuntimeOptions Validate()
     {
@@ -333,7 +333,7 @@ public static class SemanticReviewPlanner
             ["proposedValidationDiagnostics"] = planned.Request.ProposedValidation.Diagnostics.Count,
         };
         var items = componentCounts.Values.Sum();
-        var estimatedTokens = (bytes + 3) / 4;
+        var estimatedTokens = bytes / 4 + (bytes % 4 == 0 ? 0 : 1);
         var exceeded = new List<string>();
         if (bytes > options.MaxRequestBytes) exceeded.Add("bytes");
         if (items > options.MaxRequestItems) exceeded.Add("items");
@@ -429,16 +429,16 @@ public static class SemanticReviewOutputValidator
             "block" => SemanticReviewDecision.Block,
             _ => throw new JsonException("Semantic review decision must be allow or block."),
         };
-        if (string.IsNullOrWhiteSpace(output.Summary) || output.Summary.Length > GraphLimits.TextMaxLength)
-            throw new JsonException("Semantic review summary must be nonempty and bounded.");
+        if (string.IsNullOrWhiteSpace(output.Summary))
+            throw new JsonException("Semantic review summary must be nonempty.");
         ArgumentNullException.ThrowIfNull(output.Concerns);
         var allowed = manifest.AllowedCitationIds.ToHashSet(StringComparer.Ordinal);
         var concerns = new List<SemanticReviewConcern>();
         foreach (var concern in output.Concerns)
         {
-            if (string.IsNullOrWhiteSpace(concern.Code) || concern.Code.Length > GraphLimits.MetadataNameMaxLength ||
-                string.IsNullOrWhiteSpace(concern.Message) || concern.Message.Length > GraphLimits.TextMaxLength)
-                throw new JsonException("Semantic review concern code and message must be nonempty and bounded.");
+            if (string.IsNullOrWhiteSpace(concern.Code) ||
+                string.IsNullOrWhiteSpace(concern.Message))
+                throw new JsonException("Semantic review concern code and message must be nonempty.");
             ArgumentNullException.ThrowIfNull(concern.Citations);
             if (concern.Citations.Count == 0)
                 throw new JsonException("Every semantic review concern must contain a citation.");
@@ -508,7 +508,7 @@ public sealed class OpenAiResponsesSemanticReviewProvider : ISemanticReviewProvi
     {
         var measurement = SemanticReviewPlanner.Measure(request, options);
         var bytes = Encoding.UTF8.GetByteCount(SerializeOutboundRequest(request));
-        var estimatedTokens = (bytes + 3) / 4;
+        var estimatedTokens = bytes / 4 + (bytes % 4 == 0 ? 0 : 1);
         var exceeded = measurement.ExceededLimits.ToList();
         if (bytes > options.MaxRequestBytes && !exceeded.Contains("bytes")) exceeded.Add("bytes");
         if (estimatedTokens > options.MaxRequestTokens && !exceeded.Contains("tokens")) exceeded.Add("tokens");

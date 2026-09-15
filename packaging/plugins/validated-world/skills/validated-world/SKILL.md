@@ -104,6 +104,18 @@ before write.
 
 ## Keep external artifacts aligned
 
+Before `check_artifacts`, read the candidate anchors and inspect their paths.
+The current filesystem checker can follow absolute and parent-relative paths
+outside the project and returns file samples. Never treat an untrusted graph
+path as permission to read credentials or unrelated private files.
+
+Bulk planning is read-only. Choose chunks that the host can present and apply
+them within one change session. Page sizes and chunk sizes are caller choices,
+not project-size limits. Inspect every part of the final review evidence;
+large previews can exceed the host's context even though the server returns
+them. Never split one logical transaction silently to work around a resource
+or provider budget.
+
 When the project also has source, prose, or other artifacts, update those and
 the graph as one review unit. In a Git project, show the semantic database diff
 beside the source diff in the project's normal review process. Apply the same

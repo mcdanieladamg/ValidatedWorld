@@ -220,7 +220,7 @@ internal sealed class HumanShell(
     private async Task Health(ShellFlags flags)
     {
         flags.Allow("limit");
-        var limit = flags.PositiveInt("limit", 20, QueryPageRequest.MaximumLimit);
+        var limit = flags.PositiveInt("limit", 20, int.MaxValue);
         var report = application.Queries(path).GetGraphObservability(new GraphObservabilityOptions
         {
             MaxItems = limit,
@@ -263,9 +263,9 @@ internal sealed class HumanShell(
     private async Task Directory(ShellFlags flags)
     {
         flags.Allow("limit", "depth", "upstream", "scope-only");
-        var limit = flags.PositiveInt("limit", 20, QueryPageRequest.MaximumLimit);
-        var depth = flags.NonNegativeInt("depth", 1, QueryPageRequest.MaximumLimit);
-        var upstream = flags.NonNegativeInt("upstream", 1, QueryPageRequest.MaximumLimit);
+        var limit = flags.PositiveInt("limit", 20, int.MaxValue);
+        var depth = flags.NonNegativeInt("depth", 1, int.MaxValue);
+        var upstream = flags.NonNegativeInt("upstream", 1, int.MaxValue);
         var scopeOnly = flags.Boolean("scope-only");
         var graph = CurrentGraph;
         var index = new GraphIndex(graph);
@@ -378,7 +378,7 @@ internal sealed class HumanShell(
     {
         flags.Allow("text", "limit");
         var text = flags.Required("text");
-        var limit = flags.PositiveInt("limit", 20, QueryPageRequest.MaximumLimit);
+        var limit = flags.PositiveInt("limit", 20, int.MaxValue);
         var hits = CurrentGraph.Nodes
             .Where(node => Contains(node.Id.Value, text) || Contains(node.Text, text) || Contains(node.Kind, text) ||
                            node.Tags.Any(tag => Contains(tag, text)))
@@ -528,7 +528,7 @@ internal sealed class HumanShell(
     private async Task NodeList(ShellFlags flags)
     {
         flags.Allow("limit");
-        var limit = flags.PositiveInt("limit", 20, QueryPageRequest.MaximumLimit);
+        var limit = flags.PositiveInt("limit", 20, int.MaxValue);
         foreach (var node in CurrentGraph.Nodes.Take(limit))
             await output.WriteLineAsync($"{node.Id.Value} — {node.Text}");
     }
@@ -671,7 +671,7 @@ internal sealed class HumanShell(
     private async Task EdgeList(ShellFlags flags)
     {
         flags.Allow("limit");
-        var limit = flags.PositiveInt("limit", 20, QueryPageRequest.MaximumLimit);
+        var limit = flags.PositiveInt("limit", 20, int.MaxValue);
         foreach (var edge in CurrentGraph.Edges.Take(limit))
             await output.WriteLineAsync(
                 $"{edge.Id.Value} — {edge.Source.Value} -[{edge.Relationship}/{DirectionName(edge.ReviewDirection)}]-> {edge.Target.Value}");

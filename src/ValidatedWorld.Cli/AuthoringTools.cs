@@ -11,9 +11,6 @@ public sealed record AuthoringToolExecution(string Output);
 
 public sealed class AuthoringToolHost
 {
-    public const int MaximumSearchResults = 50;
-    public const int MaximumAffectedItems = 5_000;
-    public const int MaximumOperations = 1_000;
 
     private readonly ProjectApplication _application;
     private readonly string _path;
@@ -136,7 +133,7 @@ public sealed class AuthoringToolHost
     {
         var text = Nullable(arguments, "text");
         var tag = Nullable(arguments, "tag");
-        var limit = Integer(arguments, "limit", 1, MaximumSearchResults);
+        var limit = Integer(arguments, "limit", 1, int.MaxValue);
         if ((text is null) == (tag is null))
             throw new ArgumentException("Supply exactly one of text or tag.");
         var queries = Queries();
@@ -149,7 +146,7 @@ public sealed class AuthoringToolHost
     private object RankedSearch(JsonElement arguments)
     {
         var text = Required(arguments, "text");
-        var limit = Integer(arguments, "limit", 1, MaximumSearchResults);
+        var limit = Integer(arguments, "limit", 1, int.MaxValue);
         _searched = true;
         return CliDto.RankedSearch(Queries().SearchRanked(text, new QueryPageRequest(limit)));
     }
@@ -163,13 +160,13 @@ public sealed class AuthoringToolHost
     private object ReadScope(JsonElement arguments, CancellationToken cancellationToken) =>
         CliDto.Scope(Queries().GetScope(
             new EntityId(Required(arguments, "node_id")),
-            new QueryPageRequest(Integer(arguments, "limit", 1, MaximumSearchResults)),
-            new QueryTraversalOptions { MaxDepth = 1_000, MaxVisitedNodes = 10_000, CancellationToken = cancellationToken }));
+            new QueryPageRequest(Integer(arguments, "limit", 1, int.MaxValue)),
+            new QueryTraversalOptions { CancellationToken = cancellationToken }));
 
     private object GraphHealth(JsonElement arguments, CancellationToken cancellationToken) =>
         CliDto.GraphObservability(Queries().GetGraphObservability(new GraphObservabilityOptions
         {
-            MaxItems = Integer(arguments, "limit", 1, MaximumSearchResults),
+            MaxItems = Integer(arguments, "limit", 1, int.MaxValue),
             CancellationToken = cancellationToken,
         }));
 
@@ -228,17 +225,11 @@ public sealed class AuthoringToolHost
     private object Patch(GraphOperation operation, CancellationToken cancellationToken)
     {
         var snapshot = RequireSession();
-        if (snapshot.Operations.Operations.Count >= MaximumOperations &&
-            snapshot.Operations.Operations.All(existing => existing.EntityId != operation.EntityId))
-            throw new InvalidOperationException($"A proposal cannot exceed {MaximumOperations} operations.");
         _session = _application.PatchChange(
             snapshot.Reference,
             new GraphOperationBatch([operation]),
             new AffectedAnalysisOptions
             {
-                MaxTraversalDepth = 10_000,
-                MaxAffectedNodes = 100_000,
-                MaxOutputItems = MaximumAffectedItems,
                 CancellationToken = cancellationToken,
             });
         return SnapshotSummary(_session);
@@ -410,13 +401,13 @@ public sealed class AuthoringToolHost
             new("initialize_project", "Create a new purpose-only project only when project_status reports that the fixed path does not exist. Existing destinations are never overwritten.",
                 Schema("""{"type":"object","properties":{"project_id":{"type":"string"},"title":{"type":"string"},"purpose_id":{"type":"string"},"purpose_text":{"type":"string"}},"required":["project_id","title","purpose_id","purpose_text"],"additionalProperties":false}""")),
             new("search_graph", "Bounded text or exact-tag search. Search before creating and before changing closed-world claims.",
-                Schema("""{"type":"object","properties":{"text":{"type":["string","null"]},"tag":{"type":["string","null"]},"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["text","tag","limit"],"additionalProperties":false}""")),
+                Schema("""{"type":"object","properties":{"text":{"type":["string","null"]},"tag":{"type":["string","null"]},"limit":{"type":"integer","minimum":1}},"required":["text","tag","limit"],"additionalProperties":false}""")),
             new("ranked_search_graph", "Bounded deterministic lexical search with explainable ranking for stable IDs, exact tags, phrases, tokens, and metadata.",
-                Schema("""{"type":"object","properties":{"text":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["text","limit"],"additionalProperties":false}""")),
+                Schema("""{"type":"object","properties":{"text":{"type":"string"},"limit":{"type":"integer","minimum":1}},"required":["text","limit"],"additionalProperties":false}""")),
             new("read_node", "Read one node by stable ID.", Schema("""{"type":"object","properties":{"node_id":{"type":"string"}},"required":["node_id"],"additionalProperties":false}""")),
             new("read_edge", "Read one edge by stable ID.", Schema("""{"type":"object","properties":{"edge_id":{"type":"string"}},"required":["edge_id"],"additionalProperties":false}""")),
-            new("read_scope", "Read one node's complete upstream scope path and bounded descendants.", Schema("""{"type":"object","properties":{"node_id":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["node_id","limit"],"additionalProperties":false}""")),
-            new("graph_health", "Read bounded graph-quality diagnostics: scope coverage, unreachable nodes, review fan-out, isolated claims, missing rationales, and tag use.", Schema("""{"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["limit"],"additionalProperties":false}""")),
+            new("read_scope", "Read one node's complete upstream scope path and bounded descendants.", Schema("""{"type":"object","properties":{"node_id":{"type":"string"},"limit":{"type":"integer","minimum":1}},"required":["node_id","limit"],"additionalProperties":false}""")),
+            new("graph_health", "Read bounded graph-quality diagnostics: scope coverage, unreachable nodes, review fan-out, isolated claims, missing rationales, and tag use.", Schema("""{"type":"object","properties":{"limit":{"type":"integer","minimum":1}},"required":["limit"],"additionalProperties":false}""")),
             new("begin_change", "Begin the one process-local incremental change session.", Schema("""{"type":"object","properties":{"intent":{"type":"string"}},"required":["intent"],"additionalProperties":false}""")),
             new("put_node", "Add or replace one complete node. Adding is rejected until search_graph has run.",
                 Schema("""{"type":"object","properties":{"mode":{"type":"string","enum":["add","replace"]},"id":{"type":"string"},"text":{"type":"string"},"kind":{"type":["string","null"]},"tags":{"type":"array","items":{"type":"string"}},"attributes":ATTRIBUTES},"required":["mode","id","text","kind","tags","attributes"],"additionalProperties":false}""".Replace("ATTRIBUTES", attribute, StringComparison.Ordinal))),

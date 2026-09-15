@@ -11,7 +11,6 @@ public sealed class AiAssistantShell(
     int maxToolCallsPerTurn = AiAuthoringConfiguration.DefaultMaxToolCallsPerTurn,
     CancellationToken cancellationToken = default)
 {
-    public const int MaximumUserInputCharacters = 16_384;
     private string? _previousResponseId;
 
     public async Task<int> RunAsync()
@@ -27,11 +26,6 @@ public sealed class AiAssistantShell(
             var line = await input.ReadLineAsync(cancellationToken);
             if (line is null || StringComparer.OrdinalIgnoreCase.Equals(line.Trim(), "exit")) break;
             if (string.IsNullOrWhiteSpace(line)) continue;
-            if (line.Length > MaximumUserInputCharacters)
-            {
-                await error.WriteLineAsync($"error[input-limit]: One message cannot exceed {MaximumUserInputCharacters} characters.");
-                continue;
-            }
             if (StringComparer.OrdinalIgnoreCase.Equals(line.Trim(), "discard"))
             {
                 if (tools.Session is null)

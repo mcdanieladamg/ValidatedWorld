@@ -1,4 +1,21 @@
-ValidatedWorld is a local AI agent plugin, built using the OpenAI Plugin format, that lets an agent maintain any project’s semantic knowledge as a pre-validated connected model, then review and save the consequences of proposed changes in a structured way—preserving stronger semantic validation over time than freeform changes alone—all in a single local SQLite database file.
+ValidatedWorld is a local AI agent plugin that keeps project facts, decisions,
+and their dependencies in one SQLite file. When an agent changes a fact, it can
+see which connected claims need review, check the project's rules, and save the
+reviewed change atomically. The current package uses the Codex plugin format.
+
+Use it to document a project's entire knowledge base in an organized manner, to
+prevent it from growing in a disorganized or undocumented manner. The eventual
+goal is to organize every project from inception all the way up to the point that
+it has accrued enough connected knowledge that keeping consistent is becoming
+difficult even for high context-window AI agents to manage in one-shot prompts.
+When adding content through this plugin, the agent must maintain the dependency edges:
+missing links can hide stale claims, and a successful write does not prove the
+text is true. Small projects may be better served by ordinary notes and tests.
+
+The plugin is currently a Windows x64 prerelease with local installation;
+public catalog distribution is still in preparation. The authoring agent uses
+your chosen host. Optional independent review sends project evidence to OpenAI
+using a separately configured API key and incurs API charges.
 
 The initial public release is supported in English only. Graph text uses Unicode
 and can store and round-trip other languages, but the product instructions,
