@@ -49,9 +49,9 @@ The server advertises the following read tools in addition to
 budgets are enforced by Application. Results include cursors and omission
 metadata where a query is incomplete. Page sizes are caller-selected positive
 integers; follow cursors to retrieve the remaining results. The adapter does
-not discard results based on their byte size. `proposal_preview` returns the
-entire review set, so inspect its actual size before relying on a host to
-deliver complete review evidence.
+not discard results based on their byte size. `proposal_preview` also returns
+revision-bound pages so large atomic changes do not depend on one response
+fitting the agent host's context.
 
 ## Large imports
 
@@ -69,8 +69,9 @@ share its memory, provider, and configured resource budgets.
 
 `host_status` requires no selected project and reports the product version,
 local-only stdio support, operating system/process architecture, .NET runtime,
-installation directory, and effective optional semantic-review configuration.
-Credential status is reported as a boolean without returning the credential.
+installation directory, host-authorized artifact roots, and effective optional
+semantic-review configuration. Credential status is reported as a boolean
+without returning the credential.
 
 ## Edit and review
 
@@ -81,21 +82,34 @@ Editing uses one sequential in-memory session per MCP process:
    supplying the latest revision. Use `proposal_preview` to inspect exact
    operations, affected explanations, old/new scope context, dispositions,
    omissions, and readiness.
-3. Call `proposal_preview` after the final mutation and inspect the exact current
-   operations and consequences. Its readiness still shows pending dispositions
-   until the write is attempted.
-4. Call `write_change` with that same revision. The adapter accounts for the
-   presented affected/context set and performs the atomic write through
-   Application. The tool has no AI-review bypass argument; configured enabled
-   semantic review remains an exact-write preflight. Use `discard_change` to
-   abandon the unresolved proposal.
+3. Call `proposal_preview` after the final mutation. Choose a positive `limit`,
+   inspect every `reviewPage.items` entry, and follow each `nextCursor` with the
+   same revision and limit. The page stream contains every operation, affected
+   consequence, edge change, scope-context entry, omission, disposition, and
+   validation diagnostic without partitioning the logical change. The final
+   page reports `allEvidencePresented: true` only after every page has been
+   returned for that revision.
+4. Call `write_change` with that same revision. It rejects an unpreviewed or
+   partially previewed revision, accounts for the presented affected/context
+   set, and performs the atomic write through Application. The tool has no AI
+   review bypass argument; configured semantic review remains an exact-write
+   preflight. Use `discard_change` to abandon the unresolved proposal.
 
 Preview and semantic inspection are obligations of the calling agent. The
-current adapter does not require a previous preview call: a valid write attempt
-automatically marks affected nodes and context as reviewed. With independent
-review disabled or unconfigured, this is the agent's attestation, not an
-additional semantic check. A rule-invalid baseline can be repaired when the
-complete proposed graph passes its attached rules.
+adapter records lossless presentation coverage for the exact process-wide
+revision; any mutation invalidates that coverage and old cursors. After full
+coverage, write records direct edits, affected consequences, and scope context
+as the agent's review dispositions. With independent review disabled or
+unconfigured, this remains agent review rather than an additional semantic
+check. A rule-invalid baseline can be repaired when the complete proposed graph
+passes its attached rules.
+
+Identical overlapping `write_change` calls for one revision share one in-flight
+independent-review task, so they cannot dispatch duplicate paid reviews. A
+patch or discard during review makes that write stale without losing a
+replacement session. Project selection and initialization remain blocked while
+a proposal is active, and initialization is atomic with respect to session
+state.
 
 The adapter keeps exact Application references and fingerprints private. MCP
 callers use only the process-wide monotonic proposal revision, so stale revisions are
@@ -109,11 +123,16 @@ this does not rebase an active proposal.
 
 ## External artifact checks
 
-Artifact checking follows paths stored in the graph, including absolute paths
-and paths outside the database directory, and returns file samples. Inspect
-those anchors before calling `check_artifacts`; selecting a database does not
-confine this checker to a project folder. Do not run it on untrusted anchors or
-paths containing credentials or other private material.
+Artifact checking is deny-by-default. Start the MCP process with one or more
+human/host-owned `--artifact-root <directory>` arguments to authorize reads;
+`host_status.artifactAllowedRoots` reports the configured roots. Project
+selection and graph metadata do not grant filesystem authority. Relative,
+absolute, parent-relative, and UNC paths must be lexically inside a configured
+root, and the opened file handle must still resolve inside that root. Links,
+reparse points, or path replacement that escape a root return `Unauthorized`
+without a hash or content sample. Roots themselves may be links: both their
+declared and opened locations are checked. Authorize only the narrow
+directories whose contents may be returned to the agent host.
 
 ## Agent host integration
 

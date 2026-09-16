@@ -203,16 +203,19 @@ Check opt-in external artifact anchors without changing the graph:
 
 ```powershell
 dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    artifact check project.vw.db
+    artifact check project.vw.db --allow-root .
 ```
 
 Nodes marked with the `artifact` tag or `external-anchor` kind can declare
 `artifact.path` and `artifact.sha256` text attributes. Relative paths resolve
-from the database directory. The built-in version-1 `filesystem` checker only
-reads and hashes the file, returning a bounded base64 sample; adapter selection
-is host-owned and graph text is never executed. Use NDJSON command
-`artifact.check` or the selected-project MCP tool `check_artifacts` for the
-same read-only check.
+from the database directory. The built-in version-1 `filesystem` checker is
+deny-by-default and only reads inside explicit caller/host-owned roots. It
+checks the opened file handle against those roots before hashing or sampling,
+so parent paths, absolute paths, UNC paths, links, reparse points, and path
+replacement cannot expand graph-owned authority. Use NDJSON `allowedRoots`,
+CLI `--allow-root`, or MCP server startup `--artifact-root`; selecting a project
+does not authorize artifact access. Adapter selection remains host-owned and
+graph text is never executed.
 
 Use `read --help` for the complete query surface.
 

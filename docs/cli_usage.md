@@ -346,28 +346,34 @@ artifact.sha256 = <64 lowercase hexadecimal SHA-256>
 ```
 
 Relative paths resolve from the `.vw.db` directory. The built-in `filesystem`
-adapter is contract version `1`; it hashes file bytes and returns a bounded
-base64 sample for review. An anchor may select another registered adapter with
+adapter is contract version `1`; it is deny-by-default and reads only beneath
+one or more explicit caller-owned `--allow-root` directories. It checks both
+the lexical path and the opened file handle, then hashes bytes and returns a
+bounded base64 sample for review. An anchor may select another registered adapter with
 `artifact.adapter` and `artifact.adapter-version`, but adapters are supplied by
 the host and are never loaded or executed from graph text. Missing files,
 invalid metadata, unsupported adapters, and byte drift are reported as results;
 the database is never changed.
 
 ```powershell
-./ValidatedWorld.Cli.exe artifact check world.vw.db
+./ValidatedWorld.Cli.exe artifact check world.vw.db --allow-root .
 ./ValidatedWorld.Cli.exe artifact check world.vw.db design-document `
-    --max-sample-bytes 1024
+    --allow-root C:\data\project --max-sample-bytes 1024
 ```
 
 The NDJSON equivalent is:
 
 ```json
-{"version":1,"command":"artifact.check","payload":{"path":"world.vw.db","maxAnchors":100,"maxSampleBytes":4096}}
+{"version":1,"command":"artifact.check","payload":{"path":"world.vw.db","allowedRoots":["C:\\data\\project"],"maxAnchors":100,"maxSampleBytes":4096}}
 ```
 
-The selected-project MCP tool is named `check_artifacts` and accepts the same
-optional node and bound arguments. Artifact checking detects byte-level drift;
-it does not rewrite, publish, or certify an external artifact.
+The selected-project MCP tool is named `check_artifacts`; its roots are supplied
+only by MCP server startup `--artifact-root` arguments, not by graph-facing tool
+arguments. A path outside the authorized roots, including a link or reparse
+target that escapes after opening, is reported as `Unauthorized` without a hash
+or content sample. Explicitly authorized UNC roots are supported; selecting a
+project alone grants no artifact access. Artifact checking detects byte-level
+drift; it does not rewrite, publish, or certify an external artifact.
 
 Paged results contain `nextCursor` and an explicit omission while more results
 exist. Pass that exact token back with `--cursor`. Traversal bounds return

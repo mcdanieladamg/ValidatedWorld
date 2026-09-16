@@ -15,7 +15,7 @@ public sealed class ArtifactCheckingTests
         File.WriteAllText(file, "Small artifact.");
         var report = new ArtifactCheckService().Check(Path.Combine(temporary.Path, "project.vw.db"),
             Graph(Anchor("sample", "small.txt", Hash(file))),
-            options: new ArtifactCheckOptions(int.MaxValue, int.MaxValue));
+            options: new ArtifactCheckOptions(int.MaxValue, int.MaxValue, [temporary.Path]));
         var item = Assert.Single(report.Items);
         Assert.Equal(ArtifactCheckStatus.Matched, item.Status);
         Assert.Equal("Small artifact.", Encoding.UTF8.GetString(Convert.FromBase64String(item.ContentSampleBase64!)));
@@ -37,7 +37,8 @@ public sealed class ArtifactCheckingTests
             Anchor("drifted", "drifted.txt", HashOf("original bytes")),
             Anchor("missing", "missing.txt", HashOf("missing bytes")));
 
-        var report = new ArtifactCheckService().Check(projectPath, graph);
+        var report = new ArtifactCheckService().Check(projectPath, graph,
+            options: new ArtifactCheckOptions(AllowedRoots: [temporary.Path]));
 
         Assert.Equal(3, report.TotalAnchorCount);
         Assert.Equal(ArtifactCheckStatus.Matched, report.Items.Single(item => item.NodeId.Value == "matching").Status);
@@ -78,7 +79,7 @@ public sealed class ArtifactCheckingTests
 
         var report = new ArtifactCheckService().Check(
             Path.Combine(temporary.Path, "project.vw.db"), graph,
-            options: new ArtifactCheckOptions(MaxAnchors: 1, MaxSampleBytes: 8));
+            options: new ArtifactCheckOptions(MaxAnchors: 1, MaxSampleBytes: 8, AllowedRoots: [temporary.Path]));
 
         var item = Assert.Single(report.Items);
         Assert.True(report.IsComplete);
@@ -90,9 +91,62 @@ public sealed class ArtifactCheckingTests
             Anchor("second", "large.txt", Hash(path)));
         var omitted = new ArtifactCheckService().Check(
             Path.Combine(temporary.Path, "project.vw.db"), twoAnchors,
-            options: new ArtifactCheckOptions(MaxAnchors: 1, MaxSampleBytes: 8));
+            options: new ArtifactCheckOptions(MaxAnchors: 1, MaxSampleBytes: 8, AllowedRoots: [temporary.Path]));
         Assert.False(omitted.IsComplete);
         Assert.Contains("first 1", omitted.OmissionMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Filesystem_reads_are_denied_without_host_owned_authority_and_parent_escapes_stay_denied()
+    {
+        using var projectDirectory = new TemporaryDirectory();
+        using var outsideDirectory = new TemporaryDirectory();
+        var secret = Path.Combine(outsideDirectory.Path, "outside.txt");
+        File.WriteAllText(secret, "must not be sampled");
+        var relativeEscape = Path.GetRelativePath(projectDirectory.Path, secret);
+        var graph = Graph(
+            Anchor("relative", relativeEscape, Hash(secret)),
+            Anchor("absolute", secret, Hash(secret)),
+            Anchor("network", @"\\invalid-server\private-share\secret.txt", HashOf("secret")));
+
+        var denied = new ArtifactCheckService().Check(
+            Path.Combine(projectDirectory.Path, "project.vw.db"), graph);
+        Assert.All(denied.Items, item => Assert.Equal(ArtifactCheckStatus.Unauthorized, item.Status));
+        Assert.All(denied.Items, item => Assert.Null(item.ContentSampleBase64));
+        Assert.Equal(3, denied.UnauthorizedCount);
+
+        var stillDenied = new ArtifactCheckService().Check(
+            Path.Combine(projectDirectory.Path, "project.vw.db"), graph,
+            options: new ArtifactCheckOptions(AllowedRoots: [projectDirectory.Path]));
+        Assert.All(stillDenied.Items, item => Assert.Equal(ArtifactCheckStatus.Unauthorized, item.Status));
+        Assert.All(stillDenied.Items, item => Assert.Null(item.ActualSha256));
+    }
+
+    [Fact]
+    public void Explicit_roots_authorize_relative_and_absolute_paths_but_not_links_that_resolve_outside()
+    {
+        using var projectDirectory = new TemporaryDirectory();
+        using var outsideDirectory = new TemporaryDirectory();
+        var inside = Path.Combine(projectDirectory.Path, "inside.txt");
+        var outside = Path.Combine(outsideDirectory.Path, "outside.txt");
+        var link = Path.Combine(projectDirectory.Path, "linked.txt");
+        File.WriteAllText(inside, "inside");
+        File.WriteAllText(outside, "outside");
+        File.CreateSymbolicLink(link, outside);
+        var graph = Graph(
+            Anchor("relative", "inside.txt", Hash(inside)),
+            Anchor("absolute", inside, Hash(inside)),
+            Anchor("link", "linked.txt", Hash(outside)));
+
+        var report = new ArtifactCheckService().Check(
+            Path.Combine(projectDirectory.Path, "project.vw.db"), graph,
+            options: new ArtifactCheckOptions(AllowedRoots: [projectDirectory.Path]));
+
+        Assert.Equal(ArtifactCheckStatus.Matched, report.Items.Single(item => item.NodeId.Value == "relative").Status);
+        Assert.Equal(ArtifactCheckStatus.Matched, report.Items.Single(item => item.NodeId.Value == "absolute").Status);
+        var deniedLink = report.Items.Single(item => item.NodeId.Value == "link");
+        Assert.Equal(ArtifactCheckStatus.Unauthorized, deniedLink.Status);
+        Assert.Null(deniedLink.ContentSampleBase64);
     }
 
     [Fact]

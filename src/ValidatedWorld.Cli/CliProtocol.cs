@@ -48,7 +48,8 @@ internal sealed record ArtifactCheckRequest(
     string Path,
     string? NodeId = null,
     int MaxAnchors = ArtifactCheckerContract.DefaultMaxAnchors,
-    int MaxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes);
+    int MaxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes,
+    IReadOnlyList<string>? AllowedRoots = null);
 internal sealed record SampleCreateRequest(string SampleName, string Path);
 internal sealed record ReadEntityRequest(string Path, string EntityId, string? ExpectedProjectId = null);
 internal sealed record ReadPageRequest(
@@ -281,6 +282,7 @@ internal sealed record ArtifactCheckDto(
     int MissingCount,
     int InvalidAnchorCount,
     int UnsupportedAdapterCount,
+    int UnauthorizedCount,
     int UnreadableCount,
     bool IsComplete,
     string? OmissionMessage);
@@ -606,6 +608,7 @@ internal static class CliDto
         value.MissingCount,
         value.InvalidAnchorCount,
         value.UnsupportedAdapterCount,
+        value.UnauthorizedCount,
         value.UnreadableCount,
         value.IsComplete,
         value.OmissionMessage);

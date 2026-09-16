@@ -9,7 +9,7 @@ namespace ValidatedWorld.Mcp;
 [McpServerToolType]
 internal sealed class McpTools(McpProjectService projects)
 {
-    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reports the local MCP host version, runtime, installation path, transport, English-only product support, Unicode graph-text boundary, and effective semantic-review configuration without exposing credentials. This does not require a selected project.")]
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Reports the local MCP host version, runtime, installation path, transport, English-only product support, Unicode graph-text boundary, configured artifact roots, and effective semantic-review configuration without exposing credentials. This does not require a selected project.")]
     public McpHostStatus HostStatus() => projects.HostStatus();
 
     [McpServerTool(UseStructuredContent = true, Destructive = false, OpenWorld = false), Description("Selects an existing local ValidatedWorld .vw.db project for this MCP session. Paths are interpreted by the host process and are never taken from graph text.")]
@@ -62,7 +62,7 @@ internal sealed class McpTools(McpProjectService projects)
     [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Runs structural verification and every attached active full-graph rule for the selected project, returning bounded actionable diagnostics.")]
     public object ValidateProject() => projects.ValidateProject();
 
-    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Checks selected-project nodes marked as artifact anchors against their declared path and SHA-256. The built-in filesystem adapter only reads and hashes bytes, returns a bounded base64 sample, and never executes graph text. Pass nodeId to check one anchor.")]
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Checks selected-project nodes marked as artifact anchors against their declared path and SHA-256. Filesystem reads are denied unless the server was started with a matching --artifact-root; authorization is checked again on the opened file handle. Pass nodeId to check one anchor.")]
     public object CheckArtifacts(
         [Description("Optional stable artifact-anchor node identifier; omit to check all marked anchors.")] string? nodeId = null,
         [Description("Maximum number of anchors to check, positive.")] int maxAnchors = ArtifactCheckerContract.DefaultMaxAnchors,
@@ -120,12 +120,14 @@ internal sealed class McpTools(McpProjectService projects)
         projects.PatchChange(expectedRevision, new GraphOperationBatch([
             McpProjectService.RemoveOperation(entityKind, id)]));
 
-    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Returns the exact current operations, affected explanations, old/new scope context, dispositions, omissions, and review readiness. Fingerprints remain application-owned and are not accepted as mutation arguments.")]
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true, Destructive = false, OpenWorld = false, Idempotent = true), Description("Returns one lossless, revision-bound page of the exact current operations, affected explanations, old/new scope context, omissions, dispositions, and validation diagnostics. Follow every nextCursor before write_change; fingerprints remain application-owned.")]
     public McpChangePreview ProposalPreview(
-        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision) =>
-        projects.PreviewChange(expectedRevision);
+        [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision,
+        [Description("Maximum review evidence items in this page, positive. Keep the same value while following nextCursor.")] int limit = 100,
+        [Description("Opaque continuation cursor returned by the preceding proposal_preview page.")] string? cursor = null) =>
+        projects.PreviewChange(expectedRevision, limit, cursor);
 
-    [McpServerTool(UseStructuredContent = true, Destructive = true, OpenWorld = false), Description("Writes the exact current proposal through the shared Application layer. Independent semantic review remains enabled by effective configuration and this tool has no bypass argument.")]
+    [McpServerTool(UseStructuredContent = true, Destructive = true, OpenWorld = false), Description("Writes the exact current proposal after every revision-bound proposal_preview page has been presented. Independent semantic review remains enabled by effective configuration and this tool has no bypass argument.")]
     public Task<McpChangeWrite> WriteChange(
         [Description("Current proposal revision returned by the preceding change call.")] int expectedRevision,
         CancellationToken cancellationToken = default) =>

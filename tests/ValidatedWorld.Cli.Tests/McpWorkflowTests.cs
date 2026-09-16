@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using ValidatedWorld.Application;
 using ValidatedWorld.Core;
@@ -34,10 +35,21 @@ public sealed class McpWorkflowTests
         });
         var revision = staged["revision"]!.GetValue<int>();
         Assert.Equal(10_002, staged["operationCount"]!.GetValue<int>());
-        var preview = await host.Call("proposal_preview", new { expectedRevision = revision });
-        // Added scope edges also select their existing purpose endpoint.
-        Assert.Equal(5_002, preview["affectedNodes"]!.AsArray().Count);
-        Assert.Empty(preview["omissions"]!.AsArray());
+        var preview = await host.Call("proposal_preview", new { expectedRevision = revision, limit = 257 });
+        // Added scope edges also select their existing purpose endpoint. The complete
+        // evidence is paged instead of relying on one host-sized response.
+        Assert.Equal(5_002, preview["affectedNodeCount"]!.GetValue<int>());
+        Assert.Equal(0, preview["omissionCount"]!.GetValue<int>());
+        var pageCount = 1;
+        var cursor = preview["reviewPage"]!["nextCursor"]?.GetValue<string>();
+        while (cursor is not null)
+        {
+            preview = await host.Call("proposal_preview", new { expectedRevision = revision, limit = 257, cursor });
+            cursor = preview["reviewPage"]!["nextCursor"]?.GetValue<string>();
+            pageCount++;
+        }
+        Assert.True(pageCount > 1);
+        Assert.True(preview["reviewPage"]!["allEvidencePresented"]!.GetValue<bool>());
         Assert.Equal(1, application.Status(project).NodeCount);
         var result = await host.Call("write_change", new { expectedRevision = revision });
         Assert.Equal("Written", result["status"]!.GetValue<string>());
@@ -73,6 +85,69 @@ public sealed class McpWorkflowTests
         var staleDiscard = await host.CallResult("discard_change", new { expectedRevision = revision });
         Assert.True(staleDiscard["isError"]?.GetValue<bool>() == true);
         await host.Call("discard_change", new { expectedRevision = third["revision"]!.GetValue<int>() });
+    }
+
+    [Fact]
+    public async Task Overlapping_identical_writes_share_one_review_and_a_patch_preserves_the_replacement_session()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "overlap.vw.db");
+        var other = Path.Combine(temporary.Path, "other.vw.db");
+        var forbiddenInitialization = Path.Combine(temporary.Path, "must-not-exist.vw.db");
+        var store = new SqliteProjectStore();
+        var reviewer = new ControlledReviewer();
+        var application = ReviewedApplication(store, reviewer);
+        application.Initialize(project, new ProjectId("overlap"), "Overlap", new EntityId("purpose"), "Original.");
+        application.Initialize(other, new ProjectId("other"), "Other", new EntityId("purpose"), "Other.");
+        var service = ReviewedService(application, project);
+
+        var begun = service.BeginChange("First proposal");
+        var staged = (McpChangeSummary)service.PatchChange(begun.Revision, new GraphOperationBatch([
+            GraphOperation.ReplaceNode(new GraphNode(new EntityId("purpose"), "First proposal.", "purpose"))]));
+        PreviewAll(service, staged.Revision, 1);
+
+        var firstWrite = service.WriteChangeAsync(staged.Revision);
+        await reviewer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var duplicateWrite = service.WriteChangeAsync(staged.Revision);
+        Assert.Same(firstWrite, duplicateWrite);
+        Assert.Throws<ChangeSessionException>(() => service.Select(other));
+        Assert.Throws<ChangeSessionException>(() => service.Initialize(
+            forbiddenInitialization, "forbidden", "Forbidden", "purpose", "Forbidden."));
+        Assert.False(File.Exists(forbiddenInitialization));
+
+        var replacement = (McpChangeSummary)service.PatchChange(staged.Revision, new GraphOperationBatch([
+            GraphOperation.ReplaceNode(new GraphNode(new EntityId("purpose"), "Replacement proposal.", "purpose"))]));
+        reviewer.Release.TrySetResult();
+        Assert.Equal("Stale", (await firstWrite).Status);
+        Assert.Equal(1, reviewer.CallCount);
+
+        PreviewAll(service, replacement.Revision, 1);
+        Assert.Equal("Written", (await service.WriteChangeAsync(replacement.Revision)).Status);
+        Assert.Equal("Replacement proposal.", application.Queries(project).GetNode(new EntityId("purpose")).Text);
+    }
+
+    [Fact]
+    public async Task Discard_during_review_leaves_no_write_and_does_not_erase_a_later_session()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "discard-overlap.vw.db");
+        var reviewer = new ControlledReviewer();
+        var application = ReviewedApplication(new SqliteProjectStore(), reviewer);
+        application.Initialize(project, new ProjectId("discard-overlap"), "Discard", new EntityId("purpose"), "Original.");
+        var service = ReviewedService(application, project);
+        var begun = service.BeginChange("Discard while reviewing");
+        var staged = (McpChangeSummary)service.PatchChange(begun.Revision, new GraphOperationBatch([
+            GraphOperation.ReplaceNode(new GraphNode(new EntityId("purpose"), "Discarded.", "purpose"))]));
+        PreviewAll(service, staged.Revision, 2);
+        var write = service.WriteChangeAsync(staged.Revision);
+        await reviewer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        service.DiscardChange(staged.Revision);
+        var later = service.BeginChange("Later session must survive");
+        reviewer.Release.TrySetResult();
+        Assert.Equal("Stale", (await write).Status);
+        Assert.Equal("Original.", application.Queries(project).GetNode(new EntityId("purpose")).Text);
+        service.DiscardChange(later.Revision);
     }
 
     [Fact]
@@ -140,9 +215,11 @@ public sealed class McpWorkflowTests
         Assert.Contains("begin_change", noSession["content"]![0]!["text"]!.GetValue<string>());
     }
 
-    private static async Task<McpProcess> InitializedHost(string? project = null)
+    private static async Task<McpProcess> InitializedHost(
+        string? project = null,
+        IReadOnlyList<string>? artifactRoots = null)
     {
-        var host = await McpProcess.Start(project);
+        var host = await McpProcess.Start(project, artifactRoots);
         try
         {
             await host.Request("initialize", new
@@ -167,6 +244,59 @@ public sealed class McpWorkflowTests
             expectedRevision = begun["revision"]!.GetValue<int>(), mode = "replace", id = "purpose",
             text, kind = "purpose", tags = Array.Empty<string>(), attributes = Array.Empty<object>(),
         });
+    }
+
+    private static async Task PreviewAll(McpProcess host, int revision, int limit = 100)
+    {
+        string? cursor = null;
+        do
+        {
+            var preview = await host.Call("proposal_preview", new { expectedRevision = revision, limit, cursor });
+            cursor = preview["reviewPage"]!["nextCursor"]?.GetValue<string>();
+        } while (cursor is not null);
+    }
+
+    private static void PreviewAll(McpProjectService service, int revision, int limit)
+    {
+        string? cursor = null;
+        do
+        {
+            var preview = service.PreviewChange(revision, limit, cursor);
+            cursor = preview.ReviewPage.NextCursor;
+        } while (cursor is not null);
+    }
+
+    private static ProjectApplication ReviewedApplication(IProjectStore store, ISemanticReviewProvider reviewer) =>
+        new(store, semanticReviewProvider: reviewer,
+            semanticReviewOptions: new SemanticReviewRuntimeOptions(Enabled: true, Configured: true));
+
+    private static McpProjectService ReviewedService(ProjectApplication application, string project) =>
+        new(application, new McpHostOptions(project, [], false, false),
+            new McpSemanticReviewConfiguration(true, "openai", "gpt-5.6-terra", 1200, false, "fake"));
+
+    private sealed class ControlledReviewer : ISemanticReviewProvider
+    {
+        private int callCount;
+
+        public string Provider => "openai";
+        public string Model => "controlled";
+        public int CallCount => Volatile.Read(ref callCount);
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<SemanticReviewProviderResult> ReviewAsync(
+            SemanticReviewPlannedRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref callCount) == 1)
+            {
+                Started.TrySetResult();
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            return new SemanticReviewProviderResult(
+                SemanticReviewStatus.Complete, SemanticReviewDecision.Allow,
+                "Controlled review allowed the proposal.", [], null, null, TimeSpan.Zero);
+        }
     }
 
     [Fact]
@@ -257,6 +387,40 @@ public sealed class McpWorkflowTests
     }
 
     [Fact]
+    public async Task Mcp_artifact_roots_are_host_owned_and_deny_reads_by_default()
+    {
+        using var temporary = new TemporaryDirectory();
+        var project = Path.Combine(temporary.Path, "artifact-authority.vw.db");
+        var artifact = Path.Combine(temporary.Path, "artifact.txt");
+        File.WriteAllText(artifact, "authorized bytes");
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(artifact))).ToLowerInvariant();
+        var purpose = new GraphNode(new EntityId("purpose"), "Purpose", "purpose");
+        var anchor = new GraphNode(new EntityId("anchor"), "Artifact", "external-anchor", ["artifact"], [
+            new(ArtifactAnchorMetadata.Path, GraphValue.FromText("artifact.txt")),
+            new(ArtifactAnchorMetadata.Sha256, GraphValue.FromText(hash))]);
+        new SqliteProjectStore().Initialize(project,
+            new ProjectGraph(new ProjectId("artifact-authority"), "Artifacts", purpose.Id, [purpose, anchor], [
+                new GraphEdge(new EntityId("anchor-scope"), anchor.Id, purpose.Id, "scope-parent", ReviewDirection.None)]));
+
+        await using (var deniedHost = await InitializedHost(project))
+        {
+            var denied = await deniedHost.Call("check_artifacts", new { });
+            Assert.Equal("Unauthorized", denied["items"]![0]!["status"]!.GetValue<string>());
+            Assert.Null(denied["items"]![0]!["contentSampleBase64"]);
+        }
+
+        await using (var allowedHost = await InitializedHost(project, [temporary.Path]))
+        {
+            var status = await allowedHost.Call("host_status", new { });
+            Assert.Contains(temporary.Path, status["artifactAllowedRoots"]!.AsArray()
+                .Select(item => item!.GetValue<string>()));
+            var allowed = await allowedHost.Call("check_artifacts", new { });
+            Assert.Equal("Matched", allowed["items"]![0]!["status"]!.GetValue<string>());
+            Assert.NotNull(allowed["items"]![0]!["contentSampleBase64"]);
+        }
+    }
+
+    [Fact]
     public async Task Mcp_discovers_and_instantiates_governed_templates()
     {
         using var temporary = new TemporaryDirectory();
@@ -296,8 +460,9 @@ public sealed class McpWorkflowTests
         });
         var preview = await host.Call("proposal_preview", new { expectedRevision = edge["revision"]!.GetValue<int>() });
         Assert.Equal("Invalid", preview["proposedValidation"]!["status"]!.GetValue<string>());
-        Assert.Contains(preview["proposedValidation"]!["diagnostics"]!.AsArray(),
-            item => item!["code"]!.GetValue<string>() == "rule-violation");
+        Assert.Contains(preview["reviewPage"]!["items"]!.AsArray(), item =>
+            item!["kind"]!.GetValue<string>() == "proposedValidationDiagnostic" &&
+            item["diagnostic"]!["code"]!.GetValue<string>() == "rule-violation");
     }
 
     [Fact]
@@ -352,6 +517,10 @@ public sealed class McpWorkflowTests
             stale["content"]![0]!["text"]!.GetValue<string>(),
             StringComparison.Ordinal);
 
+        var missingPreview = await host.CallResult("write_change", new { expectedRevision = revision });
+        Assert.True(missingPreview["isError"]!.GetValue<bool>());
+        Assert.Contains("proposal_preview", missingPreview["content"]![0]!["text"]!.GetValue<string>());
+        await PreviewAll(host, revision);
         var written = await host.Call("write_change", new { expectedRevision = revision });
         Assert.Equal("Written", written["status"]!.GetValue<string>());
         Assert.False(written["aiReviewBypassed"]!.GetValue<bool>());
@@ -455,10 +624,13 @@ public sealed class McpWorkflowTests
             this.process = process;
         }
 
-        public static Task<McpProcess> Start(string? defaultProject = null)
+        public static Task<McpProcess> Start(
+            string? defaultProject = null,
+            IReadOnlyList<string>? artifactRoots = null)
         {
             var arguments = $"\"{typeof(McpAssembly).Assembly.Location}\"" +
-                (defaultProject is null ? string.Empty : $" --project \"{defaultProject}\"");
+                (defaultProject is null ? string.Empty : $" --project \"{defaultProject}\"") +
+                string.Concat((artifactRoots ?? []).Select(root => $" --artifact-root \"{root}\""));
             var process = new Process
             {
                 StartInfo = new ProcessStartInfo
