@@ -268,7 +268,7 @@ public static class CliRunner
         var nodeId = options.NodeId is null ? (EntityId?)null : new EntityId(options.NodeId);
         await WriteJson(output, CliDto.Artifacts(application.CheckArtifacts(
             arguments[2], nodeId,
-            new ArtifactCheckOptions(options.MaxAnchors, options.MaxSampleBytes),
+            new ArtifactCheckOptions(options.MaxAnchors, options.MaxSampleBytes, options.AllowedRoots),
             cancellationToken)));
         return SuccessExitCode;
     }
@@ -489,11 +489,12 @@ public static class CliRunner
     private static async Task PrintArtifactHelp(TextWriter output)
     {
         await output.WriteLineAsync("Artifact commands:");
-        await output.WriteLineAsync("  artifact check <database> [node-id] [--max-anchors N] [--max-sample-bytes N]");
+        await output.WriteLineAsync("  artifact check <database> [node-id] --allow-root <directory> [--allow-root <directory>...] [--max-anchors N] [--max-sample-bytes N]");
         await output.WriteLineAsync();
         await output.WriteLineAsync("Checks nodes tagged 'artifact' or having kind 'external-anchor'.");
         await output.WriteLineAsync("Anchors use artifact.path and artifact.sha256 attributes; checks are read-only.");
-        await output.WriteLineAsync("The built-in filesystem adapter hashes bytes and returns a bounded base64 sample.");
+        await output.WriteLineAsync("The built-in filesystem adapter is deny-by-default. Each host/user-authorized root must be supplied explicitly.");
+        await output.WriteLineAsync("It validates the opened file against those roots, hashes its bytes, and returns a bounded base64 sample.");
     }
 
     private static async Task PrintTemplateHelp(TextWriter output)
@@ -623,13 +624,15 @@ public static class CliRunner
     private sealed record CliArtifactCheckOptions(
         string? NodeId,
         int MaxAnchors,
-        int MaxSampleBytes)
+        int MaxSampleBytes,
+        IReadOnlyList<string> AllowedRoots)
     {
         public static CliArtifactCheckOptions Parse(string[] arguments)
         {
             string? nodeId = null;
             var maxAnchors = ArtifactCheckerContract.DefaultMaxAnchors;
             var maxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes;
+            var allowedRoots = new List<string>();
             var index = 3;
             if (index < arguments.Length && !arguments[index].StartsWith("--", StringComparison.Ordinal))
             {
@@ -645,13 +648,14 @@ public static class CliRunner
                 {
                     case "--max-anchors": maxAnchors = PositiveInt(value, "max-anchors"); break;
                     case "--max-sample-bytes": maxSampleBytes = PositiveInt(value, "max-sample-bytes"); break;
+                    case "--allow-root": allowedRoots.Add(value); break;
                     default: throw new CliUsageException($"Unknown option '{arguments[index]}'.");
                 }
 
                 index += 2;
             }
 
-            return new(nodeId, maxAnchors, maxSampleBytes);
+            return new(nodeId, maxAnchors, maxSampleBytes, allowedRoots);
         }
     }
 

@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using ValidatedWorld.Core;
 
 namespace ValidatedWorld.Application;
@@ -104,6 +106,7 @@ public sealed record ArtifactCheckRequest(
     string ProjectPath,
     ArtifactAnchor Anchor,
     int MaxSampleBytes,
+    IReadOnlyList<string> AllowedRoots,
     CancellationToken CancellationToken = default);
 
 public enum ArtifactCheckStatus
@@ -113,6 +116,7 @@ public enum ArtifactCheckStatus
     Missing,
     InvalidAnchor,
     UnsupportedAdapter,
+    Unauthorized,
     Unreadable,
 }
 
@@ -131,7 +135,8 @@ public sealed record ArtifactCheckResult(
 
 public sealed record ArtifactCheckOptions(
     int MaxAnchors = ArtifactCheckerContract.DefaultMaxAnchors,
-    int MaxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes)
+    int MaxSampleBytes = ArtifactCheckerContract.DefaultMaxSampleBytes,
+    IReadOnlyList<string>? AllowedRoots = null)
 {
     public ArtifactCheckOptions Validate()
     {
@@ -154,6 +159,7 @@ public sealed record ArtifactCheckReport(
     int MissingCount,
     int InvalidAnchorCount,
     int UnsupportedAdapterCount,
+    int UnauthorizedCount,
     int UnreadableCount,
     bool IsComplete,
     string? OmissionMessage);
@@ -183,28 +189,22 @@ public sealed class FileSystemArtifactChecker : IArtifactChecker
         ArgumentNullException.ThrowIfNull(request);
         request.CancellationToken.ThrowIfCancellationRequested();
 
-        var resolvedPath = ResolvePath(request.ProjectPath, request.Anchor.Path);
-        if (!File.Exists(resolvedPath))
-        {
-            return new(request.Anchor.NodeId, request.Anchor.Path, resolvedPath, AdapterId,
-                ContractVersion, ArtifactCheckStatus.Missing,
-                "The anchored artifact file does not exist.", request.Anchor.Sha256, null, null, false);
-        }
+        var candidatePath = ResolvePath(request.ProjectPath, request.Anchor.Path);
+        var allowedRoots = request.AllowedRoots.Select(ResolveAllowedRoot).ToArray();
+        if (!allowedRoots.Any(root => Contains(root.DeclaredPath, candidatePath)))
+            return Unauthorized(request, candidatePath,
+                "The artifact path is outside every host-authorized root.");
 
         try
         {
-            var info = new FileInfo(resolvedPath);
-            if ((info.Attributes & FileAttributes.Directory) != 0)
-            {
-                return new(request.Anchor.NodeId, request.Anchor.Path, resolvedPath, AdapterId,
-                    ContractVersion, ArtifactCheckStatus.Unreadable,
-                    "The anchored artifact path is a directory, not a file.", request.Anchor.Sha256,
-                    null, null, false);
-            }
-
             using var stream = new FileStream(
-                resolvedPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                candidatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
                 bufferSize: 64 * 1_024, options: FileOptions.SequentialScan);
+            var openedPath = OpenedPath(stream.SafeFileHandle, candidatePath);
+            if (!allowedRoots.Any(root => Contains(root.OpenedPath, openedPath)))
+                return Unauthorized(request, candidatePath,
+                    "The opened artifact resolves outside every host-authorized root (for example through a link or path replacement).");
+
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             using var sample = new MemoryStream(capacity: Math.Min(request.MaxSampleBytes, ArtifactCheckerContract.DefaultMaxSampleBytes));
             var buffer = new byte[64 * 1_024];
@@ -230,18 +230,35 @@ public sealed class FileSystemArtifactChecker : IArtifactChecker
             var message = status == ArtifactCheckStatus.Matched
                 ? "The artifact bytes match the anchored SHA-256."
                 : "The artifact bytes differ from the anchored SHA-256.";
-            return new(request.Anchor.NodeId, request.Anchor.Path, resolvedPath, AdapterId,
+            return new(request.Anchor.NodeId, request.Anchor.Path, openedPath, AdapterId,
                 ContractVersion, status, message, request.Anchor.Sha256, actual,
                 Convert.ToBase64String(sample.ToArray()), totalBytes > request.MaxSampleBytes);
         }
+        catch (FileNotFoundException)
+        {
+            return new(request.Anchor.NodeId, request.Anchor.Path, candidatePath, AdapterId,
+                ContractVersion, ArtifactCheckStatus.Missing,
+                "The anchored artifact file does not exist.", request.Anchor.Sha256, null, null, false);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return new(request.Anchor.NodeId, request.Anchor.Path, candidatePath, AdapterId,
+                ContractVersion, ArtifactCheckStatus.Missing,
+                "The anchored artifact file does not exist.", request.Anchor.Sha256, null, null, false);
+        }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            return new(request.Anchor.NodeId, request.Anchor.Path, resolvedPath, AdapterId,
+            return new(request.Anchor.NodeId, request.Anchor.Path, candidatePath, AdapterId,
                 ContractVersion, ArtifactCheckStatus.Unreadable,
                 $"The anchored artifact could not be read: {exception.Message}", request.Anchor.Sha256,
                 null, null, false);
         }
     }
+
+    private ArtifactCheckResult Unauthorized(ArtifactCheckRequest request, string candidatePath, string message) =>
+        new(request.Anchor.NodeId, request.Anchor.Path, candidatePath, AdapterId,
+            ContractVersion, ArtifactCheckStatus.Unauthorized, message, request.Anchor.Sha256,
+            null, null, false);
 
     private static string ResolvePath(string projectPath, string anchorPath)
     {
@@ -249,6 +266,111 @@ public sealed class FileSystemArtifactChecker : IArtifactChecker
         return Path.GetFullPath(Path.IsPathRooted(anchorPath)
             ? anchorPath
             : Path.Combine(projectDirectory, anchorPath));
+    }
+
+    private sealed record AuthorizedRoot(string DeclaredPath, string OpenedPath);
+
+    private static AuthorizedRoot ResolveAllowedRoot(string root)
+    {
+        if (string.IsNullOrWhiteSpace(root) || root.Any(char.IsControl))
+            throw new ArgumentException("Artifact allowed roots must be non-empty and free of control characters.", nameof(root));
+        var fullPath = NormalizeDirectoryPath(root);
+        if (!Directory.Exists(fullPath))
+            throw new DirectoryNotFoundException($"The artifact allowed root does not exist or is not a directory: '{fullPath}'.");
+        return new AuthorizedRoot(fullPath, OpenedDirectoryPath(fullPath));
+    }
+
+    private static bool Contains(string root, string candidate)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var normalizedRoot = NormalizeDirectoryPath(root);
+        var normalizedCandidate = Path.GetFullPath(candidate);
+        var rootPrefix = normalizedRoot.EndsWith(Path.DirectorySeparatorChar) ||
+            normalizedRoot.EndsWith(Path.AltDirectorySeparatorChar)
+            ? normalizedRoot
+            : normalizedRoot + Path.DirectorySeparatorChar;
+        return normalizedCandidate.Equals(normalizedRoot, comparison) ||
+            normalizedCandidate.StartsWith(rootPrefix, comparison);
+    }
+
+    private static string NormalizeDirectoryPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var pathRoot = Path.GetPathRoot(fullPath);
+        return pathRoot is not null && fullPath.Equals(pathRoot,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+            ? fullPath
+            : fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static string OpenedDirectoryPath(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            var target = new DirectoryInfo(path).ResolveLinkTarget(returnFinalTarget: true);
+            return Path.GetFullPath(target?.FullName ?? path);
+        }
+
+        using var handle = NativeMethods.CreateFile(
+            path, 0, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open,
+            NativeMethods.FileFlagBackupSemantics, IntPtr.Zero);
+        if (handle.IsInvalid)
+            throw new IOException($"The artifact allowed root could not be opened: '{path}'.",
+                Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error()));
+        return WindowsFinalPath(handle);
+    }
+
+    private static string OpenedPath(SafeFileHandle handle, string fallback)
+    {
+        if (OperatingSystem.IsWindows()) return WindowsFinalPath(handle);
+        var target = new FileInfo(fallback).ResolveLinkTarget(returnFinalTarget: true);
+        return Path.GetFullPath(target?.FullName ?? fallback);
+    }
+
+    private static string WindowsFinalPath(SafeFileHandle handle)
+    {
+        var capacity = 512;
+        while (true)
+        {
+            var builder = new StringBuilder(capacity);
+            var length = NativeMethods.GetFinalPathNameByHandle(handle, builder, (uint)builder.Capacity, 0);
+            if (length == 0)
+                throw new IOException("The opened artifact path could not be resolved.",
+                    Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error()));
+            if (length < builder.Capacity)
+            {
+                var value = builder.ToString();
+                if (value.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+                    value = @"\\" + value[8..];
+                else if (value.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase))
+                    value = value[4..];
+                return Path.GetFullPath(value);
+            }
+
+            capacity = checked((int)length + 1);
+        }
+    }
+
+    private static class NativeMethods
+    {
+        internal const uint FileFlagBackupSemantics = 0x02000000;
+
+        [DllImport("kernel32.dll", EntryPoint = "CreateFileW", SetLastError = true, CharSet = CharSet.Unicode)]
+        internal static extern SafeFileHandle CreateFile(
+            string fileName,
+            uint desiredAccess,
+            FileShare shareMode,
+            IntPtr securityAttributes,
+            FileMode creationDisposition,
+            uint flagsAndAttributes,
+            IntPtr templateFile);
+
+        [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", SetLastError = true, CharSet = CharSet.Unicode)]
+        internal static extern uint GetFinalPathNameByHandle(
+            SafeFileHandle file,
+            StringBuilder filePath,
+            uint filePathLength,
+            uint flags);
     }
 }
 
@@ -315,7 +437,7 @@ public sealed class ArtifactCheckService
             }
 
             results.Add(checker.Check(new ArtifactCheckRequest(
-                projectPath, anchor, validated.MaxSampleBytes, cancellationToken)));
+                projectPath, anchor, validated.MaxSampleBytes, validated.AllowedRoots ?? [], cancellationToken)));
         }
 
         var grouped = results.GroupBy(result => result.Status).ToDictionary(group => group.Key, group => group.Count());
@@ -328,6 +450,7 @@ public sealed class ArtifactCheckService
             Count(grouped, ArtifactCheckStatus.Missing),
             Count(grouped, ArtifactCheckStatus.InvalidAnchor),
             Count(grouped, ArtifactCheckStatus.UnsupportedAdapter),
+            Count(grouped, ArtifactCheckStatus.Unauthorized),
             Count(grouped, ArtifactCheckStatus.Unreadable),
             complete,
             complete ? null : $"Only the first {validated.MaxAnchors} of {allCandidates.Length} artifact anchors were checked.");

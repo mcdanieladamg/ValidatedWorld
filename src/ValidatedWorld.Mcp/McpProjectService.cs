@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using ValidatedWorld.Application;
 using ValidatedWorld.Core;
 using ValidatedWorld.Serialization;
@@ -65,6 +66,7 @@ internal sealed record McpArtifactCheckReport(
     int MissingCount,
     int InvalidAnchorCount,
     int UnsupportedAdapterCount,
+    int UnauthorizedCount,
     int UnreadableCount,
     bool IsComplete,
     string? OmissionMessage);
@@ -87,6 +89,7 @@ internal sealed record McpHostStatus(
     string ProcessArchitecture,
     string Framework,
     string InstallationDirectory,
+    IReadOnlyList<string> ArtifactAllowedRoots,
     McpSemanticReviewHostStatus SemanticReview);
 
 internal sealed record McpReadResult<T>(
@@ -226,11 +229,33 @@ internal sealed record McpReadiness(
     bool IsReady,
     string AnalysisStatus,
     string ProposedValidationStatus,
-    IReadOnlyList<string> PendingNodeIds,
-    IReadOnlyList<string> MissingContextNodeIds,
+    int PendingNodeCount,
+    int MissingContextNodeCount,
     IReadOnlyList<string> Blockers);
 
 internal sealed record McpDisposition(string NodeId, string Kind, string? Rationale);
+
+internal sealed record McpValidationSummary(string Status, int DiagnosticCount);
+
+internal sealed record McpReviewItem(
+    int Ordinal,
+    string Kind,
+    McpChangeOperation? Operation = null,
+    McpAffectedNode? AffectedNode = null,
+    McpAffectedEdgeChange? EdgeChange = null,
+    McpScopeContext? ScopeContext = null,
+    McpAffectedOmission? Omission = null,
+    McpDisposition? Disposition = null,
+    DiagnosticDto? Diagnostic = null);
+
+internal sealed record McpReviewPage(
+    int Offset,
+    int Limit,
+    int TotalCount,
+    IReadOnlyList<McpReviewItem> Items,
+    string? NextCursor,
+    bool IsComplete,
+    bool AllEvidencePresented);
 
 internal sealed record McpChangePreview(
     int Revision,
@@ -240,16 +265,15 @@ internal sealed record McpChangePreview(
     int OperationCount,
     int ProposedNodeCount,
     int ProposedEdgeCount,
-    IReadOnlyList<McpChangeOperation> Operations,
-    IReadOnlyList<McpAffectedNode> AffectedNodes,
-    IReadOnlyList<McpAffectedEdgeChange> EdgeChanges,
-    IReadOnlyList<McpScopeContext> ScopeContext,
-    IReadOnlyList<McpAffectedOmission> Omissions,
-    IReadOnlyList<McpDisposition> Dispositions,
-    IReadOnlyList<string> PresentedContextNodeIds,
+    int AffectedNodeCount,
+    int EdgeChangeCount,
+    int ScopeContextCount,
+    int OmissionCount,
+    int DispositionCount,
+    McpReviewPage ReviewPage,
     McpReadiness Readiness,
-    ValidationDto CurrentValidation,
-    ValidationDto ProposedValidation);
+    McpValidationSummary CurrentValidation,
+    McpValidationSummary ProposedValidation);
 
 internal sealed record McpSemanticReviewConcern(
     string Code,
@@ -292,6 +316,10 @@ internal sealed class McpProjectService(
     private bool _defaultWasAttempted;
     private ChangeSessionSnapshot? _session;
     private int _revision;
+    private int _previewCoverageRevision;
+    private readonly HashSet<int> _presentedReviewOrdinals = [];
+    private Task<McpChangeWrite>? _activeWrite;
+    private int _activeWriteRevision;
 
     public McpHostStatus HostStatus() => new(
         McpAssembly.ProductVersion,
@@ -303,6 +331,7 @@ internal sealed class McpProjectService(
         RuntimeInformation.ProcessArchitecture.ToString(),
         RuntimeInformation.FrameworkDescription,
         AppContext.BaseDirectory,
+        hostOptions.ArtifactAllowedRoots,
         new McpSemanticReviewHostStatus(
             reviewConfiguration.Enabled,
             reviewConfiguration.IsConfigured,
@@ -330,23 +359,22 @@ internal sealed class McpProjectService(
         string purposeNodeId,
         string purposeText)
     {
-        lock (_gate) EnsureNoActiveSession();
-        var normalized = ProjectPathPolicy.New(path);
-        var created = application.Initialize(
-            normalized,
-            new ProjectId(projectId),
-            title,
-            new EntityId(purposeNodeId),
-            purposeText);
-        var selected = ToSelection(application.Status(created.Path));
         lock (_gate)
         {
             EnsureNoActiveSession();
+            var normalized = ProjectPathPolicy.New(path);
+            var created = application.Initialize(
+                normalized,
+                new ProjectId(projectId),
+                title,
+                new EntityId(purposeNodeId),
+                purposeText);
+            var selected = ToSelection(application.Status(created.Path));
             _selection = selected;
+            return new McpProjectInitializationResult(
+                selected,
+                "The purpose-only project was initialized and selected. Add graph content through a reviewed MCP change session.");
         }
-        return new McpProjectInitializationResult(
-            selected,
-            "The purpose-only project was initialized and selected. Add graph content through a reviewed MCP change session.");
     }
 
     public IReadOnlyList<TemplateDescriptor> ListTemplates() => application.ListTemplates();
@@ -370,17 +398,16 @@ internal sealed class McpProjectService(
         string title,
         string purposeText)
     {
-        lock (_gate) EnsureNoActiveSession();
-        var normalized = ProjectPathPolicy.New(path);
-        var created = application.InstantiateTemplate(nameOrPath, normalized, new ProjectId(projectId), title, purposeText);
-        var selected = ToSelection(application.Status(created.Path));
         lock (_gate)
         {
             EnsureNoActiveSession();
+            var normalized = ProjectPathPolicy.New(path);
+            var created = application.InstantiateTemplate(nameOrPath, normalized, new ProjectId(projectId), title, purposeText);
+            var selected = ToSelection(application.Status(created.Path));
             _selection = selected;
+            return new McpProjectInitializationResult(selected,
+                "The selected template was instantiated and selected. Attached active rules govern subsequent reviewed changes.");
         }
-        return new McpProjectInitializationResult(selected,
-            "The selected template was instantiated and selected. Attached active rules govern subsequent reviewed changes.");
     }
 
     public McpProjectSelection Status()
@@ -482,7 +509,7 @@ internal sealed class McpProjectService(
         var report = application.CheckArtifacts(
             selection.Path,
             nodeId is null ? null : new EntityId(nodeId),
-            new ArtifactCheckOptions(maxAnchors, maxSampleBytes),
+            new ArtifactCheckOptions(maxAnchors, maxSampleBytes, hostOptions.ArtifactAllowedRoots),
             cancellationToken);
         return new McpArtifactCheckReport(
             report.ProjectPath,
@@ -504,6 +531,7 @@ internal sealed class McpProjectService(
             report.MissingCount,
             report.InvalidAnchorCount,
             report.UnsupportedAdapterCount,
+            report.UnauthorizedCount,
             report.UnreadableCount,
             report.IsComplete,
             report.OmissionMessage);
@@ -524,6 +552,7 @@ internal sealed class McpProjectService(
             // Revisions identify proposals across the entire MCP process, including
             // discarded sessions and project switches. Never reuse an old token.
             _revision = checked(_revision + 1);
+            ResetPreviewCoverage();
             return Summary(_session, "The in-memory MCP change session has begun.");
         }
     }
@@ -538,6 +567,7 @@ internal sealed class McpProjectService(
                 operations,
                 AnalysisOptions(cancellationToken));
             _revision = checked(_revision + 1);
+            ResetPreviewCoverage();
             return Summary(_session, "The operation batch was applied to the in-memory proposal.");
         }
     }
@@ -549,16 +579,17 @@ internal sealed class McpProjectService(
             var session = RequireRevision(expectedRevision);
             _session = application.ExpandChange(session.Reference, AnalysisOptions(cancellationToken));
             _revision = checked(_revision + 1);
+            ResetPreviewCoverage();
             return Summary(_session, "Affected analysis was refreshed for the current proposal.");
         }
     }
 
-    public McpChangePreview PreviewChange(int expectedRevision)
+    public McpChangePreview PreviewChange(int expectedRevision, int limit, string? cursor)
     {
-        lock (_gate) return Preview(RequireRevision(expectedRevision), _revision);
+        lock (_gate) return Preview(RequireRevision(expectedRevision), _revision, limit, cursor);
     }
 
-    public async Task<McpChangeWrite> WriteChangeAsync(
+    public Task<McpChangeWrite> WriteChangeAsync(
         int expectedRevision,
         CancellationToken cancellationToken = default)
     {
@@ -566,37 +597,73 @@ internal sealed class McpProjectService(
         lock (_gate)
         {
             session = RequireRevision(expectedRevision);
+            if (_activeWrite is not null && _activeWriteRevision == expectedRevision)
+                return _activeWrite;
+            EnsureReviewPresented(session, expectedRevision);
             session = CompleteReviewForWrite(session);
             _session = session;
+            _activeWriteRevision = expectedRevision;
+            _activeWrite = RunWriteAsync(session, expectedRevision, cancellationToken);
+            return _activeWrite;
         }
+    }
 
-        var result = await application.WriteChangeAsync(
-            session.Reference,
-            new ChangeWriteOptions(BypassAiReview: false),
-            cancellationToken);
-        lock (_gate)
+    private async Task<McpChangeWrite> RunWriteAsync(
+        ChangeSessionSnapshot session,
+        int revision,
+        CancellationToken cancellationToken)
+    {
+        // Ensure the shared task is installed under _gate before provider work can complete.
+        await Task.Yield();
+        try
         {
-            if (result.Status == ChangeWriteStatus.Written)
+            var result = await application.WriteChangeAsync(
+                session.Reference,
+                new ChangeWriteOptions(BypassAiReview: false),
+                cancellationToken);
+            lock (_gate)
             {
-                _session = null;
-                _selection = ToSelection(application.Status(session.Path));
-            }
+                if (result.Status == ChangeWriteStatus.Written &&
+                    _revision == revision && _session?.Reference == session.Reference)
+                {
+                    _session = null;
+                    ResetPreviewCoverage();
+                    _selection = ToSelection(application.Status(session.Path));
+                }
 
-            return new McpChangeWrite(
-                result.Status.ToString(),
-                result.ProjectId.Value,
-                result.Message,
-                result.AiReviewBypassed,
-                result.Project is null ? null : ToSelection(application.Status(result.Project.Path)),
-                result.SemanticReview is null ? null : new McpSemanticReview(
-                    result.SemanticReview.Status.ToString(),
-                    result.SemanticReview.Decision?.ToString(),
-                    result.SemanticReview.Summary,
-                    result.SemanticReview.Concerns.Select(concern => new McpSemanticReviewConcern(
-                        concern.Code,
-                        concern.Message,
-                        concern.Citations.Select(id => id.Value).ToArray())).ToArray(),
-                    result.SemanticReview.IsCurrent));
+                return new McpChangeWrite(
+                    result.Status.ToString(),
+                    result.ProjectId.Value,
+                    result.Message,
+                    result.AiReviewBypassed,
+                    result.Project is null ? null : ToSelection(application.Status(result.Project.Path)),
+                    result.SemanticReview is null ? null : new McpSemanticReview(
+                        result.SemanticReview.Status.ToString(),
+                        result.SemanticReview.Decision?.ToString(),
+                        result.SemanticReview.Summary,
+                        result.SemanticReview.Concerns.Select(concern => new McpSemanticReviewConcern(
+                            concern.Code,
+                            concern.Message,
+                            concern.Citations.Select(id => id.Value).ToArray())).ToArray(),
+                        result.SemanticReview.IsCurrent));
+            }
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                // Completing agent dispositions changes the private Application
+                // reference without changing the public proposal revision. If the
+                // write did not consume the session, require a fresh presentation
+                // before any retry so coverage still describes the exact snapshot.
+                if (_revision == revision && _session?.Reference == session.Reference)
+                    ResetPreviewCoverage();
+                if (_activeWriteRevision == revision)
+                {
+                    _activeWrite = null;
+                    _activeWriteRevision = 0;
+                }
+            }
         }
     }
 
@@ -607,6 +674,7 @@ internal sealed class McpProjectService(
             var session = RequireRevision(expectedRevision);
             var discarded = application.DiscardChange(session.Reference);
             _session = null;
+            ResetPreviewCoverage();
             return new McpDiscardResult(
                 discarded.ProjectId.Value,
                 expectedRevision,
@@ -677,36 +745,76 @@ internal sealed class McpProjectService(
         session.Readiness.Blockers,
         message);
 
-    private static McpChangePreview Preview(ChangeSessionSnapshot session, int revision) => new(
-        revision,
-        session.ProposedGraph.ProjectId.Value,
-        session.ProposedGraph.Title,
-        session.Intent,
-        session.Operations.Operations.Count,
-        session.ProposedGraph.Nodes.Count,
-        session.ProposedGraph.Edges.Count,
-        session.Operations.Operations.Select(Operation).ToArray(),
-        session.Affected.AffectedNodes.Select(node => new McpAffectedNode(
+    private McpChangePreview Preview(ChangeSessionSnapshot session, int revision, int limit, string? cursor)
+    {
+        if (limit <= 0) throw new ArgumentOutOfRangeException(nameof(limit), "The review page size must be positive.");
+        var items = ReviewItems(session);
+        var offset = DecodePreviewCursor(cursor, revision, limit);
+        if (offset < 0 || offset > items.Count)
+            throw new McpWorkflowException("The proposal preview cursor is invalid for this revision and page size.");
+        var pageItems = items.Skip(offset).Take(limit).ToArray();
+        if (_previewCoverageRevision != revision)
+        {
+            _previewCoverageRevision = revision;
+            _presentedReviewOrdinals.Clear();
+        }
+        foreach (var item in pageItems) _presentedReviewOrdinals.Add(item.Ordinal);
+        var nextOffset = checked(offset + pageItems.Length);
+        var nextCursor = nextOffset < items.Count ? EncodePreviewCursor(revision, limit, nextOffset) : null;
+        var allPresented = _presentedReviewOrdinals.Count == items.Count;
+        return new McpChangePreview(
+            revision,
+            session.ProposedGraph.ProjectId.Value,
+            session.ProposedGraph.Title,
+            session.Intent,
+            session.Operations.Operations.Count,
+            session.ProposedGraph.Nodes.Count,
+            session.ProposedGraph.Edges.Count,
+            session.Affected.AffectedNodes.Count,
+            session.Affected.EdgeChanges.Count,
+            session.Affected.ScopeContext.Count,
+            session.Affected.Omissions.Count,
+            session.Dispositions.Count,
+            new McpReviewPage(offset, limit, items.Count, pageItems, nextCursor,
+                nextCursor is null, allPresented),
+            Readiness(session.Readiness),
+            new McpValidationSummary(session.Affected.CurrentValidation.Status.ToString(),
+                session.Affected.CurrentValidation.Diagnostics.Count),
+            new McpValidationSummary(session.Affected.ProposedValidation.Status.ToString(),
+                session.Affected.ProposedValidation.Diagnostics.Count));
+    }
+
+    private static IReadOnlyList<McpReviewItem> ReviewItems(ChangeSessionSnapshot session)
+    {
+        var items = new List<McpReviewItem>();
+        void Add(string kind, McpChangeOperation? operation = null, McpAffectedNode? affected = null,
+            McpAffectedEdgeChange? edgeChange = null, McpScopeContext? context = null,
+            McpAffectedOmission? omission = null, McpDisposition? disposition = null,
+            DiagnosticDto? diagnostic = null) =>
+            items.Add(new McpReviewItem(items.Count, kind, operation, affected, edgeChange, context,
+                omission, disposition, diagnostic));
+
+        foreach (var operation in session.Operations.Operations) Add("operation", operation: Operation(operation));
+        foreach (var node in session.Affected.AffectedNodes) Add("affectedNode", affected: new McpAffectedNode(
             node.NodeId.Value,
             node.IsDirectChange,
             node.Distance,
             node.Explanation.Nodes.Select(id => id.Value).ToArray(),
             node.Explanation.Edges.Select(id => id.Value).ToArray(),
             node.CurrentNode is null ? null : Node(node.CurrentNode),
-            node.ProposedNode is null ? null : Node(node.ProposedNode))).ToArray(),
-        session.Affected.EdgeChanges.Select(change => new McpAffectedEdgeChange(
-            Operation(change.Operation),
-            change.CurrentEdge is null ? null : Edge(change.CurrentEdge),
-            change.ProposedEdge is null ? null : Edge(change.ProposedEdge))).ToArray(),
-        session.Affected.ScopeContext.Select(context => new McpScopeContext(
+            node.ProposedNode is null ? null : Node(node.ProposedNode)));
+        foreach (var change in session.Affected.EdgeChanges) Add("edgeChange", edgeChange: new McpAffectedEdgeChange(
+            Operation(change.Operation), change.CurrentEdge is null ? null : Edge(change.CurrentEdge),
+            change.ProposedEdge is null ? null : Edge(change.ProposedEdge)));
+        foreach (var context in session.Affected.ScopeContext) Add("scopeContext", context: new McpScopeContext(
             context.NodeId.Value,
             context.Lineages.Select(lineage => new McpScopeLineage(
                 lineage.AffectedNodeId.Value,
                 lineage.CurrentPath.Select(id => id.Value).ToArray(),
                 lineage.ProposedPath.Select(id => id.Value).ToArray())).ToArray(),
             context.CurrentNode is null ? null : Node(context.CurrentNode),
-            context.ProposedNode is null ? null : Node(context.ProposedNode))).ToArray(),
-        session.Affected.Omissions.Select(omission => new McpAffectedOmission(
+            context.ProposedNode is null ? null : Node(context.ProposedNode)));
+        foreach (var omission in session.Affected.Omissions) Add("omission", omission: new McpAffectedOmission(
             omission.Reason.ToString(),
             omission.Count,
             omission.Sample.Select(sample => new McpOmissionDetail(
@@ -715,15 +823,54 @@ internal sealed class McpProjectService(
                 sample.EdgeId?.Value,
                 sample.Depth,
                 sample.Message)).ToArray(),
-            omission.DetailsFingerprint)).ToArray(),
-        session.Dispositions.Select(disposition => new McpDisposition(
-            disposition.NodeId.Value,
-            disposition.Kind.ToString(),
-            disposition.Rationale)).ToArray(),
-        session.PresentedContextNodeIds.Select(id => id.Value).ToArray(),
-        Readiness(session.Readiness),
-        ValidationProtocol.ToDto(session.Affected.CurrentValidation),
-        ValidationProtocol.ToDto(session.Affected.ProposedValidation));
+            omission.DetailsFingerprint));
+        foreach (var disposition in session.Dispositions) Add("disposition", disposition: new McpDisposition(
+            disposition.NodeId.Value, disposition.Kind.ToString(), disposition.Rationale));
+        foreach (var diagnostic in ValidationProtocol.ToDto(session.Affected.CurrentValidation).Diagnostics)
+            Add("currentValidationDiagnostic", diagnostic: diagnostic);
+        foreach (var diagnostic in ValidationProtocol.ToDto(session.Affected.ProposedValidation).Diagnostics)
+            Add("proposedValidationDiagnostic", diagnostic: diagnostic);
+        return items;
+    }
+
+    private void EnsureReviewPresented(ChangeSessionSnapshot session, int revision)
+    {
+        var total = ReviewItems(session).Count;
+        if (_previewCoverageRevision != revision || _presentedReviewOrdinals.Count != total)
+            throw new McpWorkflowException(
+                $"The exact proposal review evidence has not been fully presented for revision {revision}. " +
+                "Call proposal_preview and follow every nextCursor before write_change.");
+    }
+
+    private void ResetPreviewCoverage()
+    {
+        _previewCoverageRevision = 0;
+        _presentedReviewOrdinals.Clear();
+    }
+
+    private static string EncodePreviewCursor(int revision, int limit, int offset) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes($"mcp-preview-v1:{revision}:{limit}:{offset}"));
+
+    private static int DecodePreviewCursor(string? cursor, int revision, int limit)
+    {
+        if (cursor is null) return 0;
+        try
+        {
+            var value = Encoding.UTF8.GetString(Convert.FromBase64String(cursor));
+            var parts = value.Split(':');
+            if (parts.Length != 4 || parts[0] != "mcp-preview-v1" ||
+                !int.TryParse(parts[1], CultureInfo.InvariantCulture, out var cursorRevision) ||
+                !int.TryParse(parts[2], CultureInfo.InvariantCulture, out var cursorLimit) ||
+                !int.TryParse(parts[3], CultureInfo.InvariantCulture, out var offset) ||
+                cursorRevision != revision || cursorLimit != limit)
+                throw new FormatException();
+            return offset;
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException)
+        {
+            throw new McpWorkflowException("The proposal preview cursor is invalid for this revision and page size.");
+        }
+    }
 
     private ChangeSessionSnapshot CompleteReviewForWrite(ChangeSessionSnapshot session)
     {
@@ -769,8 +916,8 @@ internal sealed class McpProjectService(
         readiness.IsReady,
         readiness.AnalysisStatus.ToString(),
         readiness.ProposedValidationStatus.ToString(),
-        readiness.PendingNodeIds.Select(id => id.Value).ToArray(),
-        readiness.MissingContextNodeIds.Select(id => id.Value).ToArray(),
+        readiness.PendingNodeIds.Count,
+        readiness.MissingContextNodeIds.Count,
         readiness.Blockers);
 
     public static GraphOperationBatch ParseOperations(OperationBatchDto dto)

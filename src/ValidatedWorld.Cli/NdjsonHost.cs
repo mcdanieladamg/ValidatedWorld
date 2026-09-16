@@ -251,7 +251,7 @@ internal sealed class NdjsonHost(
         return CliDto.Artifacts(application.CheckArtifacts(
             request.Path,
             nodeId,
-            new ArtifactCheckOptions(request.MaxAnchors, request.MaxSampleBytes),
+            new ArtifactCheckOptions(request.MaxAnchors, request.MaxSampleBytes, request.AllowedRoots),
             cancellationToken));
     }
 
