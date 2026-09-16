@@ -97,7 +97,7 @@ by the caller.
    base, provider block, cancellation, disconnect, or mismatch must leave the
    database unchanged. Use `discard_change` when abandoning the proposal.
 
-For format-v2 projects, inspect `currentValidation` and `proposedValidation` in
+Inspect `currentValidation` and `proposedValidation` in
 every preview. Attached active rules evaluate the complete candidate graph,
 even when a failure lies outside the semantic affected slice. Malformed,
 unsupported, cancelled, or over-budget rules are inconclusive and never pass.
