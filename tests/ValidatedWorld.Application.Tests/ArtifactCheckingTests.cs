@@ -8,6 +8,28 @@ namespace ValidatedWorld.Application.Tests;
 public sealed class ArtifactCheckingTests
 {
     [Fact]
+    public void Malformed_filesystem_path_is_reported_without_aborting_other_anchors()
+    {
+        using var directory = new TemporaryDirectory();
+        var file = Path.Combine(directory.Path, "valid.txt");
+        File.WriteAllText(file, "valid artifact");
+        var graph = Graph(
+            Anchor("malformed", "bad\0path", HashOf("unused")),
+            Anchor("valid", "valid.txt", Hash(file)));
+
+        var report = new ArtifactCheckService().Check(
+            Path.Combine(directory.Path, "project.vw.db"), graph,
+            options: new ArtifactCheckOptions(AllowedRoots: [directory.Path]));
+
+        var malformed = report.Items.Single(item => item.NodeId.Value == "malformed");
+        Assert.Equal(ArtifactCheckStatus.InvalidAnchor, malformed.Status);
+        Assert.Null(malformed.ContentSampleBase64);
+        Assert.Null(malformed.ActualSha256);
+        Assert.Equal(ArtifactCheckStatus.Matched, report.Items.Single(item => item.NodeId.Value == "valid").Status);
+        Assert.True(report.IsComplete);
+    }
+
+    [Fact]
     public void Caller_selected_sample_size_does_not_preallocate_the_requested_capacity()
     {
         using var temporary = new TemporaryDirectory();

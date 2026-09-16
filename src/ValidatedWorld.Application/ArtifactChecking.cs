@@ -189,7 +189,18 @@ public sealed class FileSystemArtifactChecker : IArtifactChecker
         ArgumentNullException.ThrowIfNull(request);
         request.CancellationToken.ThrowIfCancellationRequested();
 
-        var candidatePath = ResolvePath(request.ProjectPath, request.Anchor.Path);
+        string candidatePath;
+        try
+        {
+            candidatePath = ResolvePath(request.ProjectPath, request.Anchor.Path);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return new(request.Anchor.NodeId, request.Anchor.Path, null, AdapterId,
+                ContractVersion, ArtifactCheckStatus.InvalidAnchor,
+                $"The artifact path is invalid: {exception.Message}", request.Anchor.Sha256,
+                null, null, false);
+        }
         var allowedRoots = request.AllowedRoots.Select(ResolveAllowedRoot).ToArray();
         if (!allowedRoots.Any(root => Contains(root.DeclaredPath, candidatePath)))
             return Unauthorized(request, candidatePath,
