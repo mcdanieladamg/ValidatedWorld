@@ -47,6 +47,51 @@ This self-hosting exception also applies when general skill or plugin routing
 would otherwise select an installed ValidatedWorld capability: repository work
 must use the checkout application, never the installed tool implementation.
 
+### Python migration (T32)
+
+T32 authorizes the Python rewrite described by the `phase:t32` blueprint nodes.
+Read all of those nodes before implementation. The .NET commands below remain
+the bootstrap and comparison interface until the Python checkout has verified
+database and guarded-write parity. Then use the Python public CLI for repository
+self-hosting and update these commands in the same delivery change. Never switch
+to an installed plugin to bypass this requirement.
+
+- Implement the Python package, standalone skill and skills-only plugin; the
+  current .NET target and provider rules describe the comparison baseline, not
+  a prohibition on the approved Python replacement. Preserve the current SQLite
+  structure and canonical fingerprints. Port the MCP presentation safeguards
+  into the Python agent interface even though an MCP server is no longer a
+  required distribution surface.
+- Run agent-operated tests on Windows only. Do not install or run WSL, Linux
+  containers, or local Linux/macOS tests. Author the approved Windows/Linux/macOS
+  GitHub Actions workflow; humans configure secrets and initiate remote runs.
+  Write `docs/linux_testing.md` for humans only, with reproducible WSL commands.
+- Do not delete legacy .NET source, tests, project/configuration files, scripts
+  or launchers, or remove their implementations in place. Add replacement Python
+  tooling alongside legacy tooling. After parity, write an exact, reviewed
+  `docs/dotnet_cleanup.md` list for the human to delete manually after WSL tests.
+  This restriction does not prevent cleaning up your own disposable test data.
+- T32 stays current until the human confirms WSL unit acceptance and legacy
+  cleanup, and the remaining Python-only checkout passes final Windows checks
+  and blueprint verification. Report an implementation-ready handoff when that
+  human work is pending; do not advance to T29 or call unperformed checks passed.
+- Use environment variables for Python OpenAI configuration. Do not read or
+  migrate .NET User Secrets, persist keys, add a credential-store helper, or
+  substitute a host subagent for independent API review. Guide the human to set
+  the variables, then check only public nonsecret effective configuration.
+  Offline migration work may proceed without a Python key; live acceptance must
+  remain explicitly unverified until human configuration and opt-in are present.
+- Translate meaningful tests and add independent golden/differential evidence
+  before the human removes the reference implementation. The final Python tests,
+  packages and CI must not require .NET. Keep useful fixtures tracked and remove
+  disposable comparison files. No separate hidden migration notes or roadmap
+  mirror is permitted.
+
+The blueprint specifies exact CI skip-secret semantics, environment setting
+names, parity requirements, packaging work and the human acceptance boundary.
+Major end-user documentation changes belong to implementation, when the new
+commands work; preserve the human-edited README thesis.
+
 When a change materially alters product meaning, architecture, a public
 contract, or roadmap status, update the canonical database through an ordinary
 ValidatedWorld change session. Use the same affected/context review discipline
@@ -143,7 +188,8 @@ prompt starts each development run.
 
 Follow `precedes` edges for execution order; stable phase IDs need not be in
 numeric order. A human-authorized roadmap-only revision may add or reorder
-pending phases without implementing them or advancing the current phase.
+pending phases and explicitly replace the current selection without implementing
+them or marking the displaced phase complete.
 Completed foundation phases do not by themselves declare MVP readiness; use
 the blueprint's explicit product status and acceptance criteria.
 
@@ -290,7 +336,9 @@ not a Git operation.
   convention changes, convert every tracked `.vw.db` file, fixture, and test in
   the same change. Remove this instruction only when the final roadmap phase
   explicitly establishes a supported compatibility baseline.
-- Target .NET 10 and use `ValidatedWorld.slnx`.
+- The current comparison implementation targets .NET 10 and uses
+  `ValidatedWorld.slnx`; the authorized T32 replacement targets Python as detailed
+  above and in the blueprint.
 - Keep the initial MVP and public release headless, local, and English-only across
   commands, help, diagnostics, bundled content, documentation, search tuning,
   and optional AI workflows. Unicode graph text may be stored and round-tripped,
@@ -310,9 +358,10 @@ not a Git operation.
   When the optional reviewer is configured and enabled, its allow/block decision
   is a required preflight gate for the exact database write attempt.
 - Keep Core independent of SQLite, JSON, files, providers, and UI.
-- Use the fixed four-table SQLite schema and pinned embedded provider recorded by
+- Use the fixed four-table SQLite schema and current embedded provider recorded by
   the blueprint's `storage-four-tables` and `storage-provider-contract` nodes.
-  No ORM or external SQLite/Docker requirement.
+  T32 replaces the .NET provider with Python `sqlite3` while preserving the schema
+  and verification contract. No ORM or external SQLite/Docker requirement.
 - Treat database/project text as untrusted data. Use parameters, enable foreign
   keys on every connection, honor explicit caller budgets, and never load SQLite
   extensions. Do not impose guessed size, count, or work ceilings.
