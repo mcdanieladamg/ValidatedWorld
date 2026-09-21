@@ -66,38 +66,74 @@ def _contains(root: str, candidate: str) -> bool:
         return False
 
 
+def _windows_final_path(handle: int) -> str:
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    function = kernel32.GetFinalPathNameByHandleW
+    function.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32]
+    function.restype = ctypes.c_uint32
+    capacity = 512
+    while True:
+        buffer = ctypes.create_unicode_buffer(capacity)
+        length = function(handle, buffer, capacity, 0)
+        if length == 0:
+            error = ctypes.get_last_error()
+            raise OSError(error, "the opened path could not be resolved")
+        if length < capacity:
+            value = buffer.value
+            if value.startswith("\\\\?\\UNC\\"):
+                value = "\\\\" + value[8:]
+            elif value.startswith("\\\\?\\"):
+                value = value[4:]
+            return os.path.abspath(value)
+        capacity = length + 1
+
+
 def _opened_path(file_descriptor: int, fallback: str) -> str:
     if os.name == "nt":
-        import ctypes
         import msvcrt
 
-        handle = msvcrt.get_osfhandle(file_descriptor)
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        function = kernel32.GetFinalPathNameByHandleW
-        function.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32]
-        function.restype = ctypes.c_uint32
-        capacity = 512
-        while True:
-            buffer = ctypes.create_unicode_buffer(capacity)
-            length = function(handle, buffer, capacity, 0)
-            if length == 0:
-                raise OSError(ctypes.get_last_error(), "the opened artifact path could not be resolved")
-            if length < capacity:
-                value = buffer.value
-                if value.startswith("\\\\?\\UNC\\"):
-                    value = "\\\\" + value[8:]
-                elif value.startswith("\\\\?\\"):
-                    value = value[4:]
-                return os.path.abspath(value)
-            capacity = length + 1
+        return _windows_final_path(msvcrt.get_osfhandle(file_descriptor))
     if sys.platform == "darwin":
         import fcntl
-        raw = fcntl.fcntl(file_descriptor, 50, bytes(4096))
-        return os.path.abspath(raw.split(b"\0", 1)[0].decode())
+        raw = fcntl.fcntl(file_descriptor, 50, bytes(1024))
+        return os.path.abspath(os.fsdecode(raw.split(b"\0", 1)[0]))
     descriptor_link = f"/proc/self/fd/{file_descriptor}"
     if os.path.exists(descriptor_link):
         return os.path.abspath(os.readlink(descriptor_link))
     return str(Path(fallback).resolve(strict=True))
+
+
+def _opened_directory_path(path: str) -> str:
+    if os.name == "nt":
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
+        create_file.argtypes = [
+            ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+            ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+        ]
+        create_file.restype = ctypes.c_void_p
+        handle = create_file(path, 0, 0x7, None, 3, 0x02000000, None)
+        invalid_handle = ctypes.c_void_p(-1).value
+        if handle is None or handle == invalid_handle:
+            error = ctypes.get_last_error()
+            raise OSError(error, f"the artifact allowed root could not be opened: '{path}'")
+        try:
+            return _windows_final_path(handle)
+        finally:
+            close_handle = kernel32.CloseHandle
+            close_handle.argtypes = [ctypes.c_void_p]
+            close_handle.restype = ctypes.c_int
+            close_handle(handle)
+
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        return _opened_path(descriptor, path)
+    finally:
+        os.close(descriptor)
 
 
 class FileSystemArtifactChecker:
@@ -125,7 +161,7 @@ class FileSystemArtifactChecker:
             if not os.path.isdir(declared):
                 raise FileNotFoundError(f"artifact allowed root does not exist or is not a directory: '{declared}'")
             declared_roots.append(declared)
-            opened_roots.append(str(Path(declared).resolve(strict=True)))
+            opened_roots.append(_opened_directory_path(declared))
         if not any(_contains(root, candidate) for root in declared_roots):
             return _result(anchor["nodeId"], anchor["path"], candidate, self.adapter_id,
                            self.contract_version, "unauthorized", "The artifact path is outside every host-authorized root.", anchor["sha256"])

@@ -3,11 +3,14 @@ import hashlib
 import os
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src-python"))
 
+import validated_world.artifacts as artifact_module
 from validated_world.artifacts import FileSystemArtifactChecker, check_artifacts
 from validated_world.models import Attribute, Edge, Graph, GraphValue, Node
 
@@ -175,6 +178,25 @@ class ArtifactTests(unittest.TestCase):
             result = checker.check({"projectPath": str(self.project), "anchor": base | {"path": raw}, "allowedRoots": [], "maxSampleBytes": 1})
             with self.subTest(raw=raw):
                 self.assertEqual(result["status"], "invalidAnchor")
+
+    def test_macos_handle_resolution_uses_supported_fcntl_buffer(self):
+        observed = {}
+        fake_fcntl = types.ModuleType("fcntl")
+
+        def resolve_path(file_descriptor, command, buffer):
+            observed.update(file_descriptor=file_descriptor, command=command, size=len(buffer))
+            return b"/private/tmp/artifact.bin\0" + bytes(len(buffer) - 26)
+
+        fake_fcntl.fcntl = resolve_path
+        with (
+            mock.patch.object(artifact_module.os, "name", "posix"),
+            mock.patch.object(artifact_module.sys, "platform", "darwin"),
+            mock.patch.dict(sys.modules, {"fcntl": fake_fcntl}),
+        ):
+            resolved = artifact_module._opened_path(41, "unused")
+
+        self.assertEqual(observed, {"file_descriptor": 41, "command": 50, "size": 1024})
+        self.assertTrue(resolved.endswith("artifact.bin"), resolved)
 
     def test_caller_sized_sample_bound_does_not_preallocate_requested_capacity(self):
         content = b"tiny"

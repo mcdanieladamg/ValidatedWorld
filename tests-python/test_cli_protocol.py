@@ -99,10 +99,11 @@ class CliProtocolTests(unittest.TestCase):
         output, error = io.StringIO(), io.StringIO()
         code = direct_command(["artifact", "check", str(artifact_project), "--allow-root", str(self.root), "--max-sample-bytes", "4"], output, error)
         self.assertEqual(code, SUCCESS, error.getvalue())
-        self.assertEqual(json.loads(output.getvalue())["matchedCount"], 1)
+        direct_report = json.loads(output.getvalue())
+        self.assertEqual(direct_report["matchedCount"], 1, direct_report)
         process = self.process()
         result = self.send(process, "artifact.check", {"path": str(artifact_project), "allowedRoots": [str(self.root)], "maxSampleBytes": 4})
-        self.assertEqual(result["payload"]["matchedCount"], 1)
+        self.assertEqual(result["payload"]["matchedCount"], 1, result)
         self.assertEqual(artifact_project.read_bytes(), before)
 
     def test_direct_exit_codes_and_traversal_flags_are_explicit(self):
