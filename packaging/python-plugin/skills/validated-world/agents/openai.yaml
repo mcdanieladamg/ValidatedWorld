@@ -1,0 +1,4 @@
+interface:
+  display_name: "ValidatedWorld Python"
+  short_description: "Use portable local semantic change control"
+  default_prompt: "Use the portable Python ValidatedWorld engine to inspect and safely update this project's local knowledge graph."

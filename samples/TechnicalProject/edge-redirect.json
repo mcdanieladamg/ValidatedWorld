@@ -3,8 +3,8 @@
   "operations": {
     "operations": [
       {
-        "kind": 1,
-        "entityKind": 1,
+        "kind": "replace",
+        "entityKind": "edge",
         "entityId": "retention-requires-architecture",
         "node": null,
         "edge": {
@@ -12,7 +12,7 @@
           "source": "retention-policy",
           "target": "accessibility-acceptance",
           "relationship": "requires",
-          "reviewDirection": 1,
+          "reviewDirection": "sourceToTarget",
           "rationale": null,
           "tags": [],
           "attributes": []

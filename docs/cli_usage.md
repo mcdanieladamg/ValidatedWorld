@@ -1,977 +1,159 @@
-# ValidatedWorld CLI usage
+# ValidatedWorld CLI reference
 
-ValidatedWorld is a local, headless .NET 10 command-line application.
-One-shot commands cover project storage and bounded reads. Long-lived change
-sessions have two interfaces over the same Application behavior:
-
-- `shell <database>` is the stateful flag-based interface. It remembers the
-  selected entity, pending operation batch, review state, and fingerprints.
-- `ndjson` is the strict structured interface for AIs, scripts, and integrations.
-
-Both retain unfinished changes only in the running process.
-
-Workflows are supported in English only. Project titles and graph text support
-Unicode storage and round-tripping.
-
-## Contents
-
-- [Run or publish](#run-or-publish)
-- [Project and sample commands](#project-and-sample-commands)
-- [Templates and deterministic rules](#templates-and-deterministic-rules)
-- [Semantic database diff](#semantic-database-diff)
-- [Graph-aware three-way merge](#graph-aware-three-way-merge)
-- [Large imports](#large-imports-and-bulk-authoring)
-- [Bounded reads](#bounded-reads)
-- [Stateful shell](#stateful-shell)
-- [Graph rules](#graph-rules-needed-by-cli-authors) and [modeling guidance](#modeling-graphs-that-age-well)
-- [NDJSON framing](#ndjson-framing-and-sessions) and [manual change workflow](#manual-change-workflow)
-- [Conversational AI authoring](#conversational-ai-authoring)
-- [Optional semantic AI write gate](#optional-semantic-ai-write-gate)
-
-## Run or publish
-
-From the repository root, run a command directly with:
+ValidatedWorld is a local Python 3.12+ command-line application. From a source
+checkout, make the package importable and run it with:
 
 ```powershell
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- <arguments>
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
+py -3.12 -m validated_world --help
 ```
 
-Or create a framework-dependent release directory and run the produced
-executable:
+An installed package also provides the `validated-world` command. Quote paths
+and text containing spaces. Project and backup destinations are never
+overwritten.
+
+## Project commands
+
+```text
+project init <path> <project-id> <title> <purpose-node-id> <purpose-text>
+project status <path>
+project open <path>
+project verify <path>
+project backup <source> <destination>
+project export-sql <path>
+project diff <base> <target> [--limit N] [--cursor TOKEN]
+project merge <base> <ours> <theirs>
+project bulk-plan <path> <manifest> [--chunk-size N] [--cursor TOKEN]
+```
+
+`project open` returns the complete graph. Prefer bounded reads for discovery.
+`project diff`, `project merge`, and `project bulk-plan` are read-only planning
+operations; applying a plan still requires the reviewed change workflow.
+
+## Templates and samples
+
+```text
+sample list
+sample create technical-project <path>
+
+template list
+template describe <name-or-template-path>
+template export <name-or-template-path> <destination.json>
+template instantiate <name-or-template-path> <database> <project-id> <title> <purpose-text>
+```
+
+The built-in templates are `code-development` and `research-notebook`.
+
+## Bounded reads
+
+```text
+read node <database> <node-id>
+read edge <database> <edge-id>
+read nodes|edges <database> [--limit N] [--cursor TOKEN]
+read search|ranked-search <database> <text> [--limit N] [--cursor TOKEN]
+read tag <database> <exact-tag> [--limit N] [--cursor TOKEN]
+read scope <database> <node-id> [--limit N] [--cursor TOKEN]
+read neighbors|dependencies <database> <node-id> [--limit N] [--cursor TOKEN]
+read path <database> <source-node-id> <target-node-id>
+read context <database> <node-id[,node-id...]>
+read health|report <database> [--limit N]
+```
+
+Page cursors are bound to the project fingerprint and query. A cursor from a
+different query or snapshot is rejected.
+
+## Artifact checks
+
+Artifact anchors are ordinary graph nodes with kind `external-anchor` or tag
+`artifact`. Checks are deny-by-default and read only from explicitly allowed
+roots:
+
+```text
+artifact check <database> --allow-root <directory> [--allow-root <directory> ...]
+```
+
+The check reports matched, drifted, missing, invalid, unauthorized, and
+unreadable anchors. It never changes the external file or the graph.
+
+## Persistent NDJSON interface
+
+Run one process for a complete change session:
 
 ```powershell
-dotnet publish src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj `
-    -c Release -o artifacts/validated-world
-./artifacts/validated-world/ValidatedWorld.Cli.exe --help
+py -3.12 -m validated_world ndjson
 ```
 
-The executable name differs on platforms that do not use `.exe`. Quote paths
-and text containing spaces. Existing database and backup destinations are never
-overwritten. The remaining examples assume the published executable is in the
-current directory.
+Each input line is a JSON request and each output line is its JSON result:
 
-Project commands use the supplied database path and report its normalized form.
-`project backup` writes a verified portable copy to the destination;
-`project export-sql` writes deterministic text to stdout.
+```json
+{"version":1,"command":"project.verify","payload":{"path":"C:\\work\\project.vw.db"}}
+```
 
-One-shot and NDJSON structured results go to stdout; the shell writes readable
-status text there. Errors and unresolved-session warnings go to stderr. The
-process exit codes are:
+Use `host.help` to discover the command catalog and `host.exit` to close the
+process cleanly. Project, read, template, and AI-status commands mirror the
+one-shot surface. Change commands are stateful:
+
+1. `change.begin` opens a verified snapshot and returns an exact reference.
+2. `change.apply` replaces the operation batch; `change.patch` updates it.
+3. Inspect `change.show`, `change.affected`, and `change.validate` as needed.
+   `change.focus` can add explicit scope-parent selections without mutating the
+   session. `change.expand` reruns affected analysis with new caller budgets;
+   `change.omission-details` pages a fingerprint-bound omission group.
+4. `change.review` records dispositions and presented scope context.
+5. Call `change.preview`, following every `nextCursor`
+   for that exact revision and page size.
+6. `change.write` performs one guarded atomic write.
+7. Use `change.discard` to abandon the in-memory proposal.
+
+Keep the returned reference from each response and pass it to the next mutating
+request. Any proposal or review change makes an earlier reference stale.
+Incomplete review, incomplete preview evidence, a stale database fingerprint,
+failed graph rules, or an independent-review block leaves the database
+unchanged. EOF or process loss discards unfinished sessions.
+
+## Optional independent review
+
+Independent OpenAI review is configured only through environment variables.
+`OPENAI_API_KEY` is the shared key; `VW_AIREVIEW__OPENAI__APIKEY` overrides it
+for review. Other supported settings include:
+
+```text
+VW_AIREVIEW__ENABLED
+VW_AIREVIEW__PROVIDER
+VW_AIREVIEW__MODEL
+VW_AIREVIEW__TIMEOUTSECONDS
+VW_AIREVIEW__MAXREQUESTBYTES
+VW_AIREVIEW__MAXREQUESTITEMS
+VW_AIREVIEW__MAXREQUESTTOKENS
+```
+
+Send `ai.status` through NDJSON to inspect nonsecret effective configuration.
+When review is enabled and configured, only an `allow` decision bound to the
+exact proposal permits the write. Provider failures and malformed responses do
+not fall back to an unreviewed write. No provider call is made when review is
+disabled or no key is configured.
+
+The separate optional authoring assistant uses the `VW_AIAUTHORING__*`
+settings and a distinct Responses API conversation:
+
+```text
+ai status
+ai assistant <database>
+```
+
+It exposes only bounded graph tools, requires search before additions, uses the
+ordinary exact-preview/write gates, and never receives an AI-review bypass.
+Each provider call is separately billable. An unfinished in-memory proposal is
+discarded when the assistant exits.
+
+## Exit codes
 
 | Code | Meaning |
 |---:|---|
 | 0 | Success |
-| 1 | Invalid command, JSON, or argument |
-| 2 | Project, query, change, or validation error |
-| 3 | Unexpected internal error |
-| 4 | Broken input or output pipe |
-| 130 | Cancellation |
-
-## Discover the public surface
-
-```powershell
-./ValidatedWorld.Cli.exe --help
-./ValidatedWorld.Cli.exe project --help
-./ValidatedWorld.Cli.exe read --help
-./ValidatedWorld.Cli.exe sample --help
-./ValidatedWorld.Cli.exe shell --help
-./ValidatedWorld.Cli.exe ndjson --help
-```
-
-Inside an NDJSON process, send `host.help` to obtain the complete command and
-payload catalog for that executable version:
-
-```json
-{"version":1,"command":"host.help","payload":{}}
-```
-
-## Project and sample commands
-
-Create a minimal project containing only its purpose node:
-
-```powershell
-./ValidatedWorld.Cli.exe project init world.vw.db world-id `
-    "World title" purpose "The governing purpose of this world"
-```
-
-Inspect and protect a project:
-
-```powershell
-./ValidatedWorld.Cli.exe project status world.vw.db
-./ValidatedWorld.Cli.exe project open world.vw.db
-./ValidatedWorld.Cli.exe project verify world.vw.db
-./ValidatedWorld.Cli.exe project backup world.vw.db world-backup.vw.db
-./ValidatedWorld.Cli.exe project export-sql world.vw.db > world.sql
-./ValidatedWorld.Cli.exe project diff world-before.vw.db world.vw.db --limit 100
-```
-
-List or create a built-in disposable sample:
-
-```powershell
-./ValidatedWorld.Cli.exe sample list
-./ValidatedWorld.Cli.exe sample create technical-project sample.vw.db
-```
-
-`project open` returns the complete graph and can be large. Prefer bounded read
-commands when only part of a project is needed.
-
-## Templates and deterministic rules
-
-Discover and instantiate the bundled templates:
-
-```powershell
-./ValidatedWorld.Cli.exe template list
-./ValidatedWorld.Cli.exe template describe code-development
-./ValidatedWorld.Cli.exe template instantiate code-development project.vw.db `
-    project-id "Project title" "Project purpose"
-```
-
-`code-development` creates separate architecture, public-contract, evidence,
-uncertainty, and roadmap scopes plus attached roadmap rules. It starts in
-`status:planning`, ready for a roadmap based on the project's documentation,
-source, tests, and requirements.
-
-`research-notebook` provides evidence, claims, and uncertainty scopes for research.
-
-Export a template to create a user-owned JSON variant, then pass that path
-anywhere a template name is accepted:
-
-```powershell
-./ValidatedWorld.Cli.exe template export code-development my-template.json
-./ValidatedWorld.Cli.exe template instantiate my-template.json custom.vw.db `
-    custom "Custom" "Custom purpose"
-```
-
-Template JSON is strict and versioned,
-and instantiated only at a new destination. Template changes never edit an
-existing project automatically; change its graph through the ordinary reviewed
-workflow.
-
-An active deterministic rule is an ordinary node with kind `validation-rule`,
-tag `rule:active`, integer attribute `rule:version` equal to `1`, and text
-attribute `rule:expression`. Its node text is the actionable failure message. A
-named view has kind `validation-view` and attributes `view:version`, `view:name`,
-and `view:expression`.
-
-Expressions are strict JSON objects with one operator. Set expressions support:
-
-- `nodes` and `edges` selectors with exact `id`, `kind`, `relationship`,
-  `tagsAll`, `tagPrefix`, and typed scalar `attributes` filters;
-- edge `sourceIn` and `targetIn` set filters;
-- `view`, `union`, `intersect`, and `except`; and
-- `reachable` traversal over an explicit edge set, direction, and optional
-  starting-node inclusion.
-
-Boolean expressions support `and`, `or`, `not`, `exists`, `count`, `subset`,
-`equalSets`, `all`, `acyclic`, `singleChain`, and `tagSuffixMatch`. Comparisons
-are `eq`, `ne`, `lt`, `lte`, `gt`, and `gte`. `all` conditions support `hasTag`
-and `tagCount`.
-
-Unknown fields or operators, unsupported rule-language versions, duplicate or
-cyclic views, malformed JSON, cancellation, and exhausted bounds are
-inconclusive and never pass. Evaluation is local over the complete candidate
-graph. Diagnostics identify the rule, report the total offender count, return a
-bounded stable-ID sample, and state how many IDs were omitted.
-
-All active rules compose by conjunction. Rule and view edits are normal
-reviewed graph changes: they affect fingerprints, semantic diffs, review state,
-and optional semantic-review bindings. Rules run during project verification,
-proposal validation, MCP preview, before semantic-provider dispatch, and again
-before SQLite mutation. A structurally valid rule-invalid baseline can be opened
-for repair, but only a candidate satisfying every active rule can be written.
-
-## Semantic database diff
-
-`project diff` compares two verified files belonging to the same project. It is
-read-only and makes no AI call:
-
-```powershell
-./ValidatedWorld.Cli.exe project diff base.vw.db target.vw.db `
-    --limit 100
-./ValidatedWorld.Cli.exe project diff base.vw.db target.vw.db `
-    --limit 100 --cursor <nextCursor>
-```
-
-The JSON result contains:
-
-- `basePath`, `targetPath`, `projectId`, and both state fingerprints;
-- `metadataChanges` for title or purpose-node changes;
-- a `summary` of metadata and node/edge adds, replacements, and removals;
-- bounded `items`, `totalCount`, `nextCursor`, and `omission` fields.
-
-An added item contains its complete `newNode` or `newEdge`; a removed item
-contains its complete `oldNode` or `oldEdge`. A replacement contains both and a
-`changedFields` list. Nodes precede edges, with ordinal stable-ID ordering inside
-each category. Summary and metadata remain on every page.
-
-The cursor belongs to the exact project ID, base/target fingerprints, input
-order, and page limit. Reversing the comparison, changing either database, or
-changing `--limit` requires starting again without the old cursor. Identical
-files succeed with no items. Different project IDs, invalid databases, and bad
-cursors fail explicitly.
-
-The NDJSON equivalent is:
-
-```json
-{"version":1,"command":"project.diff","payload":{"basePath":"base.vw.db","targetPath":"target.vw.db","limit":100}}
-```
-
-## Graph-aware three-way merge
-
-`project merge` compares a common base with `ours` and `theirs` without
-modifying any database:
-
-```powershell
-./ValidatedWorld.Cli.exe project merge base.vw.db ours.vw.db theirs.vw.db
-```
-
-Each stable node and edge ID is merged with standard three-way rules. A value
-changed on only one side is selected; identical additions are compatible;
-divergent additions, divergent replacements, delete/modify pairs, and
-node/edge ID collisions are explicit conflicts. Project title and purpose-ID
-changes are also reported as conflicts because the current reviewed change
-session contract mutates graph entities, not project metadata.
-
-A clean result contains a `mergedFingerprint` and an `operations` batch
-relative to `ours`; it does not repeat the complete graph. The batch is a plan,
-not a write. Inspect it, begin a normal change session on `ours`, and require
-the session's base fingerprint to equal the returned `oursFingerprint` before
-applying the operations. Then review the affected/context set and write using
-the ordinary atomic workflow. A result with `status` of `conflicted` or
-`invalid` must not be applied. Validation is absent while conflicts prevent a
-candidate graph and contains diagnostics when a conflict-free combination is
-invalid.
-
-The NDJSON equivalent is:
-
-```json
-{"version":1,"command":"project.merge","payload":{"basePath":"base.vw.db","oursPath":"ours.vw.db","theirsPath":"theirs.vw.db"}}
-```
-
-To compare Git revisions, save them as verified `.vw.db` snapshots and pass
-those files to the command. Git integration is managed by the caller.
-
-Use a `project backup` made before editing as the base, then diff it against the
-result. A Git revision materialized as a `.vw.db` file is equally valid. Diff
-output is not stored in either database.
-
-### Large imports and bulk authoring
-
-Large graph additions and refactors can be staged from a local JSONL manifest
-without placing the complete operation list in an agent request. The planner is
-read-only and returns one bounded chunk at a time:
-
-```powershell
-./ValidatedWorld.Cli.exe project bulk-plan project.vw.db import.jsonl `
-    --chunk-size 100
-./ValidatedWorld.Cli.exe project bulk-plan project.vw.db import.jsonl `
-    --chunk-size 100 --cursor <nextCursor>
-```
-
-The first manifest line is a strict header. Every later line is one complete
-operation in the normal operation shape:
-
-```text
-{"version":1,"format":"validated-world-bulk-manifest","projectId":"demo","baseFingerprint":"<project state fingerprint>","intent":"Import the reviewed corpus."}
-{"kind":"add","entityKind":"node","entityId":"scope-a","node":{"id":"scope-a","text":"Area A","kind":"scope","tags":[],"attributes":[]},"edge":null}
-{"kind":"add","entityKind":"edge","entityId":"scope-a-parent","node":null,"edge":{"id":"scope-a-parent","source":"scope-a","target":"purpose","relationship":"scope-parent","reviewDirection":"none","rationale":null,"tags":[],"attributes":[]}}
-```
-
-The header must match the selected project and its current state fingerprint;
-the manifest has file and line byte safeguards for untrusted input. Chunk size
-is a caller-selected positive integer, without a separate operation-count ceiling.
-Each chunk boundary must also be a valid graph checkpoint, so scope edges and
-other operations needed to keep a partial graph valid belong in the same
-chunk. The returned cursor is bound to the normalized manifest contents,
-project identity, base fingerprint, and chunk size. If any of those change,
-start a new plan.
-
-Apply the returned `operations` from each page to one normal `change.begin` /
-`change.patch` session, keeping the exact reference returned after every
-mutation. Review the final affected/context set and call `change.write` once.
-The planner never writes, persists drafts, bypasses review, or commits partial
-chunks. NDJSON exposes the same operation as `project.bulk_plan`; the MCP
-surface exposes it as `plan_bulk_import` for a selected project.
-
-### Repository review procedure
-
-For a repository-backed project, treat a graph change and its matching source,
-document, or content edits as one review unit. Back up the last accepted graph
-outside the repository, make the reviewed graph change, and place its semantic
-diff beside the ordinary source diff:
-
-```powershell
-./ValidatedWorld.Cli.exe project backup world.vw.db `
-    world-before.vw.db
-./ValidatedWorld.Cli.exe project diff world-before.vw.db `
-    world.vw.db --limit 100
-```
-
-Continue `project diff` until `nextCursor` is null. The diff identifies exact
-database changes; bounded `read search`, `read tag`, `read dependencies`,
-`affected`, and `context` queries supply the surrounding meaning needed to
-compare them with external artifacts. Review and merge both sides together,
-then remove the disposable backup.
-
-## Bounded reads
-
-```powershell
-./ValidatedWorld.Cli.exe read node world.vw.db tamriel
-./ValidatedWorld.Cli.exe read edge world.vw.db tamriel-scope-parent
-./ValidatedWorld.Cli.exe read nodes world.vw.db --limit 100
-./ValidatedWorld.Cli.exe read edges world.vw.db --limit 100
-./ValidatedWorld.Cli.exe read search world.vw.db continent --limit 25
-./ValidatedWorld.Cli.exe read ranked-search world.vw.db "golden claw" --limit 25
-./ValidatedWorld.Cli.exe read tag world.vw.db quest:golden-claw --limit 25
-./ValidatedWorld.Cli.exe read scope world.vw.db tamriel --limit 100 `
-    --max-depth 1000 --max-nodes 10000
-./ValidatedWorld.Cli.exe read neighbors world.vw.db tamriel --limit 100
-./ValidatedWorld.Cli.exe read dependencies world.vw.db tamriel --limit 100
-./ValidatedWorld.Cli.exe read path world.vw.db tamriel skyrim `
-    --max-depth 1000 --max-nodes 10000
-./ValidatedWorld.Cli.exe read context world.vw.db skyrim,high-hrothgar `
-    --max-depth 1000 --max-nodes 10000
-./ValidatedWorld.Cli.exe read health world.vw.db --limit 25
-```
-
-### External artifact checks
-
-Artifact checking is an optional, read-only companion to paired graph-and-file
-review. Mark a node with the `artifact` tag or `external-anchor` kind and add
-these text attributes:
-
-```text
-artifact.path = docs/design.md
-artifact.sha256 = <64 lowercase hexadecimal SHA-256>
-```
-
-Relative paths resolve from the `.vw.db` directory. The built-in `filesystem`
-adapter is contract version `1`; it is deny-by-default and reads only beneath
-one or more explicit caller-owned `--allow-root` directories. It checks both
-the lexical path and the opened file handle, then hashes bytes and returns a
-bounded base64 sample for review. An anchor may select another registered adapter with
-`artifact.adapter` and `artifact.adapter-version`, but adapters are supplied by
-the host and are never loaded or executed from graph text. Missing files,
-invalid metadata, unsupported adapters, and byte drift are reported as results;
-the database is never changed.
-
-```powershell
-./ValidatedWorld.Cli.exe artifact check world.vw.db --allow-root .
-./ValidatedWorld.Cli.exe artifact check world.vw.db design-document `
-    --allow-root C:\data\project --max-sample-bytes 1024
-```
-
-The NDJSON equivalent is:
-
-```json
-{"version":1,"command":"artifact.check","payload":{"path":"world.vw.db","allowedRoots":["C:\\data\\project"],"maxAnchors":100,"maxSampleBytes":4096}}
-```
-
-The selected-project MCP tool is named `check_artifacts`; its roots are supplied
-only by MCP server startup `--artifact-root` arguments, not by graph-facing tool
-arguments. A path outside the authorized roots, including a link or reparse
-target that escapes after opening, is reported as `Unauthorized` without a hash
-or content sample. Explicitly authorized UNC roots are supported; selecting a
-project alone grants no artifact access. Artifact checking detects byte-level
-drift; it does not rewrite, publish, or certify an external artifact.
-
-Paged results contain `nextCursor` and an explicit omission while more results
-exist. Pass that exact token back with `--cursor`. Traversal bounds return
-explicit omissions rather than silently reporting a complete result.
-
-`neighbors` describes stored edge endpoints. `dependencies` describes expanded
-review arcs. `path` follows review arcs, not the scope tree. `scope` returns the
-selected node, its upstream scope, and paged descendants. `context` returns the
-combined scope-upstream context for the requested node IDs without sibling
-fan-out.
-
-`health` (also available as `report`) returns a bounded deterministic graph
-observability report. It includes scope coverage, nodes whose scope lineage
-does not reach the purpose, review-arc fan-out sources, suspiciously isolated
-non-structural nodes, semantic edges without rationale, tag frequencies, and
-untagged node/edge counts. Each report section has its own `totalCount` and
-`omittedCount`; these are author diagnostics and heuristics, not proof or
-automatic dependency creation. The NDJSON commands are `read.health` and
-`read.report` with payload `{path,limit?,expectedProjectId?}`.
-
-`search` is case-insensitive substring discovery across node IDs/text/kinds/tags
-and edge IDs/labels/rationales/tags. `tag` is an exact case-sensitive lookup
-across node and edge tags. Both return the same bounded search-hit shape,
-including the complete matching node or edge.
-
-`ranked-search` is an additive lexical discovery query. It tokenizes the input,
-recognizes quoted phrases (and an unquoted multi-token phrase), and ranks exact
-stable-ID matches above exact case-sensitive tag matches, phrases, text tokens,
-and metadata tokens. Common English function words are ignored as standalone
-tokens so natural-language questions do not rank generic matches above their
-domain terms; exact IDs, exact tags, and quoted phrases remain unchanged.
-Metadata includes kinds, relationships, rationales, tags,
-and attribute names and values. Results are deterministically ordered by score,
-stable ID, and entity kind; every result includes `score` and `matches` with the
-field, term, match kind, and score contribution that explain the ranking. Its
-cursor is bound to the exact ranked query and project fingerprint. The NDJSON
-equivalent is `read.ranked_search` with the same payload as `read.search`.
-
-## Stateful shell
-
-Open one project and keep the process running:
-
-```powershell
-./ValidatedWorld.Cli.exe shell world.vw.db
-```
-
-The shell uses ordinary flag-based commands, not JSON. It automatically selects
-the purpose root when it opens, so `pwd` and `dir` are immediately useful. Type
-`help`, `help navigation`, `help node`, `help edge`, or `help review` inside it.
-It remembers the current project, selected node and edge, active change, latest
-fingerprints, accumulated operations, affected analysis, and review state. A
-command failure is printed to stderr and the shell remains usable.
-
-Navigate without starting a change:
-
-```text
-status
-pwd
-dir --limit 20
-cd geography
-dir --depth 2 --upstream 2 --limit 40
-cd ..
-cd /
-root
-search --text "sixth continent" --limit 20
-cd continent-count
-node show
-edge select --id roster-informs-atlas
-edge show
-```
-
-The selected node acts like the shell's working directory. `cd ID` (or
-`cd --id ID`) selects any stable node ID, `cd ..` selects its immediate scope
-parent, and `cd /` or `root` returns to the purpose root. `pwd` prints the full
-scope path as stable IDs, for example `/purpose/geography/continent-count`.
-Paths are descriptive; because node IDs are globally unique, `cd` takes one ID
-rather than requiring a repeated absolute path.
-
-`dir` and its `ls` alias print the selected node (`[.]`), then nearby
-connections. Scope parents are labeled `[..1]`, `[..2]`, and so on; scope
-children and deeper descendants are labeled `[scope +1]`, `[scope +2]`, and so
-on. Direct non-scope edges are shown in both stored endpoint directions as
-`[out]` or `[in]`, with the stable edge ID, relationship, and review direction.
-Thus a `both` review edge remains visibly different from merely displaying both
-incoming and outgoing neighbors. `--depth N` bounds scope descendants,
-`--upstream N` bounds ancestors, `--limit N` bounds all entries other than
-`[.]`, and `--scope-only` omits semantic neighbors. Defaults are depth 1,
-upstream 1, and limit 20; depth or upstream may be zero. An omission count says
-when the limit hid additional connections.
-
-Navigation always reads the current proposed graph. An uncommitted `node move`
-therefore appears under its new parent immediately. `node list` and
-`node select --id ID` remain available as flat discovery and explicit-selection
-forms.
-
-Begin one in-memory transaction, then make small incremental edits:
-
-```text
-begin --author "Morgan" --intent "Add Atmora and reconcile the continent roster"
-cd continent-count
-node set --text "The world has six recognized continents."
-node add --id atmora --text "Atmora is the sixth recognized continent." --kind continent --parent geography
-edge add --id atmora-member-of-roster --source atmora --target continent-roster --relationship member-of --direction source-to-target
-```
-
-Each mutating shell command patches the current proposal. It does not replace or
-require resending the accumulated batch. Repeated edits to one entity collapse
-to its final operation; returning an entity exactly to its base value removes
-that pending operation. `node move --parent ID` replaces the selected node's
-existing `scope-parent` target. `node remove` also includes all current incident
-edges, reports how many it included, and selects the removed node's former scope
-parent so navigation remains usable.
-
-Single-value commands cover ordinary fields and metadata:
-
-```text
-node set --text "Replacement text"
-node set --kind claim
-node set --clear-kind
-node tag-add --tag roster:continent
-node tag-remove --tag roster:continent
-node attribute-set --name count --type integer --value 6
-node attribute-remove --name count
-
-edge set --relationship informs
-edge set --direction source-to-target
-edge set --rationale "The atlas repeats the roster."
-edge set --clear-rationale
-edge tag-add --tag artifact:atlas
-edge attribute-set --name confidence --type decimal --value 0.9
-```
-
-Attribute types are `text`, `integer`, `decimal`, `boolean`, `symbol`, and
-`instant`; instants use the round-trip UTC `O` format. Supply `--id ID` to edit
-an entity without selecting it first.
-
-Inspect and review the growing transaction in small steps:
-
-```text
-changes
-affected
-review --id continent-count --as updated
-review --id atlas-summary --as reviewed-no-change
-review --id obsolete-note --as not-applicable --rationale "No longer describes this roster"
-context mark --id purpose
-context mark --id geography
-validate
-```
-
-Finish with a one-line commit or discard:
-
-```text
-commit
-commit --bypass-ai-review
-discard
-exit
-```
-
-The bypass applies only to that `commit`. It does not change configuration and
-does not bypass structural validation, affected-node review, context coverage,
-fingerprints, stale detection, or SQLite atomicity. A block from the semantic
-reviewer is formatted as readable text with its cited concerns.
-
-## Graph rules needed by CLI authors
-
-- Node and edge IDs share one case-sensitive stable-ID namespace.
-- Exactly one node is the purpose. It has no scope parent.
-- Every other node has exactly one outgoing `scope-parent` edge to its parent.
-- `scope-parent` edges always use review direction `none`.
-- Ordinary edge labels do not imply propagation. Set `reviewDirection`
-  explicitly to `none`, `sourceToTarget`, `targetToSource`, or `both`.
-- Changing an ordinary node seeds recursive review-arc traversal. Changing a
-  scope node also selects its current and proposed scope descendants. Scope
-  ancestors are context only unless independently affected or directly edited.
-- Adding or replacing an edge uses the union of its current and proposed review
-  arcs, so removing or redirecting a relationship cannot hide old consequences.
-- A changed `scope-parent` is special despite its `none` review direction. Its
-  old and new child subtrees and immediate parents require review, and both
-  ancestry lineages are context. The parents do not fan out through siblings.
-
-Nodes and edges may use any `kind`, tags, and scalar attributes. The common
-engine does not give those values hidden semantics. A meaningful connection must
-be represented as an edge if it is expected to affect review selection.
-
-### Tags and external views
-
-Tags are useful when a system outside ValidatedWorld needs a stable secondary
-index. Prefer short namespaced labels so ownership and intent remain obvious:
-
-```text
-quest:golden-claw
-runtime:content
-enable:lucan-dead
-region:whiterun
-```
-
-An external game build tool could use exact tag lookup to collect every node
-marked `enable:lucan-dead`, then compile that already-authored content into its
-own runtime representation. ValidatedWorld does not toggle nodes, execute the
-condition, or participate during gameplay. This keeps shipped runtime state
-separate from design-time review while avoiding condition syntax hidden inside
-ordinary prose.
-
-Keep these boundaries when designing tag conventions:
-
-- A tag answers “which labeled set contains this entity?” It is unordered and
-  carries no value beyond exact membership.
-- Use a scalar attribute for named data such as `chapter = 3` or
-  `runtime-key = lucan-status` when equality to a value is the important fact.
-- Use an explicit directed edge when changing one entity can make another
-  stale. Shared tags do not form a dependency clique and are not traversed by
-  affected analysis.
-- Exact tag lookup may narrow a working view or find candidate entities. It
-  must not filter an affected preview, required scope context, or review
-  obligations after a change has been proposed.
-- Tags on affected nodes and edges are present in the structured result, so an
-  integration may group or annotate the review without losing graph evidence.
-- Changing tags means replacing the node or edge through the normal reviewed
-  transaction. Treat tag names and casing as a small external API once another
-  system consumes them.
-
-Tags alone do not validate gameplay states. Define and validate those rules
-explicitly in the consuming project.
-
-## Modeling graphs that age well
-
-Treat the scope tree as stable containment and review context, not as automatic
-semantic inference. In particular, adding a child does not make every sibling a
-dependency and the engine does not derive counts from children.
-
-Useful defaults for a human or authoring agent are:
-
-- Keep scope-container text broad and stable. Put frequently changing names,
-  counts, lists, dates, and conclusions in separate claim nodes below or beside
-  the scope.
-- Prefer one important claim per node. Stable IDs should describe identity, not
-  repeat mutable display names.
-- Direct edges from the source of truth toward the nodes that may become stale.
-  `sourceToTarget` is the common choice. Use `both` only when either endpoint
-  genuinely requires the other to be reconsidered.
-- Represent a closed set through a roster or aggregate claim. Point each member
-  toward that claim, then point the claim toward summaries, dialogue, tests, or
-  artifact anchors that repeat it. Members do not need to be mutually linked.
-- Link canonical name or terminology claims to the chunks that repeat them.
-  Prefer useful document, quest, scene, or dialogue anchors over an edge for
-  every word occurrence.
-- Search for exact counts, lists, names, and words such as “all”, “only”,
-  “every”, and “none” before changing a modeled concept. Search results are
-  candidate relationships, not automatically trusted dependencies.
-- Preview the affected set before review. An unexpectedly tiny set can indicate
-  a missing relationship; an unexpectedly huge set can indicate a volatile fact
-  stored in a scope node or an edge directed too broadly.
-
-For example, model a world and its continent roster as:
-
-```text
-purpose
-└─ world scope
-   ├─ geography scope
-   │  ├─ continent A scope ──member-of-roster──▶ roster claim
-   │  ├─ continent B scope ──member-of-roster──▶ roster claim
-   │  └─ continent C scope ──member-of-roster──▶ roster claim
-   └─ roster claim ──informs──▶ atlas/dialogue/artifact anchors
-```
-
-Adding a member with its roster edge selects the new member, the roster, and
-the roster's consumers without selecting every existing member. A local fact
-under one continent remains local unless explicit semantic edges say otherwise.
-Changing the whole continent scope intentionally selects its descendants.
-
-## NDJSON framing and sessions
-
-Start one host and keep its stdin and stdout open:
-
-```powershell
-./ValidatedWorld.Cli.exe ndjson
-```
-
-Every input line is one strict JSON request:
-
-```json
-{"version":1,"command":"project.status","payload":{"path":"world.vw.db"}}
-```
-
-Every output line has `version`, `command`, `status`, and `payload`. An error is
-returned as an error payload; the host then continues reading later lines.
-Unknown fields and protocol versions are rejected.
-
-One process may hold one active session per project. EOF, cancellation, or
-`host.exit` ends the process. Any unresolved session is lost and produces a
-stderr warning. No operation or review state is written to SQLite until
-`change.write` succeeds.
-
-Mutating commands require the complete latest `reference` to prevent clients
-from acting on stale state. The reference is a small bundle
-of opaque fingerprints, not graph content, and every successful mutation
-returns the next reference.
-
-`change.patch` is the normal incremental path for an interactive client or
-authoring agent. Its `operations` contains only the entities being changed in
-that request; the host merges them into the session's normalized pending batch.
-`change.apply` remains available when a client deliberately wants to replace the
-complete pending batch. Both commands recalculate projection, validation,
-affected analysis, review invalidation, counts, and fingerprints.
-
-Change-session responses include operations and the proposed graph by default.
-Set `includeOperations:false` and
-`includeProposedGraph:false` on `change.begin`, `change.show`, `change.apply`,
-`change.patch`, `change.expand`, `change.review`, or `change.validate` when the
-client does not need those large fields. The response still includes the exact
-reference, operation/node/edge counts, affected evidence, review state, and
-readiness. For a final proposal preview, use `change.show` with
-`includeOperations:true` and `includeProposedGraph:false` to retrieve the
-normalized operation batch without retrieving the whole graph.
-
-## NDJSON project initialization
-
-`project.init` creates project metadata and one purpose node. Add later nodes
-and edges through
-`change.begin`, `change.patch` or `change.apply`, `change.review`, and
-`change.write`.
-
-The request below is formatted for reading; serialize it as one physical line
-before sending it to the NDJSON host:
-
-```json
-{
-  "version": 1,
-  "command": "project.init",
-  "payload": {
-    "path": "world.vw.db",
-    "projectId": "world-id",
-    "title": "World title",
-    "purposeNodeId": "purpose",
-    "purposeText": "A coherent game world"
-  }
-}
-```
-
-## Manual change workflow
-
-The normal sequence is:
-
-```text
-change.begin
-→ change.focus (optional helper for new-node scope parents)
-→ change.patch (repeat with one or a few entity operations)
-→ inspect change.affected / change.validate
-→ change.review
-→ change.write or change.discard
-→ host.exit
-```
-
-Begin a session:
-
-```json
-{
-  "version": 1,
-  "command": "change.begin",
-  "payload": {
-    "path": "world.vw.db",
-    "projectId": "world-id",
-    "author": "operator",
-    "intent": "Add a sixth continent",
-    "includeOperations": false,
-    "includeProposedGraph": false
-  }
-}
-```
-
-The response contains `payload.reference`. Copy that entire object into the next
-mutating command. Do not reconstruct it or keep using an earlier reference.
-Every proposal or review change returns a new exact reference and makes the old
-one stale.
-
-An operation batch has one final operation per entity ID. Add and replace carry
-the complete node or edge; remove carries only its entity kind and ID:
-
-```json
-{
-  "operations": [
-    {
-      "kind": "add",
-      "entityKind": "node",
-      "entityId": "continent-6",
-      "node": {
-        "id": "continent-6",
-        "text": "Atmora is recognized as the sixth continent",
-        "kind": "continent",
-        "tags": [],
-        "attributes": []
-      },
-      "edge": null
-    }
-  ]
-}
-```
-
-For new nodes, `change.focus` can add only the explicit scope-parent edges you
-request:
-
-```json
-{
-  "version": 1,
-  "command": "change.focus",
-  "payload": {
-    "reference": {
-      "projectId": "...",
-      "sessionId": "...",
-      "baseFingerprint": "...",
-      "operationFingerprint": "...",
-      "proposedFingerprint": "...",
-      "affectedFingerprint": "...",
-      "reviewFingerprint": "..."
-    },
-    "operations": {
-      "operations": [
-        {
-          "kind": "add",
-          "entityKind": "node",
-          "entityId": "continent-6",
-          "node": {
-            "id": "continent-6",
-            "text": "Atmora is recognized as the sixth continent",
-            "kind": "continent",
-            "tags": [],
-            "attributes": []
-          },
-          "edge": null
-        }
-      ]
-    },
-    "scopeParents": [
-      {
-        "childId": "continent-6",
-        "parentId": "tamriel",
-        "edgeId": "continent-6-scope-parent"
-      }
-    ]
-  }
-}
-```
-
-Use the returned `expandedOperations` in `change.patch`. A patch carries only
-the new operations; do not resend operations already accumulated in the
-session. Replacing a pending addition keeps it as one final `add`, removing a
-pending addition cancels it, and replacing a base entity with its exact base
-value removes that pending operation. Use only the latest returned reference;
-an older reference is rejected as stale.
-
-Inspect the resulting
-`affected.affectedNodes`, explanation paths, `edgeChanges`, `scopeContext`, both
-validation results, and any omissions. Directly changed nodes normally receive
-`updated`; every other affected node begins `pending`. Context-only nodes need
-presentation coverage but no disposition.
-
-Omissions are returned as compact groups rather than one response item per
-omitted traversal candidate. Each group contains a reason, total count, a
-small sample, and a fingerprint. Request the exact omitted candidates with the
-latest change reference:
-
-```json
-{
-  "version": 1,
-  "command": "change.omission-details",
-  "payload": {
-    "reference": { "projectId": "...", "sessionId": "...", "baseFingerprint": "...",
-      "operationFingerprint": "...", "proposedFingerprint": "...",
-      "affectedFingerprint": "...", "reviewFingerprint": "..." },
-    "fingerprint": "<detailsFingerprint>",
-    "limit": 100
-  }
-}
-```
-
-The returned `nextCursor` is bound to the supplied detail fingerprint and is
-opaque. A changed proposal or a cursor from another group is rejected.
-
-A review request supplies all current affected-node dispositions and every
-presented context-node ID:
-
-```json
-{
-  "version": 1,
-  "command": "change.review",
-  "payload": {
-    "reference": {
-      "projectId": "...",
-      "sessionId": "...",
-      "baseFingerprint": "...",
-      "operationFingerprint": "...",
-      "proposedFingerprint": "...",
-      "affectedFingerprint": "...",
-      "reviewFingerprint": "..."
-    },
-    "dispositions": [
-      { "nodeId": "continent-6", "kind": "updated" },
-      { "nodeId": "continent-count", "kind": "updated" },
-      { "nodeId": "travel-guide", "kind": "reviewedNoChange" }
-    ],
-    "presentedContextNodeIds": ["purpose", "tamriel"]
-  }
-}
-```
-
-Disposition kinds are `updated`, `reviewedNoChange`, `notApplicable`, and
-`pending`. `notApplicable` requires a rationale. `change.validate` reports
-whether the exact current proposal is ready. `change.write` rechecks everything
-inside one SQLite transaction and either commits the complete graph or leaves
-the previous state unchanged.
-
-Finish explicitly:
-
-```json
-{"version":1,"command":"host.exit","payload":{}}
-```
-
-Use `change.show` or `change.affected` with
-`{"session":{"projectId":"...","sessionId":"..."}}` for non-mutating session
-inspection. Use the latest complete reference for `change.expand`,
-`change.validate`, `change.write`, or `change.discard`.
-
-## Conversational AI authoring
-
-The conversational authoring entry point is:
-
-```powershell
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- ai-assistant-shell project.vw.db
-```
-
-Describe the project or desired change in English. The authoring agent checks
-status, performs bounded searches and reads, and builds one incremental
-in-memory proposal with strict node/edge tools. It cannot execute SQL, write the
-database directly, record review dispositions, or bypass independent semantic
-review. Type `discard` to abandon its current proposal or `exit` to leave.
-
-When the agent believes the proposal is ready, it inspects the complete preview
-and calls `write_change`. The application records direct edits as updated,
-semantic consequences as reviewed-no-change, and the complete required scope
-context before attempting the atomic write. The normal write still invokes the
-configured independent semantic reviewer.
-
-If AI authoring is disabled or has no configured key, this command opens an
-existing database in the manual shell. Use `ai-assistant-shell --help` for the
-short command reference and the [OpenAI configuration guide](technical_guide.md#optional-openai-configuration)
-for configuration defaults.
-
-## Optional semantic AI write gate
-
-See [OpenAI configuration](technical_guide.md#optional-openai-configuration) for
-setup. `ai.status` inspects the effective policy without making a provider call:
-
-```json
-{"version":1,"command":"ai.status","payload":{}}
-```
-
-There is no separate paid-review command. After the normal manual review is
-ready, `change.write` automatically invokes semantic review when the key is
-configured and `AiReview:Enabled=true`:
-
-```json
-{
-  "version": 1,
-  "command": "change.write",
-  "payload": {
-    "reference": {
-      "projectId": "...",
-      "sessionId": "...",
-      "baseFingerprint": "...",
-      "operationFingerprint": "...",
-      "proposedFingerprint": "...",
-      "affectedFingerprint": "...",
-      "reviewFingerprint": "..."
-    },
-    "bypassAiReview": false
-  }
-}
-```
-
-The provider receives the exact proposed operation/affected/context slice and
-returns a strict `allow` or `block` decision with cited feedback. Only `allow`
-permits SQLite to open the write transaction. `block`, refusal, timeout,
-malformed output, or provider failure leaves the database unchanged. A current
-decision is cached against all proposal/review fingerprints, so retrying the
-unchanged write does not make another paid call; changing the session invalidates
-it.
-
-Before dispatch, the application measures the serialized request in bytes,
-estimated input tokens, and component-item counts. Optional caller-configured
-ceilings are `AiReview:MaxRequestBytes`, `AiReview:MaxRequestItems`, and
-`AiReview:MaxRequestTokens`. They are unset by default; provider limits still
-apply. A request exceeding an explicitly configured budget is
-reported as inconclusive with component counts and guidance to split or
-remodel the change, or use the explicit manual bypass. The application never
-partitions one write or makes multiple paid review calls.
-
-To use the manual-only path for one write, set `bypassAiReview` to `true`. The
-result records the bypass. It skips only the provider gate: structural
-validation, affected-node dispositions, context coverage, stale-reference
-checks, and atomic-write safeguards still apply. Omitting the field is equivalent
-to `false`.
+| 1 | Invalid command, request, or argument |
+| 2 | Project or storage-domain failure |
+| 3 | Unexpected internal failure |
+
+Structured NDJSON request errors are returned as result lines so a long-lived
+process can continue handling later requests.

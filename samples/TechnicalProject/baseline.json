@@ -105,7 +105,7 @@
       "source": "scope-power",
       "target": "purpose",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -115,7 +115,7 @@
       "source": "scope-privacy",
       "target": "purpose",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -125,7 +125,7 @@
       "source": "scope-documentation",
       "target": "purpose",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -135,7 +135,7 @@
       "source": "scope-accessibility",
       "target": "purpose",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -145,7 +145,7 @@
       "source": "battery-assumption",
       "target": "scope-power",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -155,7 +155,7 @@
       "source": "runtime-test",
       "target": "scope-power",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -165,7 +165,7 @@
       "source": "power-design-anchor",
       "target": "scope-power",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -175,7 +175,7 @@
       "source": "retention-policy",
       "target": "scope-privacy",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -185,7 +185,7 @@
       "source": "privacy-architecture",
       "target": "scope-privacy",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -195,7 +195,7 @@
       "source": "retention-test",
       "target": "scope-privacy",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -205,7 +205,7 @@
       "source": "privacy-documentation",
       "target": "scope-documentation",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -215,7 +215,7 @@
       "source": "accessibility-acceptance",
       "target": "scope-accessibility",
       "relationship": "scope-parent",
-      "reviewDirection": 0,
+      "reviewDirection": "none",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -225,7 +225,7 @@
       "source": "battery-assumption",
       "target": "runtime-test",
       "relationship": "requires",
-      "reviewDirection": 1,
+      "reviewDirection": "sourceToTarget",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -235,7 +235,7 @@
       "source": "battery-assumption",
       "target": "power-design-anchor",
       "relationship": "informs",
-      "reviewDirection": 1,
+      "reviewDirection": "sourceToTarget",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -245,7 +245,7 @@
       "source": "retention-policy",
       "target": "privacy-architecture",
       "relationship": "requires",
-      "reviewDirection": 1,
+      "reviewDirection": "sourceToTarget",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -255,7 +255,7 @@
       "source": "privacy-architecture",
       "target": "retention-test",
       "relationship": "requires",
-      "reviewDirection": 1,
+      "reviewDirection": "sourceToTarget",
       "rationale": null,
       "tags": [],
       "attributes": []
@@ -265,7 +265,7 @@
       "source": "privacy-architecture",
       "target": "privacy-documentation",
       "relationship": "informs",
-      "reviewDirection": 1,
+      "reviewDirection": "sourceToTarget",
       "rationale": null,
       "tags": [],
       "attributes": []

@@ -22,11 +22,16 @@ Use these public commands from the repository root for the database reading
 step, then search additional task terms as needed:
 
 ```powershell
-dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- project verify ValidatedWorld.Blueprint.vw.db
-dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read node ValidatedWorld.Blueprint.vw.db purpose
-dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read tag ValidatedWorld.Blueprint.vw.db project:status --limit 10
-dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- read tag ValidatedWorld.Blueprint.vw.db status:current --limit 10
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
+python -m validated_world project verify ValidatedWorld.Blueprint.vw.db
+python -m validated_world read node ValidatedWorld.Blueprint.vw.db purpose
+python -m validated_world read tag ValidatedWorld.Blueprint.vw.db project:status --limit 10
+python -m validated_world read tag ValidatedWorld.Blueprint.vw.db status:current --limit 10
 ```
+
+Use a Python 3.12+ executable. Check the interpreter version and select an
+already available compliant interpreter if `python` on `PATH` is older; do not
+install or alter a machine runtime without human authorization.
 
 Use the phase tag returned by the current phase to retrieve all of its scheduled
 work. Read additional nodes and dependency/context queries as needed. Human
@@ -36,59 +41,75 @@ of building an undocumented compromise.
 
 ### Repository self-hosting exception
 
-For this repository only, do not use an installed ValidatedWorld plugin or MCP
-server to read or update `ValidatedWorld.Blueprint.vw.db`. Build the current
-checkout and use the public local CLI through `dotnet run --no-restore` for the
-complete blueprint workflow. This ensures every phase exercises the source being
-developed and avoids stale installed-package behavior. The packaged plugin
-remains the primary interface for other projects and may still be tested here in
-disposable release or smoke-test environments.
+For this repository only, do not use an installed ValidatedWorld plugin to read
+or update `ValidatedWorld.Blueprint.vw.db`. Use the Python public CLI from the
+current checkout so every phase exercises the source being developed and avoids
+stale installed-package behavior. The packaged plugin remains the primary
+interface for other projects and may still be tested here in disposable release
+or smoke-test environments.
 This self-hosting exception also applies when general skill or plugin routing
 would otherwise select an installed ValidatedWorld capability: repository work
 must use the checkout application, never the installed tool implementation.
 
+The verified Python guarded-write workflow is the repository self-hosting
+surface for blueprint reads, reviewed updates, and semantic diffs. If that
+checkout surface cannot safely update or diff the database, stop and report the
+blocker rather than falling back to another implementation.
+
 ### Python migration (T32)
 
-T32 authorizes the Python rewrite described by the `phase:t32` blueprint nodes.
-Read all of those nodes before implementation. The .NET commands below remain
-the bootstrap and comparison interface until the Python checkout has verified
-database and guarded-write parity. Then use the Python public CLI for repository
-self-hosting and update these commands in the same delivery change. Never switch
-to an installed plugin to bypass this requirement.
+T32 authorizes the Python implementation described by the `phase:t32` blueprint
+nodes. Read all of those nodes before implementation. Python is the forward
+product authority. Never switch to an installed plugin to bypass checkout
+self-hosting.
 
-- Implement the Python package, standalone skill and skills-only plugin; the
-  current .NET target and provider rules describe the comparison baseline, not
-  a prohibition on the approved Python replacement. Preserve the current SQLite
-  structure and canonical fingerprints. Port the MCP presentation safeguards
-  into the Python agent interface even though an MCP server is no longer a
-  required distribution surface.
+- Implement the Python package, standalone skill, and skills-only plugin.
+  Preserve the tracked SQLite structure, graph meaning, and state fingerprints
+  so every tracked database opens and can continue safely under Python.
+  Byte-for-byte compatibility with newly created files from the disposable
+  reference implementation is not required. Preserve exact-revision paged
+  presentation and guarded-write safeguards in the Python agent interface.
 - Run agent-operated tests on Windows only. Do not install or run WSL, Linux
   containers, or local Linux/macOS tests. Author the approved Windows/Linux/macOS
-  GitHub Actions workflow; humans configure secrets and initiate remote runs.
-  Write `docs/linux_testing.md` for humans only, with reproducible WSL commands.
-- Do not delete legacy .NET source, tests, project/configuration files, scripts
-  or launchers, or remove their implementations in place. Add replacement Python
-  tooling alongside legacy tooling. After parity, write an exact, reviewed
-  `docs/dotnet_cleanup.md` list for the human to delete manually after WSL tests.
-  This restriction does not prevent cleaning up your own disposable test data.
-- T32 stays current until the human confirms WSL unit acceptance and legacy
-  cleanup, and the remaining Python-only checkout passes final Windows checks
-  and blueprint verification. Report an implementation-ready handoff when that
-  human work is pending; do not advance to T29 or call unperformed checks passed.
+  GitHub Actions workflow; humans configure secrets, initiate trusted runs, and
+  inspect enabled remote operating-system results. A deliberately skipped job
+  is not platform acceptance.
+- Do not delete the retained reference source, tests, project/configuration
+  files, scripts, or launchers. The human will remove them after accepting the
+  Python implementation. Give the exact deletion walkthrough in the final
+  handoff, not a tracked migration checklist. This restriction does not prevent
+  cleaning up the agent's own disposable test data.
+- T32 stays current until comprehensive Python-only tests and Windows smoke,
+  enabled remote platform jobs, any required opt-in live acceptance, human
+  cleanup, final Python-only checks, and blueprint verification are complete.
+  Do not advance to T29 or call unperformed checks passed.
 - Use environment variables for Python OpenAI configuration. Do not read or
-  migrate .NET User Secrets, persist keys, add a credential-store helper, or
+  search credential stores, persist keys, add a credential-store helper, or
   substitute a host subagent for independent API review. Guide the human to set
   the variables, then check only public nonsecret effective configuration.
-  Offline migration work may proceed without a Python key; live acceptance must
+  Offline work may proceed without a key; live acceptance must
   remain explicitly unverified until human configuration and opt-in are present.
-- Translate meaningful tests and add independent golden/differential evidence
-  before the human removes the reference implementation. The final Python tests,
-  packages and CI must not require .NET. Keep useful fixtures tracked and remove
-  disposable comparison files. No separate hidden migration notes or roadmap
-  mirror is permitted.
+- Add meaningful Python tests and independently reviewed golden evidence before
+  the human removes the reference implementation. The final Python tests,
+  packages, and CI must be self-contained. Keep useful sanitized fixtures tracked
+  and remove disposable comparison files. No separate hidden migration notes or
+  roadmap mirror is permitted.
+
+The Python checkout entry points delivered by T32 are:
+
+```powershell
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
+python -m validated_world project verify ValidatedWorld.Blueprint.vw.db
+python -m unittest discover -s tests-python -v
+.\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
+.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
+```
+
+The agent may run these Windows commands directly with a verified Python 3.12+
+interpreter. Linux and macOS execution remains remote and human-inspected.
 
 The blueprint specifies exact CI skip-secret semantics, environment setting
-names, parity requirements, packaging work and the human acceptance boundary.
+names, behavior requirements, packaging work, and the human acceptance boundary.
 Major end-user documentation changes belong to implementation, when the new
 commands work; preserve the human-edited README thesis.
 
@@ -176,7 +197,7 @@ drift detection remains optional integration work.
   test. Check a file's contents/role before deleting it. Do not delete the canonical
   database, user settings, unknown user data, or an active installation during
   cleanup. Completed release archives may remain as documented build outputs.
-- Keep the workflow usable by other agents through the tracked CLI/MCP and
+- Keep the workflow usable by other agents through the tracked Python CLI and
   skill sources. Host-specific installation adapters are optional setup;
   distinguish them from portable project knowledge and unverified client support.
 
@@ -227,32 +248,24 @@ development phases.
 Use focused tests while developing. When ready, run:
 
 ```powershell
-dotnet restore ValidatedWorld.slnx
-dotnet build ValidatedWorld.slnx --no-restore
-dotnet test ValidatedWorld.slnx --no-build --no-restore
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
+python -m validated_world project verify ValidatedWorld.Blueprint.vw.db
+python -m unittest discover -s tests-python -v
+.\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
+.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
 ```
 
-For an offline review or when the human asks to omit live provider calls, use
-`dotnet test ValidatedWorld.slnx --no-build --no-restore --filter "Category!=LiveOpenAI"`.
-This selects tests without changing saved preferences or effective feature
-configuration. Report the live tests as excluded, not passed. It does not replace
-the authorized live acceptance checks required for a live-AI feature phase.
+Verify that the selected interpreter is Python 3.12 or newer. The default unit
+and package commands are offline and must not make provider calls. Live tests
+require separate explicit human opt-in and effective configuration; report them
+as excluded when they are not run, never passed.
 Also run `eng/Test-DeveloperTools.ps1` and `eng/Test-Blueprint.ps1` for changes to
 release tooling or blueprint conventions. The latter enforces this repository's
 roadmap rules through the public CLI; it is not a built-in domain profile.
 
-If restore fails with `Unauthorized access` while reading the user-level
-`NuGet.Config`, do not inspect, copy, modify, or search for credentials in that
-file. Rerun the exact restore command with the command tool's elevated,
-outside-sandbox permission and a narrowly scoped explanation that NuGet must
-read its configuration to restore dependencies. This is a sandbox permission
-workaround, not a product dependency or a reason to weaken restore. Keep the
-build and test commands sandboxed with `--no-restore` after the elevated
-restore succeeds.
-
 If an explicitly opted-in live OpenAI call fails with a transport or network
 access error inside the sandbox before receiving a provider response, rerun the
-exact full-solution test command with the command tool's elevated,
+exact authorized Python live-test command with the command tool's elevated,
 outside-sandbox permission and a narrowly scoped explanation that the call must
 reach the OpenAI API. This is a sandbox network workaround, not a provider or
 product failure. Do not print or inspect the API key or change the request
@@ -336,9 +349,8 @@ not a Git operation.
   convention changes, convert every tracked `.vw.db` file, fixture, and test in
   the same change. Remove this instruction only when the final roadmap phase
   explicitly establishes a supported compatibility baseline.
-- The current comparison implementation targets .NET 10 and uses
-  `ValidatedWorld.slnx`; the authorized T32 replacement targets Python as detailed
-  above and in the blueprint.
+- The product implementation targets Python 3.12 or newer as detailed above and
+  in the blueprint.
 - Keep the initial MVP and public release headless, local, and English-only across
   commands, help, diagnostics, bundled content, documentation, search tuning,
   and optional AI workflows. Unicode graph text may be stored and round-tripped,
@@ -360,8 +372,8 @@ not a Git operation.
 - Keep Core independent of SQLite, JSON, files, providers, and UI.
 - Use the fixed four-table SQLite schema and current embedded provider recorded by
   the blueprint's `storage-four-tables` and `storage-provider-contract` nodes.
-  T32 replaces the .NET provider with Python `sqlite3` while preserving the schema
-  and verification contract. No ORM or external SQLite/Docker requirement.
+  Use Python `sqlite3` while preserving the tracked schema and verification
+  contract. No ORM or external SQLite/Docker requirement.
 - Treat database/project text as untrusted data. Use parameters, enable foreign
   keys on every connection, honor explicit caller budgets, and never load SQLite
   extensions. Do not impose guessed size, count, or work ceilings.
@@ -369,40 +381,38 @@ not a Git operation.
 
 ## Optional OpenAI tasks
 
-OpenAI is the only supported built-in provider. An external agent host using
-the planned MCP interface is a client, not an additional built-in provider.
+OpenAI is the only supported built-in provider. The agent host is a client, not
+an additional built-in provider.
 AI prompts, tools, and responses are hardcoded in English. The AI features are
 optional at runtime, but their development phases have the strict prerequisites
-below. Transport, packaging, and offline MCP tests that do not change or invoke
-a live provider do not require a product API key; live-provider work still does.
+below. Transport, packaging, and offline protocol tests do not require a product
+API key; live-provider work still does.
 
 Before changing code for a live-AI task, check only whether an API key is
-available through the application's effective configuration. Do not check only
-the current process's `OPENAI_API_KEY`: the documented primary setup uses .NET
-User Secrets and may be configured even when that environment variable is
-absent. Use the public, non-secret `ai.status` request from the repository root:
+available through the application's effective environment configuration. Use
+the public, non-secret `ai.status` request from the repository root:
 
 ```powershell
-'{"version":1,"command":"ai.status","payload":{}}' | dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- ndjson
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
+'{"version":1,"command":"ai.status","payload":{}}' | python -m validated_world ndjson
 ```
 
 Proceed when its payload reports `configured: true`. This command reports only
-effective status and never the key. Never run `dotnet user-secrets list`, print,
-read back, copy, infer, obtain, or set the secret. If effective configuration is
-absent, make no changes; ask the human to configure it locally and stop. Never
-seek out a key on your own.
+effective status and never the key. Never print, read back, copy, infer, obtain,
+or set the secret. If effective configuration is absent, make no live-AI code
+changes; ask the human to configure it locally and stop. Never seek out a key on
+your own.
 
 Live tests also require the documented explicit opt-in flag and effective
-feature configuration. The normal full-solution test command discovers them;
-when their gates are inactive they complete without a provider call. Never
-override effective configuration in the test command. During each AI feature's
+feature configuration. Never override effective configuration in the test
+command. During each AI feature's
 development, an authorized live test must log
 and inspect the complete serialized request at least once during that task's
 development, validate the standalone prompt and coverage, and exercise meaningful
 known and control cases. There are zero automatic paid retries, parallel paid
 calls, or fallback providers/models.
 
-In normal product use, `AiReview:Enabled` defaults true but is effective only
+In normal product use, `VW_AIREVIEW__ENABLED` defaults true but is effective only
 when a key is configured. An enabled reviewer runs automatically when
 `change.write` is attempted, before SQLite opens a transaction. Only an `allow`
 decision bound to the exact current fingerprints permits the write. A `block`,
@@ -415,13 +425,10 @@ uses the complete manual workflow without a provider call.
 ## Repository layout
 
 ```text
-src/ValidatedWorld.Core
-src/ValidatedWorld.Validation
-src/ValidatedWorld.Serialization
-src/ValidatedWorld.Application
-src/ValidatedWorld.Persistence.Sqlite
-src/ValidatedWorld.Cli
-tests/*
+src-python/validated_world
+tests-python
+skills/validated-world
+packaging/python-plugin
 samples/TechnicalProject
 ```
 

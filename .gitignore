@@ -48,6 +48,12 @@ ScaffoldingReadMe.txt
 *~
 CodeCoverage/
 
+# Python development caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
 # MSBuild Binary and Structured Log
 *.binlog
 
