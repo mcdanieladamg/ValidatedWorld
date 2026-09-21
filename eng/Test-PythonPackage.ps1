@@ -18,7 +18,9 @@ $oldPythonPath = $env:PYTHONPATH
 New-Item -ItemType Directory -Force -Path $temporary | Out-Null
 try {
     $python = if ([string]::IsNullOrWhiteSpace($PythonExecutable)) { (Get-Command python -ErrorAction Stop).Source } else { (Resolve-Path -LiteralPath $PythonExecutable).Path }
-    $version = & $python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'
+    # Avoid quote-bearing Python expressions here. Windows PowerShell 5.1's
+    # native argument handling can remove the quotes inside an f-string.
+    $version = & $python -c 'import sys; print(sys.version_info.major, sys.version_info.minor, sep=chr(46))'
     if ($LASTEXITCODE -ne 0 -or [version]$version -lt [version]'3.12') { throw "Python 3.12 or newer is required; found $version" }
     foreach ($archive in Get-ChildItem -LiteralPath $packages -Filter '*.zip' -File) {
         $destination = Join-Path $temporary $archive.BaseName
