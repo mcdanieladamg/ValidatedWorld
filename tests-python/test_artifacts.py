@@ -94,23 +94,6 @@ class ArtifactTests(unittest.TestCase):
         report = check_artifacts(str(allowed / "project.vw.db"), candidate, allowed_roots=[str(allowed)])
         self.assertEqual(report["items"][0]["status"], "unauthorized")
 
-    def test_authorized_root_alias_matches_canonical_project_path(self):
-        actual = self.root / "actual"; alias = self.root / "alias"
-        actual.mkdir()
-        try:
-            os.symlink(actual, alias, target_is_directory=True)
-        except (OSError, NotImplementedError) as exc:
-            self.skipTest(f"directory links are not available to this Windows account: {exc}")
-        content = b"artifact-through-authorized-alias"
-        (actual / "artifact.bin").write_bytes(content)
-        candidate = graph(anchor("alias", "artifact.bin", hashlib.sha256(content).hexdigest()))
-
-        report = check_artifacts(
-            str(actual / "project.vw.db"), candidate, allowed_roots=[str(alias)]
-        )
-
-        self.assertEqual(report["matchedCount"], 1, report)
-
     def test_invalid_and_unsupported_anchors_are_reported_without_access(self):
         malformed = Node("malformed", "Malformed", "external-anchor", ("artifact",))
         candidate = graph(

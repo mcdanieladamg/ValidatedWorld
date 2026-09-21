@@ -106,6 +106,37 @@ class CliProtocolTests(unittest.TestCase):
         self.assertEqual(result["payload"]["matchedCount"], 1, result)
         self.assertEqual(artifact_project.read_bytes(), before)
 
+    def test_artifact_check_preserves_the_caller_path_namespace(self):
+        actual = self.root / "actual"; alias = self.root / "alias"
+        actual.mkdir()
+        try:
+            os.symlink(actual, alias, target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"directory links are not available to this Windows account: {exc}")
+        content = b"artifact-through-authorized-alias"
+        (actual / "artifact.bin").write_bytes(content)
+        digest = hashlib.sha256(content).hexdigest()
+        purpose = Node("purpose", "Purpose", "purpose")
+        anchored = Node("anchor", "Anchor", "external-anchor", ("artifact",), (
+            Attribute("artifact.path", GraphValue.text("artifact.bin")),
+            Attribute("artifact.sha256", GraphValue.text(digest)),
+        ))
+        candidate = Graph(
+            "artifact-alias", "Artifact alias", purpose.id, (purpose, anchored),
+            (Edge("anchor-scope", anchored.id, purpose.id, "scope-parent"),),
+        )
+        ProjectStore().initialize(actual / "project.vw.db", candidate)
+        output, error = io.StringIO(), io.StringIO()
+
+        code = direct_command([
+            "artifact", "check", str(alias / "project.vw.db"),
+            "--allow-root", str(alias),
+        ], output, error)
+
+        self.assertEqual(code, SUCCESS, error.getvalue())
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["matchedCount"], 1, report)
+
     def test_direct_exit_codes_and_traversal_flags_are_explicit(self):
         output, error = io.StringIO(), io.StringIO()
         self.assertEqual(direct_command(["project", "status", str(self.root / "missing.vw.db")], output, error), DOMAIN)

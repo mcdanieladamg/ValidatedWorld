@@ -86,7 +86,7 @@ def _diff(base_path: str, target_path: str, limit: int = 100, cursor: str | None
 def _artifact_check(path: str, node_id: str | None = None, roots: list[str] | None = None,
                     max_anchors: int = 2**31 - 1, max_sample_bytes: int = 4096) -> dict:
     project = ProjectStore().load(path)
-    return check_artifacts(project.path, project.graph, node_id, allowed_roots=roots or (),
+    return check_artifacts(path, project.graph, node_id, allowed_roots=roots or (),
                            max_anchors=max_anchors, max_sample_bytes=max_sample_bytes)
 
 

@@ -162,13 +162,7 @@ class FileSystemArtifactChecker:
                 raise FileNotFoundError(f"artifact allowed root does not exist or is not a directory: '{declared}'")
             declared_roots.append(declared)
             opened_roots.append(_opened_directory_path(declared))
-        # ProjectStore exposes a canonical project path, while a host-authorized
-        # root may retain an equivalent platform alias (for example an 8.3 or
-        # junction-backed Windows path, or /var versus /private/var on macOS).
-        # Accept either spelling here; the opened-file check below still binds
-        # authorization to the final path of the directory handle.
-        if (not any(_contains(root, candidate) for root in declared_roots)
-                and not any(_contains(root, candidate) for root in opened_roots)):
+        if not any(_contains(root, candidate) for root in declared_roots):
             return _result(anchor["nodeId"], anchor["path"], candidate, self.adapter_id,
                            self.contract_version, "unauthorized", "The artifact path is outside every host-authorized root.", anchor["sha256"])
 
