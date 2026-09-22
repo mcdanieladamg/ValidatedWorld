@@ -1,4 +1,4 @@
-"""Canonical JSON and SHA-256 encodings shared with the .NET implementation."""
+"""Canonical JSON and SHA-256 encodings for persistent project data."""
 
 from __future__ import annotations
 

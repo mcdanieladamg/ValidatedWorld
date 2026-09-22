@@ -10,7 +10,7 @@ from typing import Any, Iterable
 
 
 def ordinal_key(value: str) -> bytes:
-    """Sort like .NET StringComparer.Ordinal (UTF-16 code-unit order)."""
+    """Sort text by UTF-16 code units for the canonical graph ordering."""
     return value.encode("utf-16-le", "surrogatepass")
 
 

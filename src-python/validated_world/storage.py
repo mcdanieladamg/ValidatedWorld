@@ -118,12 +118,10 @@ def _connect(path: str | Path, read_only: bool = False) -> sqlite3.Connection:
         connection = sqlite3.connect(full, timeout=SQLITE_BUSY_TIMEOUT_SECONDS)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
-    # The stock Python 3.11/SQLite 3.40 Windows build rejects the fixed
-    # schema's json_valid/json_type CHECK constraints when trusted_schema is
-    # OFF (the same schema is accepted by Microsoft.Data.Sqlite).  Keep
+    # Some stock Python/SQLite builds reject the fixed schema's
+    # json_valid/json_type CHECK constraints when trusted_schema is OFF. Keep
     # extension loading disabled and verify the exact schema objects before
-    # reading data; trusted_schema ON is the portable standard-library
-    # compatibility setting for this provider.
+    # reading data; trusted_schema ON is the portable standard-library setting.
     connection.execute("PRAGMA trusted_schema = ON")
     connection.execute("PRAGMA recursive_triggers = OFF")
     connection.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MILLISECONDS}")

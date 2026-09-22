@@ -1,6 +1,8 @@
 import io
 import json
+import os
 import runpy
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -76,6 +78,21 @@ class CliSurfaceTests(unittest.TestCase):
         self.assertEqual(self.run_direct("project", "diff", path, path, "--limit", "1", "--limit", "2")[0], USAGE)
         self.assertEqual(self.run_direct("read", "nodes", path, "--limit", "1", "--limit", "2")[0], USAGE)
         self.assertEqual(self.run_direct("artifact", "check", path, "--bogus", "1")[0], USAGE)
+
+    def test_module_output_is_safe_for_a_narrow_windows_console_encoding(self):
+        environment = os.environ.copy()
+        environment["PYTHONPATH"] = str(Path(__file__).parents[1] / "src-python")
+        environment["PYTHONIOENCODING"] = "cp1252:strict"
+        path = self.root / "unicode Ω project.vw.db"
+        command = [sys.executable, "-m", "validated_world", "sample", "create", "technical-project", str(path)]
+
+        created = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment, check=False)
+        self.assertEqual(created.returncode, SUCCESS, created.stderr.decode("cp1252"))
+        self.assertEqual(json.loads(created.stdout.decode("cp1252"))["path"], str(path.resolve()))
+
+        duplicate = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment, check=False)
+        self.assertEqual(duplicate.returncode, DOMAIN)
+        self.assertIn("already exists", duplicate.stderr.decode("cp1252"))
 
     def test_every_direct_read_family_and_artifact_boundary(self):
         path = str(self.path)

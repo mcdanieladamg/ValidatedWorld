@@ -56,63 +56,6 @@ surface for blueprint reads, reviewed updates, and semantic diffs. If that
 checkout surface cannot safely update or diff the database, stop and report the
 blocker rather than falling back to another implementation.
 
-### Python migration (T32)
-
-T32 authorizes the Python implementation described by the `phase:t32` blueprint
-nodes. Read all of those nodes before implementation. Python is the forward
-product authority. Never switch to an installed plugin to bypass checkout
-self-hosting.
-
-- Implement the Python package, standalone skill, and skills-only plugin.
-  Preserve the tracked SQLite structure, graph meaning, and state fingerprints
-  so every tracked database opens and can continue safely under Python.
-  Byte-for-byte compatibility with newly created files from the disposable
-  reference implementation is not required. Preserve exact-revision paged
-  presentation and guarded-write safeguards in the Python agent interface.
-- Run agent-operated tests on Windows only. Do not install or run WSL, Linux
-  containers, or local Linux/macOS tests. Author the approved Windows/Linux/macOS
-  GitHub Actions workflow; humans configure secrets, initiate trusted runs, and
-  inspect enabled remote operating-system results. A deliberately skipped job
-  is not platform acceptance.
-- Do not delete the retained reference source, tests, project/configuration
-  files, scripts, or launchers. The human will remove them after accepting the
-  Python implementation. Give the exact deletion walkthrough in the final
-  handoff, not a tracked migration checklist. This restriction does not prevent
-  cleaning up the agent's own disposable test data.
-- T32 stays current until comprehensive Python-only tests and Windows smoke,
-  enabled remote platform jobs, any required opt-in live acceptance, human
-  cleanup, final Python-only checks, and blueprint verification are complete.
-  Do not advance to T29 or call unperformed checks passed.
-- Use environment variables for Python OpenAI configuration. Do not read or
-  search credential stores, persist keys, add a credential-store helper, or
-  substitute a host subagent for independent API review. Guide the human to set
-  the variables, then check only public nonsecret effective configuration.
-  Offline work may proceed without a key; live acceptance must
-  remain explicitly unverified until human configuration and opt-in are present.
-- Add meaningful Python tests and independently reviewed golden evidence before
-  the human removes the reference implementation. The final Python tests,
-  packages, and CI must be self-contained. Keep useful sanitized fixtures tracked
-  and remove disposable comparison files. No separate hidden migration notes or
-  roadmap mirror is permitted.
-
-The Python checkout entry points delivered by T32 are:
-
-```powershell
-$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
-python -m validated_world project verify ValidatedWorld.Blueprint.vw.db
-python -m unittest discover -s tests-python -v
-.\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
-.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
-```
-
-The agent may run these Windows commands directly with a verified Python 3.12+
-interpreter. Linux and macOS execution remains remote and human-inspected.
-
-The blueprint specifies exact CI skip-secret semantics, environment setting
-names, behavior requirements, packaging work, and the human acceptance boundary.
-Major end-user documentation changes belong to implementation, when the new
-commands work; preserve the human-edited README thesis.
-
 When a change materially alters product meaning, architecture, a public
 contract, or roadmap status, update the canonical database through an ordinary
 ValidatedWorld change session. Use the same affected/context review discipline

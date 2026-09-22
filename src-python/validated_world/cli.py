@@ -31,7 +31,9 @@ UNEXPECTED = 3
 
 
 def _json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    # JSON remains lossless after parsing while staying writable through narrow
+    # Windows console encodings and redirected PowerShell streams.
+    return json.dumps(value, ensure_ascii=True, separators=(",", ":"))
 
 
 def _print_help(out) -> None:
@@ -426,4 +428,8 @@ def ndjson_loop(inp, out, err) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(errors="backslashreplace")
     return direct_command(list(sys.argv[1:] if argv is None else argv), sys.stdout, sys.stderr)
