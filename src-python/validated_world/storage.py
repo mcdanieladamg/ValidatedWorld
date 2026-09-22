@@ -20,6 +20,8 @@ from .rules import evaluate_rules
 
 APPLICATION_ID = 0x56574C44
 SCHEMA_VERSION = 1
+SQLITE_BUSY_TIMEOUT_SECONDS = 5
+SQLITE_BUSY_TIMEOUT_MILLISECONDS = SQLITE_BUSY_TIMEOUT_SECONDS * 1000
 MIGRATION_ID = "sqlite-current-state"
 MIGRATION_CHECKSUM = "269918e56207fef7f570537fcd74c8a0e0bfcac346f8045ee35fadc77e2b24f7"
 
@@ -108,9 +110,12 @@ def utc_now() -> str:
 def _connect(path: str | Path, read_only: bool = False) -> sqlite3.Connection:
     full = str(Path(path).expanduser().resolve())
     if read_only:
-        connection = sqlite3.connect(f"file:{quote(full, safe='/:')}?mode=ro", uri=True, timeout=10)
+        connection = sqlite3.connect(
+            f"file:{quote(full, safe='/:')}?mode=ro", uri=True,
+            timeout=SQLITE_BUSY_TIMEOUT_SECONDS,
+        )
     else:
-        connection = sqlite3.connect(full, timeout=10)
+        connection = sqlite3.connect(full, timeout=SQLITE_BUSY_TIMEOUT_SECONDS)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     # The stock Python 3.11/SQLite 3.40 Windows build rejects the fixed
@@ -121,7 +126,7 @@ def _connect(path: str | Path, read_only: bool = False) -> sqlite3.Connection:
     # compatibility setting for this provider.
     connection.execute("PRAGMA trusted_schema = ON")
     connection.execute("PRAGMA recursive_triggers = OFF")
-    connection.execute("PRAGMA busy_timeout = 10000")
+    connection.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MILLISECONDS}")
     if read_only:
         connection.execute("PRAGMA query_only = ON")
     else:
