@@ -7,11 +7,9 @@ below is a starting graph for exploratory smoke testing.
 
 The fixtures use English, the supported product language.
 
-`baseline.json` is a checked, protocol-shaped fixture used by the scenario tests
-to detect drift in the built-in sample. Numeric enum
-values follow the v1 public protocol: `0` is `none` and `1` is
-`source-to-target`; operation `1` is `replace`; entity `0` is a node and `1` is
-an edge.
+`baseline.json` is a checked, protocol-shaped fixture used by scenario tests to
+detect drift in the built-in sample. The public JSON protocol uses named enum
+values such as `none`, `sourceToTarget`, `replace`, and `node`.
 
 The scenario files contain a complete operation batch, a user-facing goal, and
 the expected affected/context result. They cover:
@@ -41,13 +39,13 @@ From the repository root in PowerShell:
 $smokeDir = Join-Path ([IO.Path]::GetTempPath()) ('vw-smoke-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $smokeDir | Out-Null
 # Broader technical-project graph: power, privacy, accessibility, documentation
-dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- sample create technical-project (Join-Path $smokeDir 'technical.vw.db')
+python -m validated_world sample create technical-project (Join-Path $smokeDir 'technical.vw.db')
 # Small synthetic privacy graph: purpose, policy, dependent check, unrelated control
-dotnet run --no-restore --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- project backup samples/TechnicalProject/semantic-review-foundation.vw.db (Join-Path $smokeDir 'privacy.vw.db')
+python -m validated_world project backup samples/TechnicalProject/semantic-review-foundation.vw.db (Join-Path $smokeDir 'privacy.vw.db')
 ```
 
-Open either copy in the CLI shell or select its path through any configured
-local MCP client. `semantic-review-foundation.vw.db` contains only fictional
-data (five nodes and five edges). Delete the disposable folder after testing.
-Optional independent review sends evidence to OpenAI and incurs API charges
-when enabled and configured.
+Open either copy through the CLI or persistent NDJSON interface.
+`semantic-review-foundation.vw.db` contains only fictional data (five nodes and
+five edges). Delete the disposable folder after testing. Optional independent
+review sends evidence to OpenAI and incurs API charges when enabled and
+configured.

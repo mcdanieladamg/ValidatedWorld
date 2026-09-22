@@ -1,152 +1,121 @@
-# Release and local plugin distribution
+# Installation and release distribution
 
-ValidatedWorld provides a local agent plugin and a CLI for manual use and
-scripting. Both use the same `.vw.db` format.
+ValidatedWorld is distributed as source in two archives:
 
-Workflows are supported in English only. Graph text supports Unicode storage
-and round-tripping.
+- a standalone Agent Skill; and
+- a skills-only Codex plugin containing the same skill and Python package.
 
-For the normal two-command development loop, start with the
-[README](../README.md#build-and-install-the-local-plugin).
+Both require Python 3.12 or newer, either from the host system or an explicitly
+managed `uv` environment. Installation never creates or modifies a system
+Python runtime.
 
-`Prepare-LocalPlugin.ps1 -NoRestore` reuses already restored solution and win-x64
-CLI/MCP dependencies. It still builds and runs all offline checks; use it only
-after those restores have succeeded. It also builds and tests archives for GitHub
-releases, producing files in the artifacts folder that you can tag and upload.
-When Codex is absent, its host lifecycle check is explicitly skipped; run
-`Test-Release.ps1 -RequireCodex` locally before accepting a release.
+## Build and verify archives
 
-## Build packages only (advanced)
-
-For the normal build/test/install workflow, use `Prepare-LocalPlugin.ps1` and
-then the install command it prints, as shown in the [README](../README.md#build-and-install-the-local-plugin).
-Prepare already calls the build and release-test commands below. Use these
-separately only when you need individual packaging or verification steps.
-
-From a clean source checkout with the exact .NET SDK in `global.json`:
+From the repository root in PowerShell:
 
 ```powershell
-dotnet restore ValidatedWorld.slnx
-.\eng\Build-Release.ps1
+.\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
+.\eng\Test-PythonPackage.ps1 `
+    -PackagesDirectory artifacts/python-release/0.3.0-dev
 ```
 
-The build script performs runtime-specific restores, publishes self-contained
-single-file Windows x64 executables, assembles the local marketplace, verifies
-manifest/binary version agreement, creates archives with normalized entry
-timestamps, and writes SHA-256 checksums.
+The build creates versioned ZIP archives and `SHA256SUMS.txt` under the selected
+output directory. The package test extracts each archive to a disposable
+directory and launches its included engine outside the source checkout. Build
+outputs are regenerable and are not durable project knowledge.
 
-Outputs are placed under `artifacts/release/<version>/`:
+Release archives contain the skill instructions, Python sources, package
+metadata, and license. They exclude project databases, credentials, local
+settings, caches, and compiled platform runtimes.
 
-- `validated-world-cli-<version>-win-x64.zip`
-- `validated-world-plugin-<version>-win-x64.zip`
-- `RELEASE_NOTES-<version>.md`
-- `SHA256SUMS.txt`
+## Development checkout
 
-Run the install/upgrade/uninstall smoke test against those exact archives:
+The runtime has no third-party dependencies:
 
 ```powershell
-.\eng\Test-Release.ps1 -Version <the-built-version> -RequireCodex
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
+py -3.12 -m validated_world --version
+py -3.12 -m unittest discover -s tests-python -v
 ```
 
-The smoke test uses paths with spaces and an isolated temporary Codex home. It
-launches the packaged executables (not `dotnet`), creates and verifies a SQLite
-project outside the installation, exercises the packaged MCP protocol and
-`host_status`, rejects a deliberately mismatched manifest/binary version,
-and confirms the external database survives. When available, it discovers the
-Codex CLI from `PATH` or the local ChatGPT Desktop installation and also verifies
-plugin installation, reinstallation, and removal. Pass `-CodexCommand` with a
-specific `codex.exe` path when needed. Use `-RequireCodex` to make the complete
-plugin lifecycle check mandatory for release acceptance. The script cleans up
-only its unique temporary directory.
-
-The update check runs `Install-LocalPlugin.ps1` against a previous marketplace
-registration and compares the cached executable with the verified archive.
-Checksums must cover both archives and the release notes; an empty or partial
-checksum list fails. Checksums detect accidental changes, not publisher identity.
-
-## Offline checks
-
-PRs and pushes to `main` run only restore, build and the offline .NET tests.
-Their pass/fail result appears in GitHub Checks; CI uploads no artifacts and
-does not run packaging, installation or blueprint checks. The README badge links
-to that same status.
-
-Run tests without live OpenAI calls or changing saved preferences:
+For an isolated editable environment with the CI test dependency:
 
 ```powershell
-dotnet test ValidatedWorld.slnx --no-build --no-restore --filter "Category!=LiveOpenAI"
-.\eng\Test-DeveloperTools.ps1
-.\eng\Test-Blueprint.ps1
+py -3.12 -m venv .venv
+.venv\Scripts\python.exe -m pip install -e ".[test]"
+.venv\Scripts\python.exe -m coverage run --branch -m unittest discover -s tests-python -v
+.venv\Scripts\python.exe -m coverage report
 ```
 
-The unfiltered test command still honors the existing live-test opt-ins.
-`Test-Blueprint.ps1` evaluates repository roadmap conventions through paginated
-public CLI reads.
+## Plugin installation
 
-To use downloaded release archives, place the archives, release notes, and
-checksum file together in a folder. From a source checkout, run:
+Install the generated plugin ZIP through the Codex app's normal local-plugin
+workflow. Start a new agent task after installing or replacing the plugin so
+the host loads the current skill instructions. The standalone skill archive is
+for agent hosts that install skills without the Codex plugin manifest.
 
-```powershell
-.\eng\Test-Release.ps1 -Version <version> -ArtifactsDirectory <folder> -RequireCodex
-.\eng\Install-LocalPlugin.ps1 -Version <version> -ArtifactsDirectory <folder>
+Keep user `.vw.db` files outside package or installation directories. Replacing
+the package must not replace project databases or host settings.
+
+## GitHub Actions
+
+The CI workflow resolves three optional repository skip secrets and then runs
+the Python suite on enabled operating systems:
+
+```text
+VW_CI_SKIP_WINDOWS
+VW_CI_SKIP_LINUX
+VW_CI_SKIP_MACOS
 ```
 
-## Versions and reproducibility
+Absent, empty, or `false` runs that operating system. `true` deliberately skips
+it. Invalid nonempty values fail configuration. A skipped job is reported as
+excluded, never as a passed platform. Pull-request jobs do not receive OpenAI
+credentials.
 
-Prepare and Build-Release share one version resolver:
-`VersionPrefix` in `Directory.Build.props` plus `-dev.g` and the full Git `HEAD`
-ID. It needs no tags, history depth, timestamp, machine name, or network lookup.
-Automatic versions require a clean checkout; explicit `-Version` is available
-for intentional releases and uncommitted local experiments. The `-dev.g` form
-is reserved and must match the clean checkout even when supplied explicitly.
-Commit IDs identify builds; they do not express chronological release ordering.
+The standard unit and package workflow requires no repository secrets. Runtime
+independent review uses the same environment setting names locally and in a
+trusted, explicitly opted-in CI job:
 
-Packaging pins the SDK, uses deterministic compilation with normalized source
-paths, normalizes package text to LF, and writes sorted ZIP entries with fixed
-timestamps and no-compression mode. ZIPs are larger but avoid variable compression
-settings. The same source, SDK, dependencies,
-target and version are required for identical bytes; a shared version alone is
-not proof. Build-Release always uses Windows PowerShell 5.1 for ZIP creation,
-including when invoked from PowerShell 7, because their ZIP encodings differ.
-Compare `SHA256SUMS.txt` from independent builds. Do not substitute
-locally rebuilt files for tested release files without comparing their hashes.
+```text
+OPENAI_API_KEY
+VW_AIREVIEW__OPENAI__APIKEY
+VW_AIREVIEW__ENABLED
+VW_AIREVIEW__PROVIDER
+VW_AIREVIEW__MODEL
+VW_AIREVIEW__TIMEOUTSECONDS
+VW_AIREVIEW__MAXREQUESTBYTES
+VW_AIREVIEW__MAXREQUESTITEMS
+VW_AIREVIEW__MAXREQUESTTOKENS
+VW_AIREVIEW__LIVETESTS
+VW_AIAUTHORING__ENABLED
+VW_AIAUTHORING__PROVIDER
+VW_AIAUTHORING__MODEL
+VW_AIAUTHORING__TIMEOUTSECONDS
+VW_AIAUTHORING__MAXTOOLCALLSPERTURN
+VW_AIAUTHORING__OPENAI__APIKEY
+VW_AIAUTHORING__LIVETESTS
+```
 
-## Other local agent hosts
+Store keys as repository or environment secrets, never in workflow files,
+command arguments, packages, logs, or project databases. Set only the
+feature-specific `__LIVETESTS` value(s) you intend to exercise to `true`; an
+unset, empty, or `false` value makes no call for that feature. Live provider
+checks run only from trusted code on `main` or an explicit trusted manual
+dispatch, with sequential paid calls.
 
-The `codex plugin` installer is host-specific; the stdio MCP executable and
-workflow skill are not. On Windows x64, build with `Build-Release.ps1` (no Codex
-installation required), or download a tested archive. Extract the plugin ZIP
-to a stable folder and configure your client's local **stdio** server command as
-`<folder>/plugins/validated-world/bin/win-x64/ValidatedWorld.Mcp.exe` with no args.
-Give the agent `<folder>/plugins/validated-world/skills/validated-world/SKILL.md`
-as workflow instructions. These sources are also tracked under `packaging/`.
+## Release review
 
-For VS Code/Copilot, use **MCP: Add Server** and select a local command. Keep
-project-scoped configuration in source control with portable paths if sharing it;
-keep credentials out. See [VS Code's MCP setup](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
-Then call `host_status`, select a disposable graph, and perform your own smoke
-check.
+Before publishing a release:
 
-## Supported targets
+1. Verify every tracked `.vw.db` with the packaged Python command.
+2. Run the complete unit suite and package extraction smoke on Windows.
+3. Inspect the enabled Windows, Linux, and macOS GitHub Actions jobs.
+4. Confirm any explicitly required live-provider check separately from offline
+   success.
+5. Inspect archive contents, hashes, versions, licenses, and actual sizes.
+6. Install the exact candidate archive in a clean host and complete one
+   disposable reviewed-write workflow.
 
-The packages currently support Windows x64 only.
-
-The plugin runs locally over stdio. Its relative launch configuration supports
-installation under any stable user-owned directory. Project databases, settings,
-and credentials remain outside the plugin installation directory.
-
-## Publishing a GitHub release
-
-Create a matching version tag and GitHub release, attach the two
-archives, notes, and checksum file, and verify the uploaded checksums.
-
-Publishing and authentication remain manual. A GitHub release does not register
-the plugin in a searchable catalog. Public catalog distribution is still in
-preparation.
-
-Official references:
-
-- https://developers.openai.com/plugins/build/plugins
-- https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview
-- https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-publish
-- https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases
+Building, testing, or installing locally does not create tags, push commits, or
+publish to a catalog.

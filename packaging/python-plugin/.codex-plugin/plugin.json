@@ -1,0 +1,14 @@
+{
+  "name": "validated-world-python",
+  "version": "0.3.0-dev",
+  "description": "Portable local semantic change control for connected project knowledge.",
+  "author": {
+    "name": "Adam McDaniel",
+    "url": "https://github.com/mcdanieladamg/ValidatedWorld"
+  },
+  "homepage": "https://github.com/mcdanieladamg/ValidatedWorld",
+  "repository": "https://github.com/mcdanieladamg/ValidatedWorld",
+  "license": "MIT",
+  "keywords": ["semantic-change-control", "knowledge-graph", "local-first", "python"],
+  "skills": "./skills/"
+}

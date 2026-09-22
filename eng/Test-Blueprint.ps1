@@ -1,14 +1,20 @@
 #requires -Version 5.1
 [CmdletBinding()]
-param([string] $Path)
+param(
+    [string] $Path,
+    [string] $PythonExecutable
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if (-not $Path) { $Path = Join-Path $PSScriptRoot '../ValidatedWorld.Blueprint.vw.db' }
 . (Join-Path $PSScriptRoot 'RoadmapChecks.ps1')
-$vwCliProject = Join-Path $PSScriptRoot '../src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj'
+$vwRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$vwPython = if ([string]::IsNullOrWhiteSpace($PythonExecutable)) { (Get-Command python -ErrorAction Stop).Source } else { (Resolve-Path -LiteralPath $PythonExecutable).Path }
+$vwOldPythonPath = $env:PYTHONPATH
+$env:PYTHONPATH = Join-Path $vwRoot 'src-python'
 function Read-VwCliJson {
     param([string[]] $Arguments)
-    $vwOutput = & dotnet run --no-restore --no-build --project $vwCliProject -- @Arguments
+    $vwOutput = & $vwPython -m validated_world @Arguments
     if ($LASTEXITCODE -ne 0) { throw "Blueprint read failed: $($Arguments -join ' ')" }
     return ($vwOutput -join "`n" | ConvertFrom-Json)
 }
@@ -79,5 +85,6 @@ try {
 }
 finally {
     if (Test-Path -LiteralPath $vwTemplatePath) { Remove-Item -LiteralPath $vwTemplatePath -Force }
+    $env:PYTHONPATH = $vwOldPythonPath
 }
 Write-Host 'Blueprint structure, roadmap rules, and code-development template parity passed.'

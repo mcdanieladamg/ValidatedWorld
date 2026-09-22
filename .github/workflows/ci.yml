@@ -4,27 +4,151 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    name: Build and test
-    runs-on: windows-latest
-
+  configure:
+    name: Resolve platform test policy
+    runs-on: ubuntu-latest
+    outputs:
+      run_windows: ${{ steps.policy.outputs.run_windows }}
+      run_linux: ${{ steps.policy.outputs.run_linux }}
+      run_macos: ${{ steps.policy.outputs.run_macos }}
+      all_skipped: ${{ steps.policy.outputs.all_skipped }}
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-python@v6
         with:
-          global-json-file: global.json
+          python-version: '3.12'
+      - id: policy
+        env:
+          VW_CI_SKIP_WINDOWS: ${{ secrets.VW_CI_SKIP_WINDOWS }}
+          VW_CI_SKIP_LINUX: ${{ secrets.VW_CI_SKIP_LINUX }}
+          VW_CI_SKIP_MACOS: ${{ secrets.VW_CI_SKIP_MACOS }}
+        run: python eng/python_ci_config.py --github-output "$GITHUB_OUTPUT"
 
-      - run: dotnet restore ValidatedWorld.slnx
-      - run: dotnet build ValidatedWorld.slnx --no-restore
+  windows:
+    name: Python Windows tests
+    needs: configure
+    if: needs.configure.outputs.run_windows == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install ".[test]"
+      - run: python -m coverage run --branch -m unittest discover -s tests-python -v
+      - run: python -m coverage report
+      - run: python -m validated_world project verify ValidatedWorld.Blueprint.vw.db
+      - shell: pwsh
+        run: |
+          .\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
+          .\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
 
-      - run: >
-          dotnet test ValidatedWorld.slnx
-          --no-build
-          --no-restore
-          --filter "Category!=LiveOpenAI"
+  linux:
+    name: Python Linux tests
+    needs: configure
+    if: needs.configure.outputs.run_linux == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install ".[test]"
+      - run: python -m coverage run --branch -m unittest discover -s tests-python -v
+      - run: python -m coverage report
+      - run: python -m validated_world project verify ValidatedWorld.Blueprint.vw.db
+      - shell: pwsh
+        run: |
+          ./eng/Build-PythonPackage.ps1 -Version 0.3.0-dev
+          ./eng/Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
+
+  macos:
+    name: Python macOS tests
+    needs: configure
+    if: needs.configure.outputs.run_macos == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install ".[test]"
+      - run: python -m coverage run --branch -m unittest discover -s tests-python -v
+      - run: python -m coverage report
+      - run: python -m validated_world project verify ValidatedWorld.Blueprint.vw.db
+      - shell: pwsh
+        run: |
+          ./eng/Build-PythonPackage.ps1 -Version 0.3.0-dev
+          ./eng/Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
+
+  aggregate:
+    name: Python platform aggregate
+    needs: [configure, windows, linux, macos]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Check enabled platform jobs
+        env:
+          CONFIGURE_RESULT: ${{ needs.configure.result }}
+          RUN_WINDOWS: ${{ needs.configure.outputs.run_windows }}
+          RUN_LINUX: ${{ needs.configure.outputs.run_linux }}
+          RUN_MACOS: ${{ needs.configure.outputs.run_macos }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          LINUX_RESULT: ${{ needs.linux.result }}
+          MACOS_RESULT: ${{ needs.macos.result }}
+          ALL_SKIPPED: ${{ needs.configure.outputs.all_skipped }}
+        run: python eng/python_ci_config.py --check-aggregate
+
+  live:
+    name: Opt-in live OpenAI tests
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install ".[test]"
+      - name: Run only explicitly opted-in live tests
+        shell: pwsh
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          VW_AIREVIEW__ENABLED: ${{ secrets.VW_AIREVIEW__ENABLED }}
+          VW_AIREVIEW__PROVIDER: ${{ secrets.VW_AIREVIEW__PROVIDER }}
+          VW_AIREVIEW__MODEL: ${{ secrets.VW_AIREVIEW__MODEL }}
+          VW_AIREVIEW__TIMEOUTSECONDS: ${{ secrets.VW_AIREVIEW__TIMEOUTSECONDS }}
+          VW_AIREVIEW__MAXREQUESTBYTES: ${{ secrets.VW_AIREVIEW__MAXREQUESTBYTES }}
+          VW_AIREVIEW__MAXREQUESTITEMS: ${{ secrets.VW_AIREVIEW__MAXREQUESTITEMS }}
+          VW_AIREVIEW__MAXREQUESTTOKENS: ${{ secrets.VW_AIREVIEW__MAXREQUESTTOKENS }}
+          VW_AIREVIEW__OPENAI__APIKEY: ${{ secrets.VW_AIREVIEW__OPENAI__APIKEY }}
+          VW_AIREVIEW__LIVETESTS: ${{ secrets.VW_AIREVIEW__LIVETESTS }}
+          VW_AIAUTHORING__ENABLED: ${{ secrets.VW_AIAUTHORING__ENABLED }}
+          VW_AIAUTHORING__PROVIDER: ${{ secrets.VW_AIAUTHORING__PROVIDER }}
+          VW_AIAUTHORING__MODEL: ${{ secrets.VW_AIAUTHORING__MODEL }}
+          VW_AIAUTHORING__TIMEOUTSECONDS: ${{ secrets.VW_AIAUTHORING__TIMEOUTSECONDS }}
+          VW_AIAUTHORING__MAXTOOLCALLSPERTURN: ${{ secrets.VW_AIAUTHORING__MAXTOOLCALLSPERTURN }}
+          VW_AIAUTHORING__OPENAI__APIKEY: ${{ secrets.VW_AIAUTHORING__OPENAI__APIKEY }}
+          VW_AIAUTHORING__LIVETESTS: ${{ secrets.VW_AIAUTHORING__LIVETESTS }}
+        run: |
+          if (($env:VW_AIREVIEW__LIVETESTS -eq 'true') -or ($env:VW_AIAUTHORING__LIVETESTS -eq 'true')) {
+            python -m pytest tests-python/live_openai_checks.py -m live -v
+          }
+          else {
+            Write-Output 'Live tests are disabled; no provider call was made.'
+          }

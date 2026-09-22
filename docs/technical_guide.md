@@ -1,365 +1,107 @@
 # ValidatedWorld technical guide
 
-For plugin installation and example prompts, start with the [README](../README.md).
+ValidatedWorld keeps a project model in one local SQLite `.vw.db` file. Nodes
+hold project claims, decisions, evidence, scope, status, and uncertainty. Edges
+make scope and review consequences explicit. The system provides deterministic
+structure and review evidence; it does not prove that a claim is true or infer
+missing dependencies.
 
-## Contents
+## Graph model
 
-- [Why it exists](#why-it-exists)
-- [How a change works](#how-a-change-works)
-- [Project model](#project-model)
-- [Build and install](#build-and-install-the-local-plugin)
-- [CLI quick start](#cli-quick-start)
-- [Finding project knowledge](#finding-project-knowledge)
-- [Comparing project versions](#comparing-project-versions)
-- [Keeping the graph and project in sync](#keeping-the-graph-and-project-in-sync)
-- [Modeling guidance](#modeling-guidance)
-- [Human and AI interfaces](#human-and-ai-interfaces)
-- [Optional OpenAI configuration](#optional-openai-configuration)
-- [Boundaries](#boundaries)
-- [Repository reference](#repository-reference)
+Every project has one purpose node and one `scope-parent` tree rooted at that
+purpose. Each non-purpose node has exactly one scope parent. Other edges may
+carry a review direction so a change can identify connected claims that need
+human or independent review.
 
-## Overview
+Node and edge IDs are stable text identifiers. Tags are sorted unique strings.
+Attributes are sorted unique name/value pairs with six value kinds: text,
+signed 64-bit integer, canonical decimal text, Boolean, symbol, and canonical
+UTC instant. Unicode graph text is stored and round-tripped, while the product
+workflow and diagnostics are supported in English.
 
-ValidatedWorld is a local semantic change-control engine for large, connected
-projects. It stores human-readable project knowledge as a graph, finds the parts
-that a proposed change may invalidate, and requires those parts to be reviewed
-before committing the new state.
+## Storage and verification
 
-Validation combines structural checks with human or AI judgment. Explicit
-dependencies help reviewers inspect a focused change and its likely consequences,
-then preserve the reviewed result as the next baseline.
+The Python provider uses the standard-library `sqlite3` module and a fixed
+four-table schema for schema metadata, project metadata, nodes, and edges. It enables
+foreign keys on every connection, does not load SQLite extensions, uses
+parameterized writes, and performs schema, integrity, foreign-key, structural,
+and state-fingerprint checks when opening a project. Active graph-rule results
+are reported separately so an invalid baseline can still be opened and repaired;
+reviewed writes require the proposed graph to pass them.
 
-The same model can represent software architecture, requirements, research,
-patent outlines, novels, game lore, campaigns, or any other project whose facts
-and decisions depend on one another.
+Project initialization, backup, and reviewed writes never overwrite a requested
+destination. A write checks the base fingerprint before and after acquiring its
+SQLite write transaction, applies the complete reviewed operation batch, and
+either commits the resulting graph or rolls back.
 
-**Language support:** English-only workflows. Graph text supports Unicode storage
-and round-tripping; non-English workflows are unsupported.
+## Review workflow
 
-## Why it exists
+Change sessions live only in one `ndjson` process. The session records an exact
+base snapshot, normalized operations, the proposed graph, structural and rule
+validation, affected nodes, scope context, review dispositions, preview state,
+and any independent-review decision.
 
-An AI can only read a fraction of a very large project at once. Ordinary search
-can retrieve relevant text, but it cannot reliably identify every conclusion,
-scene, requirement, or design decision that depends on a changed fact.
+A write requires all of the following:
 
-ValidatedWorld makes those relationships explicit. A local change produces a
-bounded review set containing:
+- a structurally valid proposed graph;
+- valid active graph rules;
+- a disposition for every affected node;
+- presentation of every required scope-context node;
+- presentation of every page of the exact proposal preview;
+- an unchanged base database fingerprint; and
+- when configured, an independent `allow` decision bound to the proposal.
 
-- the nodes and edges being changed;
-- other nodes selected by the changed relationships;
-- an explanation of why each item was selected; and
-- the scope lineage from every selected node to the project's purpose.
+Any changed operation or review state invalidates older references. EOF,
+disconnect, cancellation, or explicit discard loses the in-memory proposal and
+does not alter the database.
 
-The graph remains in one portable SQLite `.vw.db` file. The human or AI works
-with focused slices while structural validation runs against the complete
-project.
+## Rules and views
 
-## How a change works
+Rules are normal graph nodes with kind `validation-rule`, tag `rule:active`, a
+`rule:version` integer attribute, and a `rule:expression` text attribute. Named
+views use kind `validation-view` plus `view:name`, `view:version`, and
+`view:expression` attributes. Expressions are JSON and evaluate against the
+complete candidate graph.
 
-```text
-describe or enter a change
-        ↓
-build an in-memory proposal
-        ↓
-validate structure and calculate affected nodes
-        ↓
-review the proposal, affected evidence, and scope context
-        ↓
-optional independent AI review
-        ↓
-atomically write the complete new graph, or write nothing
-```
+The rule language supports node and edge selectors, named views, set union,
+intersection and difference, reachability, Boolean composition, existence and
+count checks, subsets and equal sets, universal tag conditions, acyclic and
+single-chain checks, and tag-suffix matching. Unsupported or malformed rules
+must not be treated as passing.
 
-Semantic review is judgment, not mathematical proof. ValidatedWorld supplies
-the relevant evidence and enforces the workflow; a human or AI decides whether
-the affected text remains coherent.
+## Queries and planning
 
-## Project model
+Read commands provide stable paging for nodes, edges, text search, exact tags,
+scope, neighbors, dependency arcs, paths, context, and health summaries. Cursors
+are tied to a query and state fingerprint. `project diff` provides a bounded
+semantic comparison. `project merge` and `project bulk-plan` produce read-only
+operation plans for the ordinary reviewed workflow.
 
-A project contains:
+Artifact anchors allow bounded, read-only comparison of explicitly authorized
+files with recorded SHA-256 values. Allowed roots come from the human or host,
+not from graph text.
 
-- **Nodes** — stable-ID units of human-readable meaning, such as facts, claims,
-  requirements, events, decisions, tests, or artifact anchors.
-- **Edges** — stable-ID labeled relationships between nodes. Each edge declares
-  whether review propagates source-to-target, target-to-source, both ways, or
-  neither way.
-- **Scope tree** — exactly one purpose root and one `scope-parent` edge for every
-  other node. This gives every node a unique path back to the project's purpose.
-- **Tags and attributes** — searchable metadata that does not create hidden
-  dependency behavior.
+## Optional independent review
 
-Every affected node contributes its full scope-upstream path as review context.
-Those ancestors do not automatically pull in their other children, so a local
-change stays local. Directly changing a scope node selects its descendants;
-changing the purpose root is intentionally project-wide.
+The built-in reviewer uses the OpenAI Responses API only when it is both enabled
+and configured through environment variables. It makes one request per new
+proposal binding, performs no automatic paid retry, and treats transport,
+timeout, refusal, malformed output, and `block` decisions as write blockers.
+Manual review remains available without a key.
 
-Pending operations and review state live in the running process. A successful
-commit writes the complete reviewed graph in one SQLite transaction. Any stale
-state, validation, constraint, I/O, or mapping failure leaves the previous graph
-unchanged.
+## Development checks
 
-## Build and install the local plugin
-
-On Windows x64, from this repository in PowerShell with .NET 10 and Codex (or
-ChatGPT Desktop) installed. Use the exact SDK in `global.json` and a clean,
-committed checkout (for example, `main` after merging):
+From the repository root on Windows:
 
 ```powershell
-# Build, run offline checks, package, and test a disposable installation
-.\eng\Prepare-LocalPlugin.ps1
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
+py -3.12 -m validated_world project verify ValidatedWorld.Blueprint.vw.db
+py -3.12 -m unittest discover -s tests-python -v
+.\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
+.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
 ```
 
-Prepare runs `Build-Release.ps1` and `Test-Release.ps1` for you. When it succeeds,
-run the exact install command it prints to update your actual app:
-
-```powershell
-.\eng\Install-LocalPlugin.ps1 -Version <the-printed-version>
-```
-
-Restart the app, start a new task, and ask ValidatedWorld to report `host_status`
-to confirm the version. Repeat these two steps after source changes.
-
-The version is `VersionPrefix-dev.g<full-commit-id>`, using `Directory.Build.props`
-and Git `HEAD`. The same commit gets the same version locally and on GitHub.
-Existing output is never overwritten: install it again, or deliberately remove
-that version's `artifacts/release` directory before rebuilding. For uncommitted
-experiments only, use `Prepare-LocalPlugin.ps1 -Version 0.2.0-local.1` with a fresh
-explicit version. An intentional release may also supply `-Version`.
-
-The plugin bundles agent instructions (a skill) and callable tools (a local MCP
-server). Installation replaces only `validated-world@validated-world-local` and
-preserves databases and reviewer settings. Keep its active `artifacts/local-plugin`
-directory. No live OpenAI calls run during preparation.
-
-If unsigned scripts are blocked, prefix the command with
-`powershell.exe -NoProfile -ExecutionPolicy Bypass -File`; this applies only to
-that process. See [release details](release_distribution.md) for downloaded
-packages, reproducibility limits, and manual publishing.
-
-`Build-Release.ps1` builds the CLI/MCP packages without Codex installed. The
-Prepare/Install helpers target Codex hosts; other local MCP clients can use the
-same server and skill via [manual setup](release_distribution.md#other-local-agent-hosts).
-
-`artifacts/release/` holds regenerable packages; `bin/`, `obj/`, and `.vs/` hold
-generated build/IDE data. For reusable starting graphs and disposable copies,
-see [smoke-test foundations](../samples/TechnicalProject/README.md#exploratory-smoke-test-foundations).
-
-## CLI quick start
-
-ValidatedWorld targets .NET 10.
-
-```powershell
-dotnet restore ValidatedWorld.slnx
-dotnet build ValidatedWorld.slnx --no-restore
-dotnet test ValidatedWorld.slnx --no-build --no-restore
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- --help
-```
-
-Create and explore the included technical-project sample:
-
-```powershell
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    sample create technical-project demo.vw.db
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    shell demo.vw.db
-```
-
-Inside the shell, use `help`, navigate with `pwd`, `ls`, `cd`, and `root`, and
-inspect the pending change with `changes`, `affected`, and `validate`. The shell
-keeps the selected node, proposal, review coverage, and fingerprints in memory
-until commit or discard.
-
-Create a project with a purpose root:
-
-```powershell
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    project init project.vw.db my-project "My Project" purpose `
-    "The purpose and governing constraints of this project."
-```
-
-Existing destination files are never overwritten by initialization, sample
-creation, or backup commands.
-
-## Finding project knowledge
-
-Read commands return bounded results and support continuation cursors. Common
-queries include:
-
-```powershell
-# Search node text and identifiers
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    read search project.vw.db "authentication" --limit 20
-
-# Find nodes and edges carrying an exact tag
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    read tag project.vw.db status:current --limit 20
-
-# Inspect scope, dependencies, neighbors, paths, or assembled context
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    read dependencies project.vw.db requirement-login --max-depth 4 --max-nodes 100
-```
-
-Check opt-in external artifact anchors without changing the graph:
-
-```powershell
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    artifact check project.vw.db --allow-root .
-```
-
-Nodes marked with the `artifact` tag or `external-anchor` kind can declare
-`artifact.path` and `artifact.sha256` text attributes. Relative paths resolve
-from the database directory. The built-in version-1 `filesystem` checker is
-deny-by-default and only reads inside explicit caller/host-owned roots. It
-checks the opened file handle against those roots before hashing or sampling,
-so parent paths, absolute paths, UNC paths, links, reparse points, and path
-replacement cannot expand graph-owned authority. Use NDJSON `allowedRoots`,
-CLI `--allow-root`, or MCP server startup `--artifact-root`; selecting a project
-does not authorize artifact access. Adapter selection remains host-owned and
-graph text is never executed.
-
-Use `read --help` for the complete query surface.
-
-## Comparing project versions
-
-`project diff` produces a deterministic semantic comparison without modifying
-either database or calling an AI provider:
-
-```powershell
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    project diff base.vw.db target.vw.db --limit 100
-```
-
-The result includes both fingerprints, project metadata changes, summary counts,
-and stable-ID node and edge additions, replacements, and removals. Replacements
-show old and new values plus the changed field names. Large results can be read
-page by page with the returned cursor.
-
-## Keeping the graph and project in sync
-
-Review graph changes alongside the source, documents, or other artifacts they
-describe. Use `project backup` before editing and `project diff` afterward to
-compare the candidate with the accepted baseline. Update implementation-status
-nodes when planned work is delivered, so readers can distinguish current
-behavior from future work.
-
-`project verify` checks file integrity and graph validity. Semantic review
-establishes whether the claims and their dependencies remain accurate.
-
-Project-specific tools can read the public graph to generate artifacts; those
-tools are responsible for their output's correctness.
-
-## Modeling guidance
-
-- Use the scope tree for stable containment such as a subsystem, chapter, topic,
-  or artifact boundary.
-- Keep volatile names, counts, dates, complete lists, and conclusions in focused
-  nodes rather than broad ancestors.
-- Give stable IDs to enduring concepts instead of copying mutable display text
-  into the ID.
-- Direct semantic edges from a source of truth toward material that may become
-  stale. Use bidirectional review only for genuine mutual dependence.
-- Represent a closed collection with member-to-roster edges, then connect the
-  roster claim to summaries or artifacts that repeat it. This avoids dependency
-  cliques while still exposing stale counts and enumerations.
-- Search for aliases and closed-world wording such as exact numbers, “all,”
-  “only,” and “every” when adding or changing facts. A surprisingly small
-  affected set often indicates a missing dependency.
-- Use tags for organization and attributes for named scalar values. If one fact
-  can invalidate another, represent that meaning with an edge.
-
-Changing a `scope-parent` edge selects both the old and new child subtrees and
-includes both ancestry lineages for review.
-
-## Human and AI interfaces
-
-ValidatedWorld provides a local agent plugin and three direct interfaces:
-
-- local plugin — workflow guidance backed by the stdio MCP server;
-- `shell <database>` — interactive manual authoring and review;
-- `ai-assistant-shell <database>` — conversational authoring with bounded graph
-  tools; and
-- `ndjson` — a structured protocol for agents, scripts, and integrations.
-
-The AI author and semantic reviewer are separate roles. The author searches and
-edits through the same guarded application operations available to a human. The
-reviewer can allow or block the exact proposed write but cannot edit the graph.
-Changing the proposal invalidates its review decision.
-
-The [CLI usage guide](cli_usage.md) documents commands, response shapes,
-pagination, graph traversal, manual review, and automation examples.
-
-## Optional OpenAI configuration
-
-All manual features work without an API key. AI authoring and review become
-active when a key is configured and their respective switches are enabled.
-
-For an installed plugin, use the [review setup script](../packaging/PLUGIN_INSTALL.md#optional-independent-semantic-review).
-The settings below apply to source-checkout CLI use.
-
-| Setting               | Default | Effect                                                      |
-|---|---:|---|
-| `AiAuthoring:Enabled` |  `true` | Enables conversational graph authoring.                     |
-| `AiReview:Enabled`    |  `true` | Requires independent semantic review before a normal write. |
-
-For a source checkout, store the shared key in .NET User Secrets:
-
-```powershell
-dotnet user-secrets set "AiReview:OpenAI:ApiKey" "<key>" `
-    --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj
-```
-
-`AiAuthoring:OpenAI:ApiKey` may be configured separately. Authoring otherwise
-uses the review key and then `OPENAI_API_KEY`. Environment variables use the
-`VW_` prefix and replace `:` with `__`, such as
-`VW_AIREVIEW__ENABLED=false`.
-
-Check effective configuration without displaying the key:
-
-```powershell
-'{"version":1,"command":"ai.status","payload":{}}' | `
-    dotnet run --no-restore `
-    --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- ndjson
-```
-
-Start conversational authoring with:
-
-```powershell
-dotnet run --project src/ValidatedWorld.Cli/ValidatedWorld.Cli.csproj -- `
-    ai-assistant-shell project.vw.db
-```
-
-Before writing, the authoring agent inspects the exact operations, affected
-evidence, scope context, and fingerprints. It cannot bypass review, use raw SQL,
-or write directly. The application accounts for the affected/context set and a
-configured reviewer must return `allow`; blocks, malformed responses, timeouts,
-and provider errors leave SQLite unchanged.
-
-Manual operation remains available when AI features are disabled or
-unconfigured. A human can explicitly bypass AI review for one otherwise valid
-write with `commit --bypass-ai-review`.
-
-## Boundaries
-
-- Consistency depends on meaningful nodes and explicit dependency edges. The
-  engine does not infer every unstated relationship from prose.
-- The database represents current project knowledge, not commit history.
-- ValidatedWorld identifies external artifacts that may be stale. Rendering and
-  publishing remain the responsibility of project-specific tooling built on the
-  public graph.
-- Attached [validation rules](cli_usage.md#templates-and-deterministic-rules)
-  check explicit graph constraints; semantic coherence still requires review.
-
-## Repository reference
-
-The blueprint records detailed product design, implementation state, and the
-ordered roadmap. Use its phase and status tags to distinguish implemented and
-planned work. Repository development instructions are in `AGENTS.md`.
-
-- [CLI usage](cli_usage.md) — end-user and integration reference
-- [Project blueprint](../ValidatedWorld.Blueprint.vw.db) — product design,
-  implementation state, and roadmap
-- [AGENTS.md](../AGENTS.md) — repository-agent execution and safety rules
-
-## License
-
-See [LICENSE](../LICENSE).
+The runtime has no third-party dependencies. The optional test extra installs
+coverage and pytest for CI, coverage measurement, and live-test selection. See the
+[CLI reference](cli_usage.md) for commands and [release guide](release_distribution.md)
+for package and CI details.

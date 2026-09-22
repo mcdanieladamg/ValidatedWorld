@@ -3,8 +3,8 @@
   "operations": {
     "operations": [
       {
-        "kind": 1,
-        "entityKind": 0,
+        "kind": "replace",
+        "entityKind": "node",
         "entityId": "purpose",
         "node": {
           "id": "purpose",
