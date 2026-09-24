@@ -282,7 +282,7 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "read.report": ({"path"}, {"limit", "expectedProjectId"}),
         "change.begin": ({"path", "projectId", "author", "intent"}, {"includeOperations", "includeProposedGraph"}),
         "change.show": ({"session"}, {"includeOperations", "includeProposedGraph"}),
-        "change.affected": ({"session"}, set()),
+        "change.affected": ({"session"}, {"limit", "cursor"}),
         "change.omission-details": ({"reference", "fingerprint"}, {"limit", "cursor"}),
         "change.focus": ({"reference", "operations", "scopeParents"}, set()),
         "change.apply": ({"reference", "operations"}, {"includeOperations", "includeProposedGraph", "maxTraversalDepth", "maxAffectedNodes", "maxOutputItems"}),
@@ -404,19 +404,19 @@ def ndjson_loop(inp, out, err) -> int:
                     raise ValueError("project mismatch")
                 query = Queries(project); name = command[5:]; limit = payload.get("limit", 100); cursor = payload.get("cursor")
                 value = {"node": lambda: query.node(payload["entityId"]), "edge": lambda: query.edge(payload["entityId"]), "nodes": lambda: query.nodes(limit, cursor), "edges": lambda: query.edges(limit, cursor), "search": lambda: query.search(payload["text"], limit, cursor), "ranked_search": lambda: query.ranked_search(payload["text"], limit, cursor), "tag": lambda: query.tag(payload["tag"], limit, cursor), "scope": lambda: query.scope(payload["nodeId"], limit, cursor, payload.get("maxDepth", 2**31 - 1), payload.get("maxVisitedNodes", 2**31 - 1)), "neighbors": lambda: query.neighbors(payload["entityId"], limit, cursor), "dependencies": lambda: query.dependencies(payload["entityId"], limit, cursor), "path": lambda: query.path(payload["sourceNodeId"], payload["targetNodeId"], payload.get("maxDepth", 2**31 - 1), payload.get("maxVisitedNodes", 2**31 - 1)), "context": lambda: query.context(payload["nodeIds"], payload.get("maxDepth", 2**31 - 1), payload.get("maxVisitedNodes", 2**31 - 1)), "health": lambda: query.health(limit), "report": lambda: query.health(limit)}[name]()
-            elif command == "change.begin": value = app.begin(payload["path"], payload["projectId"], payload["author"], payload["intent"]).snapshot(payload.get("includeOperations", True), payload.get("includeProposedGraph", True))
+            elif command == "change.begin": value = app.begin(payload["path"], payload["projectId"], payload["author"], payload["intent"]).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command in {"change.apply", "change.patch"}:
-                session = app.apply(payload["reference"], _ops(payload), command.endswith("patch"), max_traversal_depth=payload.get("maxTraversalDepth", 2**31 - 1), max_affected_nodes=payload.get("maxAffectedNodes", 2**31 - 1), max_output_items=payload.get("maxOutputItems", 2**31 - 1)); value = session.snapshot(payload.get("includeOperations", True), payload.get("includeProposedGraph", True))
+                session = app.apply(payload["reference"], _ops(payload), command.endswith("patch"), max_traversal_depth=payload.get("maxTraversalDepth", 2**31 - 1), max_affected_nodes=payload.get("maxAffectedNodes", 2**31 - 1), max_output_items=payload.get("maxOutputItems", 2**31 - 1)); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.expand":
-                session = app.expand(payload["reference"], max_traversal_depth=payload.get("maxTraversalDepth", 2**31 - 1), max_affected_nodes=payload.get("maxAffectedNodes", 2**31 - 1), max_output_items=payload.get("maxOutputItems", 2**31 - 1)); value = session.snapshot(payload.get("includeOperations", True), payload.get("includeProposedGraph", True))
+                session = app.expand(payload["reference"], max_traversal_depth=payload.get("maxTraversalDepth", 2**31 - 1), max_affected_nodes=payload.get("maxAffectedNodes", 2**31 - 1), max_output_items=payload.get("maxOutputItems", 2**31 - 1)); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.focus": value = app.focus(payload["reference"], _ops(payload), payload["scopeParents"])
-            elif command == "change.show": value = app.locate(payload["session"]).snapshot(payload.get("includeOperations", True), payload.get("includeProposedGraph", True))
+            elif command == "change.show": value = app.locate(payload["session"]).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.preview":
                 value = app.session(payload["reference"]).preview(payload.get("limit", 100), payload.get("cursor"))
-            elif command == "change.affected": value = app.locate(payload["session"]).affected()
+            elif command == "change.affected": value = app.locate(payload["session"]).affected(payload.get("limit", 100), payload.get("cursor"))
             elif command == "change.omission-details": value = app.session(payload["reference"]).read_omission_details(payload["fingerprint"], payload.get("limit", 100), payload.get("cursor"))
-            elif command == "change.review": value = app.review(payload["reference"], payload.get("dispositions", []), payload.get("presentedContextNodeIds", [])).snapshot(payload.get("includeOperations", True), payload.get("includeProposedGraph", True))
-            elif command == "change.validate": value = app.session(payload["reference"]).snapshot(payload.get("includeOperations", True), payload.get("includeProposedGraph", True))
+            elif command == "change.review": value = app.review(payload["reference"], payload.get("dispositions", []), payload.get("presentedContextNodeIds", [])).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
+            elif command == "change.validate": value = app.session(payload["reference"]).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.write":
                 value = app.write(payload["reference"], payload.get("bypassAiReview", False))
             elif command == "change.discard": value = app.discard(payload["reference"])

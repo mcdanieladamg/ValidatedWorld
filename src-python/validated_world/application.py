@@ -394,13 +394,63 @@ class Session:
         if pending: blockers.append("Affected nodes still have pending review dispositions.")
         if missing: blockers.append("Required scope context has not been presented.")
         if self.omissions: blockers.append("Affected analysis is inconclusive because configured bounds omitted evidence.")
-        return {"isReady": not blockers, "analysisStatus": "inconclusive" if self.omissions else "complete", "proposedValidationStatus": self.proposed_validation.status, "pendingNodeIds": sorted(pending, key=ordinal_key), "missingContextNodeIds": sorted(missing, key=ordinal_key), "blockers": sorted(blockers)}
+        return {"isReady": not blockers, "analysisStatus": "inconclusive" if self.omissions else "complete", "proposedValidationStatus": self.proposed_validation.status, "pendingCount": len(pending), "missingContextCount": len(missing), "blockers": sorted(blockers)}
 
-    def affected(self) -> dict:
-        return {"status": "inconclusive" if self.omissions else "complete", "currentValidation": _validation(self.current_validation), "proposedValidation": _validation(self.proposed_validation), "currentRuleStatus": self.current_rules.status, "proposedRuleStatus": self.proposed_rules.status, "proposedRuleDiagnostics": [_rule_dto(item) for item in self.proposed_rules.diagnostics], "directNodeIds": sorted({item.entity_id for item in self.operations if item.entity_kind is EntityKind.NODE}, key=ordinal_key), "seedNodeIds": sorted({item["nodeId"] for item in self.affected_nodes}, key=ordinal_key), "affectedNodes": self.affected_nodes, "edgeChanges": self.edge_changes, "scopeContext": self.scope_context, "omissions": self.omissions}
+    def _affected_items(self) -> list[dict]:
+        items = []
+        items.extend({"kind": "affectedNode", "value": item} for item in self.affected_nodes)
+        items.extend({"kind": "edgeChange", "value": item} for item in self.edge_changes)
+        items.extend({"kind": "scopeContext", "value": item} for item in self.scope_context)
+        return items
 
-    def snapshot(self, include_operations=True, include_proposed_graph=True) -> dict:
-        return {"path": self.base.path, "author": self.author, "intent": self.intent, "createdUtc": self.base.created_utc, "updatedUtc": self.base.updated_utc, "reference": self.reference(), "operationCount": len(self.operations), "proposedNodeCount": len(self.proposed.nodes), "proposedEdgeCount": len(self.proposed.edges), "operations": {"operations": [operation_dto(item) for item in self.operations]} if include_operations else None, "proposedGraph": graph_dto(self.proposed) if include_proposed_graph else None, "affected": self.affected(), "dispositions": [self.dispositions[key] for key in sorted(self.dispositions, key=ordinal_key)], "presentedContextNodeIds": sorted(self.presented_context, key=ordinal_key), "readiness": self.readiness(), "refresh": self.refresh, "semanticReview": None}
+    def affected_summary(self) -> dict:
+        direct_node_ids = {item.entity_id for item in self.operations if item.entity_kind is EntityKind.NODE}
+        return {
+            "status": "inconclusive" if self.omissions else "complete",
+            "currentValidationStatus": self.current_validation.status,
+            "currentValidationDiagnosticCount": len(self.current_validation.diagnostics),
+            "proposedValidationStatus": self.proposed_validation.status,
+            "proposedValidationDiagnosticCount": len(self.proposed_validation.diagnostics),
+            "currentRuleStatus": self.current_rules.status,
+            "proposedRuleStatus": self.proposed_rules.status,
+            "proposedRuleDiagnosticCount": len(self.proposed_rules.diagnostics),
+            "directNodeCount": len(direct_node_ids),
+            "affectedNodeCount": len(self.affected_nodes),
+            "edgeChangeCount": len(self.edge_changes),
+            "scopeContextCount": len(self.scope_context),
+            "omissions": self.omissions,
+        }
+
+    def affected(self, limit: int = 100, cursor: str | None = None) -> dict:
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("the affected-analysis page size must be positive")
+        items = self._affected_items()
+        signature = _hash_json({"reference": self.reference(), "query": "change.affected", "limit": limit})
+        offset = 0
+        if cursor is not None:
+            try:
+                raw = __import__("base64").b64decode(cursor, validate=True).decode()
+                expected, cursor_limit, cursor_offset = raw.split(":", 2)
+                if expected != signature or int(cursor_limit) != limit:
+                    raise ValueError
+                offset = int(cursor_offset)
+                if offset < 0 or offset > len(items):
+                    raise ValueError
+            except Exception as error:
+                raise ValueError("the affected-analysis cursor is invalid for this exact revision and page size") from error
+        page_items = items[offset:offset + limit]
+        next_offset = offset + len(page_items)
+        next_cursor = __import__("base64").b64encode(f"{signature}:{limit}:{next_offset}".encode()).decode() if next_offset < len(items) else None
+        return self.affected_summary() | {
+            "items": page_items,
+            "page": {"offset": offset, "limit": limit, "totalCount": len(items), "nextCursor": next_cursor, "isComplete": next_cursor is None},
+        }
+
+    def snapshot(self, include_operations=False, include_proposed_graph=False) -> dict:
+        disposition_counts: dict[str, int] = {}
+        for item in self.dispositions.values():
+            disposition_counts[item["kind"]] = disposition_counts.get(item["kind"], 0) + 1
+        return {"path": self.base.path, "author": self.author, "intent": self.intent, "createdUtc": self.base.created_utc, "updatedUtc": self.base.updated_utc, "reference": self.reference(), "operationCount": len(self.operations), "proposedNodeCount": len(self.proposed.nodes), "proposedEdgeCount": len(self.proposed.edges), "operations": {"operations": [operation_dto(item) for item in self.operations]} if include_operations else None, "proposedGraph": graph_dto(self.proposed) if include_proposed_graph else None, "affected": self.affected_summary(), "dispositionCounts": disposition_counts, "presentedContextCount": len(self.presented_context), "readiness": self.readiness(), "refresh": self.refresh, "semanticReview": None}
 
     def review_items(self) -> list[dict]:
         items: list[dict] = []

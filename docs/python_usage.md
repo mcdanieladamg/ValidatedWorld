@@ -40,6 +40,14 @@ The `ndjson` process keeps reviewed change sessions in memory only. A session
 must present every exact-revision preview page before `change.write`; EOF,
 cancel, or process loss discards an unfinished proposal.
 
+Session snapshots are compact by default and omit full operation bodies and the
+proposed graph. Use `change.affected` with a caller-selected `limit`, then follow
+`page.nextCursor` until `page.isComplete` to collect exact affected-node,
+edge-change, and scope-context evidence. `change.preview` is separately paged
+and must be read completely before a write. For onboarding, verify the project,
+confirm its purpose and status, then search and inspect bounded task-relevant
+context. Add knowledge incrementally; a full-project import is not required.
+
 ## Configuration
 
 Independent OpenAI review uses environment variables only. ValidatedWorld does
