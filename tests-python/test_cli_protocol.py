@@ -75,6 +75,53 @@ class CliProtocolTests(unittest.TestCase):
         accepted = self.send(process, "change.apply", {"reference": begun["reference"], "operations": {"operations": [operation]}})
         self.assertEqual(accepted["status"], "ok")
 
+    def test_large_change_snapshots_are_compact_and_affected_evidence_is_paged(self):
+        base = sample_graph()
+        nodes = list(base.nodes)
+        edges = list(base.edges)
+        for index in range(1200):
+            node_id = f"controlled-claim-{index:04d}"
+            nodes.append(Node(node_id, f"Controlled claim {index} with representative project context.", "claim"))
+            edges.append(Edge(f"{node_id}-scope", node_id, "purpose", "scope-parent"))
+        graph = Graph(base.project_id, base.title, base.purpose_node_id, tuple(nodes), tuple(edges))
+        large_path = self.root / "large controlled graph.vw.db"
+        ProjectStore().initialize(large_path, graph)
+        process = self.process()
+
+        begun = self.send(process, "change.begin", {"path": str(large_path), "projectId": graph.project_id, "author": "bounded-test", "intent": "Update project purpose"})["payload"]
+        serialized_begin = json.dumps(begun, separators=(",", ":"))
+        self.assertLess(len(serialized_begin), 12000)
+        self.assertIsNone(begun["proposedGraph"])
+        self.assertIsNone(begun["operations"])
+        self.assertNotIn("affectedNodes", begun["affected"])
+
+        purpose = next(item for item in graph.nodes if item.id == graph.purpose_node_id)
+        operation = {"kind": "replace", "entityKind": "node", "entityId": purpose.id, "node": {"id": purpose.id, "text": purpose.text + " Updated.", "kind": purpose.kind, "tags": list(purpose.tags), "attributes": []}, "edge": None}
+        changed = self.send(process, "change.apply", {"reference": begun["reference"], "operations": {"operations": [operation]}})["payload"]
+        serialized_changed = json.dumps(changed, separators=(",", ":"))
+        self.assertLess(len(serialized_changed), 12000)
+        self.assertEqual(changed["affected"]["affectedNodeCount"], len(graph.nodes))
+
+        locator = {"projectId": changed["reference"]["projectId"], "sessionId": changed["reference"]["sessionId"]}
+        page = self.send(process, "change.affected", {"session": locator, "limit": 37})["payload"]
+        self.assertEqual(len(page["items"]), 37)
+        self.assertFalse(page["page"]["isComplete"])
+        first_cursor = page["page"]["nextCursor"]
+        seen = list(page["items"])
+        while page["page"]["nextCursor"]:
+            page = self.send(process, "change.affected", {"session": locator, "limit": 37, "cursor": page["page"]["nextCursor"]})["payload"]
+            seen.extend(page["items"])
+        self.assertTrue(page["page"]["isComplete"])
+        self.assertEqual(page["page"]["totalCount"], len(graph.nodes))
+        self.assertEqual(sum(item["kind"] == "affectedNode" for item in seen), len(graph.nodes))
+        self.assertEqual({item["value"]["nodeId"] for item in seen if item["kind"] == "affectedNode"}, {item.id for item in graph.nodes})
+
+        first_preview = self.send(process, "change.preview", {"reference": changed["reference"], "limit": 25})["payload"]
+        self.assertEqual(len(first_preview["reviewPage"]["items"]), 25)
+        self.assertIsNotNone(first_preview["reviewPage"]["nextCursor"])
+        invalid_cursor = self.send(process, "change.affected", {"session": locator, "limit": 38, "cursor": first_cursor})
+        self.assertEqual(invalid_cursor["status"], "error")
+
     def test_sessions_are_process_local_and_exit_cleanly(self):
         first = self.process()
         begun = self.send(first, "change.begin", {"path": str(self.path), "projectId": "technical-project", "author": "test", "intent": "test"})["payload"]

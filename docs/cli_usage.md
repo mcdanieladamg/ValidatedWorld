@@ -111,6 +111,23 @@ Incomplete review, incomplete preview evidence, a stale database fingerprint,
 failed graph rules, or an independent-review block leaves the database
 unchanged. EOF or process loss discards unfinished sessions.
 
+Snapshots from `change.begin`, `change.show`, `change.apply`, `change.patch`,
+`change.review`, and `change.validate` are compact by default: they return
+counts and readiness without operation bodies or the proposed graph. Request
+`includeOperations` or `includeProposedGraph` only for a deliberate full
+inspection. `change.affected` accepts `limit` and `cursor` and returns bounded
+`items` pages with `page.nextCursor`, `page.totalCount`, and `page.isComplete`.
+Its cursor is bound to the exact session revision and page size. `change.preview`
+remains the complete exact review evidence gate and is also paged; follow every
+cursor before writing.
+
+For onboarding and routine discovery, verify the database, read its status,
+confirm the purpose, then search task terms and inspect only the relevant nodes,
+dependencies, scope, and context. Use bounded reads and follow cursors when
+additional results matter. Knowledge is added incrementally; a complete graph
+import is not required. Do not use `project.open` for routine discovery because
+it returns the whole graph.
+
 ## Optional independent review
 
 Independent OpenAI review is configured only through environment variables.

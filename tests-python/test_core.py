@@ -109,9 +109,18 @@ class PythonProductTests(unittest.TestCase):
             begun = send("change.begin", {"path": str(path), "projectId": "technical-project", "author": "test", "intent": "change battery"})["payload"]
             operation = {"kind": "replace", "entityKind": "node", "entityId": "battery-assumption", "node": {"id": "battery-assumption", "text": "The battery lasts two duty cycles", "kind": "assumption", "tags": [], "attributes": []}, "edge": None}
             changed = send("change.apply", {"reference": begun["reference"], "operations": {"operations": [operation]}})["payload"]
+            self.assertIsNone(begun["proposedGraph"])
+            self.assertIsNone(changed["operations"])
             blocked = send("change.write", {"reference": changed["reference"]})["payload"]
             self.assertEqual(blocked["status"], "reviewNotReady")
-            review = send("change.review", {"reference": changed["reference"], "dispositions": [{"nodeId": item["nodeId"], "kind": "updated" if item["isDirectChange"] else "reviewedNoChange"} for item in changed["affected"]["affectedNodes"]], "presentedContextNodeIds": [item["nodeId"] for item in changed["affected"]["scopeContext"]]})["payload"]
+            affected = send("change.affected", {"session": {"projectId": changed["reference"]["projectId"], "sessionId": changed["reference"]["sessionId"]}, "limit": 2})["payload"]
+            affected_items = list(affected["items"])
+            while affected["page"]["nextCursor"]:
+                affected = send("change.affected", {"session": {"projectId": changed["reference"]["projectId"], "sessionId": changed["reference"]["sessionId"]}, "limit": 2, "cursor": affected["page"]["nextCursor"]})["payload"]
+                affected_items.extend(affected["items"])
+            nodes = [item["value"] for item in affected_items if item["kind"] == "affectedNode"]
+            contexts = [item["value"] for item in affected_items if item["kind"] == "scopeContext"]
+            review = send("change.review", {"reference": changed["reference"], "dispositions": [{"nodeId": item["nodeId"], "kind": "updated" if item["isDirectChange"] else "reviewedNoChange"} for item in nodes], "presentedContextNodeIds": [item["nodeId"] for item in contexts]})["payload"]
             preview = send("change.preview", {"reference": review["reference"], "limit": 2})["payload"]
             while preview["reviewPage"]["nextCursor"]:
                 preview = send("change.preview", {"reference": review["reference"], "limit": 2, "cursor": preview["reviewPage"]["nextCursor"]})["payload"]

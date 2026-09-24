@@ -183,9 +183,16 @@ class CliSurfaceTests(unittest.TestCase):
             expanded = latest()["payload"]; reference = expanded["reference"]
             yield send("change.show", {"session": {"projectId": reference["projectId"], "sessionId": reference["sessionId"]}, "includeOperations": False, "includeProposedGraph": False})
             self.assertEqual(latest()["payload"]["operationCount"], 2)
-            yield send("change.affected", {"session": {"projectId": reference["projectId"], "sessionId": reference["sessionId"]}})
+            yield send("change.affected", {"session": {"projectId": reference["projectId"], "sessionId": reference["sessionId"]}, "limit": 2})
             affected = latest()["payload"]
-            yield send("change.review", {"reference": reference, "dispositions": [{"nodeId": item["nodeId"], "kind": "updated" if item["isDirectChange"] else "reviewedNoChange"} for item in affected["affectedNodes"]], "presentedContextNodeIds": [item["nodeId"] for item in affected["scopeContext"]], "includeOperations": False, "includeProposedGraph": False})
+            affected_items = list(affected["items"])
+            while affected["page"]["nextCursor"]:
+                yield send("change.affected", {"session": {"projectId": reference["projectId"], "sessionId": reference["sessionId"]}, "limit": 2, "cursor": affected["page"]["nextCursor"]})
+                affected = latest()["payload"]
+                affected_items.extend(affected["items"])
+            nodes = [item["value"] for item in affected_items if item["kind"] == "affectedNode"]
+            contexts = [item["value"] for item in affected_items if item["kind"] == "scopeContext"]
+            yield send("change.review", {"reference": reference, "dispositions": [{"nodeId": item["nodeId"], "kind": "updated" if item["isDirectChange"] else "reviewedNoChange"} for item in nodes], "presentedContextNodeIds": [item["nodeId"] for item in contexts], "includeOperations": False, "includeProposedGraph": False})
             reviewed = latest()["payload"]; reference = reviewed["reference"]
             yield send("change.validate", {"reference": reference, "includeOperations": False, "includeProposedGraph": False})
             self.assertTrue(latest()["payload"]["readiness"]["isReady"])
