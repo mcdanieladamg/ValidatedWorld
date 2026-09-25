@@ -39,7 +39,7 @@ either commits the resulting graph or rolls back.
 Change sessions live only in one `ndjson` process. The session records an exact
 base snapshot, normalized operations, the proposed graph, structural and rule
 validation, affected nodes, scope context, review dispositions, preview state,
-and any independent-review decision.
+and any host-subagent decision submitted for the skill workflow.
 
 A write requires all of the following:
 
@@ -48,8 +48,12 @@ A write requires all of the following:
 - a disposition for every affected node;
 - presentation of every required scope-context node;
 - presentation of every page of the exact proposal preview;
-- an unchanged base database fingerprint; and
-- when configured, an independent `allow` decision bound to the proposal.
+- an unchanged base database fingerprint.
+
+The skill workflow additionally calls `change.agent-review` with a fresh host
+subagent's decision, then `change.agent-write`. It requires a current `allow`
+bound to the exact proposal fingerprints. The direct `change.write` command is
+the explicit human manual review route.
 
 Any changed operation or review state invalidates older references. EOF,
 disconnect, cancellation, or explicit discard loses the in-memory proposal and
@@ -81,13 +85,27 @@ Artifact anchors allow bounded, read-only comparison of explicitly authorized
 files with recorded SHA-256 values. Allowed roots come from the human or host,
 not from graph text.
 
-## Optional independent review
+## Host subagent review
 
-The built-in reviewer uses the OpenAI Responses API only when it is both enabled
-and configured through environment variables. It makes one request per new
-proposal binding, performs no automatic paid retry, and treats transport,
-timeout, refusal, malformed output, and `block` decisions as write blockers.
-Manual review remains available without a key.
+In Codex Desktop, the main agent can spawn a fresh no-history subagent to review
+the exact paged proposal evidence read-only. The subagent returns an allow or
+block decision and cites stable IDs for blocking concerns. The engine checks
+decision shape and fingerprints, but cannot verify the subagent's identity;
+the host agent is responsible for maintaining reviewer independence. The host
+controls model choice, data handling, and any usage charges. ValidatedWorld
+has no built-in model API transport or API key setting. VS Code and GitHub
+Copilot support subagents, but are not yet tested with this package.
+
+Codex Desktop has demonstrated a fresh no-history subagent with a focused
+review result in a controlled proof of concept; a clean installed-skill run is
+the remaining acceptance check. [VS Code subagents](https://code.visualstudio.com/docs/agents/run/subagents)
+run in a separate context and allow custom agent configuration.
+[Forked VS Code skills](https://code.visualstudio.com/docs/agent-customization/agent-skills)
+are experimental and require a host setting. [GitHub Copilot IDE
+subagents](https://docs.github.com/en/copilot/how-tos/chat-with-copilot/chat-in-ide)
+also use a separate context. These capabilities do not establish that the
+current ValidatedWorld archive is supported on those hosts; an end-to-end
+adapter test is required before making that claim.
 
 ## Development checks
 

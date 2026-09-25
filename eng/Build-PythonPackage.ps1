@@ -31,6 +31,10 @@ function Copy-PythonEngine([string] $destination) {
     $projectText = [IO.File]::ReadAllText($projectFile)
     $projectText = [regex]::Replace($projectText, '(?m)^version = "[^"]+"$', "version = `"$pythonVersion`"")
     [IO.File]::WriteAllText($projectFile, $projectText, [Text.UTF8Encoding]::new($false))
+    $initFile = Join-Path $destination 'src-python/validated_world/__init__.py'
+    $initText = [IO.File]::ReadAllText($initFile)
+    $initText = [regex]::Replace($initText, '(?m)^__version__ = "[^"]+"$', "__version__ = `"$pythonVersion`"")
+    [IO.File]::WriteAllText($initFile, $initText, [Text.UTF8Encoding]::new($false))
 }
 
 $skill = Join-Path $stage 'validated-world-skill'

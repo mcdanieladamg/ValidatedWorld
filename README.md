@@ -18,9 +18,9 @@ text is true. Small projects may be better served by ordinary notes and tests.
 
 ValidatedWorld is a Python 3.12+ source package delivered as a standalone Agent
 Skill and a skills-only Codex plugin; public catalog distribution is still in
-preparation. The authoring agent uses your chosen host. Optional independent
-review sends project evidence to OpenAI using a separately configured API key
-and incurs API charges.
+preparation. The main agent authors changes in the host. In the skill workflow,
+a fresh host subagent reviews each exact proposal before the atomic write.
+Codex Desktop is the initial host target; it requires no product API key.
 
 The initial public release is supported in English only. Graph text uses Unicode
 and can store and round-trip other languages, but the product instructions,
@@ -62,7 +62,7 @@ loss. See [Python usage](docs/python_usage.md).
 
 ## Further reading
 
-- [Technical guide](docs/technical_guide.md) — how the graph and review workflow work, CLI quick start, and OpenAI configuration.
+- [Technical guide](docs/technical_guide.md) — how the graph and review workflow work, and a CLI quick start.
 - [Installation and releases](docs/release_distribution.md) — packaging, updates, and other local agent hosts.
 - [CLI reference](docs/cli_usage.md) — commands and the persistent NDJSON workflow.
 
