@@ -12,7 +12,6 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src-python"))
 from validated_world.application import Application, sample_graph
 from validated_world.bulk import plan_bulk
 from validated_world.canonical import state_fingerprint
-from validated_world.config import load_review_config
 from validated_world.merge import merge_projects
 from validated_world.models import Attribute, Edge, Graph, GraphValue, Node, Operation, ReviewDirection
 from validated_world.queries import Queries
@@ -79,19 +78,6 @@ class PythonProductTests(unittest.TestCase):
             self.assertEqual(page["chunkOperationCount"], 2)
             self.assertIsNone(page["nextCursor"])
             self.assertEqual(ProjectStore().verify(str(base))["ruleStatus"], "valid")
-
-    def test_environment_only_ai_configuration_has_no_key_fragment_in_status(self):
-        previous = os.environ.pop("VW_AIREVIEW__OPENAI__APIKEY", None)
-        shared_previous = os.environ.pop("OPENAI_API_KEY", None)
-        try:
-            config = load_review_config()
-            self.assertFalse(config.configured)
-            self.assertNotIn("apiKey", config.public())
-        finally:
-            if previous is not None:
-                os.environ["VW_AIREVIEW__OPENAI__APIKEY"] = previous
-            if shared_previous is not None:
-                os.environ["OPENAI_API_KEY"] = shared_previous
 
     def test_ndjson_exact_preview_gate_and_persistent_session(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -90,7 +90,7 @@ Each input line is a JSON request and each output line is its JSON result:
 ```
 
 Use `host.help` to discover the command catalog and `host.exit` to close the
-process cleanly. Project, read, template, and AI-status commands mirror the
+process cleanly. Project, read, and template commands mirror the
 one-shot surface. Change commands are stateful:
 
 1. `change.begin` opens a verified snapshot and returns an exact reference.
@@ -102,13 +102,16 @@ one-shot surface. Change commands are stateful:
 4. `change.review` records dispositions and presented scope context.
 5. Call `change.preview`, following every `nextCursor`
    for that exact revision and page size.
-6. `change.write` performs one guarded atomic write.
+6. In the skill workflow, a fresh host subagent reviews the exact proposal.
+   Submit its allow or block result through `change.agent-review`, then call
+   `change.agent-write` for an allow. The direct `change.write` command is the
+   explicit human manual review route.
 7. Use `change.discard` to abandon the in-memory proposal.
 
 Keep the returned reference from each response and pass it to the next mutating
 request. Any proposal or review change makes an earlier reference stale.
 Incomplete review, incomplete preview evidence, a stale database fingerprint,
-failed graph rules, or an independent-review block leaves the database
+failed graph rules, or an agent-review block leaves the database
 unchanged. EOF or process loss discards unfinished sessions.
 
 Snapshots from `change.begin`, `change.show`, `change.apply`, `change.patch`,
@@ -128,40 +131,18 @@ additional results matter. Knowledge is added incrementally; a complete graph
 import is not required. Do not use `project.open` for routine discovery because
 it returns the whole graph.
 
-## Optional independent review
+## Agent review decision
 
-Independent OpenAI review is configured only through environment variables.
-`OPENAI_API_KEY` is the shared key; `VW_AIREVIEW__OPENAI__APIKEY` overrides it
-for review. Other supported settings include:
-
-```text
-VW_AIREVIEW__ENABLED
-VW_AIREVIEW__PROVIDER
-VW_AIREVIEW__MODEL
-VW_AIREVIEW__TIMEOUTSECONDS
-VW_AIREVIEW__MAXREQUESTBYTES
-VW_AIREVIEW__MAXREQUESTITEMS
-VW_AIREVIEW__MAXREQUESTTOKENS
-```
-
-Send `ai.status` through NDJSON to inspect nonsecret effective configuration.
-When review is enabled and configured, only an `allow` decision bound to the
-exact proposal permits the write. Provider failures and malformed responses do
-not fall back to an unreviewed write. No provider call is made when review is
-disabled or no key is configured.
-
-The separate optional authoring assistant uses the `VW_AIAUTHORING__*`
-settings and a distinct Responses API conversation:
-
-```text
-ai status
-ai assistant <database>
-```
-
-It exposes only bounded graph tools, requires search before additions, uses the
-ordinary exact-preview/write gates, and never receives an AI-review bypass.
-Each provider call is separately billable. An unfinished in-memory proposal is
-discarded when the assistant exits.
+`change.agent-review` takes `reference` and `decision`. The decision object
+contains `decision` (`allow` or `block`), a nonempty `summary`, and `concerns`.
+Allow requires an empty concerns array. Block requires at least one concern
+with nonempty `code`, `message`, and one or more `citations` of the form
+`{"entityId":"stable-id"}`. Cited IDs must occur in the exact proposal.
+The returned `agentReview.binding` records the proposal reference.
+`change.agent-write` rejects a missing, blocked, or stale decision and then
+performs the ordinary atomic write checks. The engine cannot authenticate the
+subagent that supplied the decision; the host agent must maintain independence.
+No product API key is needed. The host controls model selection and charges.
 
 ## Exit codes
 

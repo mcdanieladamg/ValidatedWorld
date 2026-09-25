@@ -33,11 +33,11 @@ The runtime itself has no third-party dependencies. In a source checkout,
 python -m validated_world project verify .\project.vw.db
 python -m validated_world read ranked-search .\project.vw.db "retention policy"
 python -m validated_world ndjson
-python -m validated_world ai status
 ```
 
 The `ndjson` process keeps reviewed change sessions in memory only. A session
-must present every exact-revision preview page before `change.write`; EOF,
+must present every exact-revision preview page before `change.write` or
+`change.agent-write`; EOF,
 cancel, or process loss discards an unfinished proposal.
 
 Session snapshots are compact by default and omit full operation bodies and the
@@ -48,18 +48,14 @@ and must be read completely before a write. For onboarding, verify the project,
 confirm its purpose and status, then search and inspect bounded task-relevant
 context. Add knowledge incrementally; a full-project import is not required.
 
-## Configuration
+## Host integration
 
-Independent OpenAI review uses environment variables only. ValidatedWorld does
-not load `.env` files, use a credential store, persist credentials, or print key
-material. The NDJSON `ai.status` command reports only effective nonsecret
-configuration.
-
-Optional built-in authoring is a separate Responses API conversation started
-with `python -m validated_world ai assistant <path>`. It uses the
-`VW_AIAUTHORING__*` settings, bounded strict tools, the ordinary reviewed-write
-gates, and no automatic paid retries. It is not required for manual or
-host-driven NDJSON operation.
+The host agent authors through the NDJSON change commands. For a skill-led
+write, it sends the exact paged proposal evidence to a fresh host subagent,
+submits that decision through `change.agent-review`, and calls
+`change.agent-write` only after an allow. A human can explicitly use
+`change.write` after manual review. ValidatedWorld has no built-in model API
+calls or API key configuration.
 
 The SQLite provider does not load extensions. It verifies the schema, database
 integrity, foreign keys, graph rules, and stored state fingerprint whenever it

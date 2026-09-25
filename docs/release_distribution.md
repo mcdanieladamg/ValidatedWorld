@@ -49,10 +49,19 @@ py -3.12 -m venv .venv
 
 ## Plugin installation
 
-Install the generated plugin ZIP through the Codex app's normal local-plugin
-workflow. Start a new agent task after installing or replacing the plugin so
-the host loads the current skill instructions. The standalone skill archive is
-for agent hosts that install skills without the Codex plugin manifest.
+Codex installs plugins from marketplaces. For a local Codex test of the Python
+plugin archive built by this repository, run
+`eng/Install-LocalPythonPlugin.ps1 -Version <version>` from PowerShell.
+The helper extracts that archive under the regenerable `artifacts/local-plugin`
+directory, adds a versioned local marketplace, and installs
+`validated-world-python`. After installing the new candidate, it removes older
+local Python plugin installations created from this repository.
+Restart Codex and use a new task to exercise the installed skill. Keep an
+older `validated-world` plugin disabled during this test so its skill is not
+selected instead.
+
+The standalone skill archive is for agent hosts that install skills without
+the Codex plugin manifest.
 
 Keep user `.vw.db` files outside package or installation directories. Replacing
 the package must not replace project databases or host settings.
@@ -70,39 +79,13 @@ VW_CI_SKIP_MACOS
 
 Absent, empty, or `false` runs that operating system. `true` deliberately skips
 it. Invalid nonempty values fail configuration. A skipped job is reported as
-excluded, never as a passed platform. Pull-request jobs do not receive OpenAI
-credentials.
+excluded, never as a passed platform.
 
-The standard unit and package workflow requires no repository secrets. Runtime
-independent review uses the same environment setting names locally and in a
-trusted, explicitly opted-in CI job:
-
-```text
-OPENAI_API_KEY
-VW_AIREVIEW__OPENAI__APIKEY
-VW_AIREVIEW__ENABLED
-VW_AIREVIEW__PROVIDER
-VW_AIREVIEW__MODEL
-VW_AIREVIEW__TIMEOUTSECONDS
-VW_AIREVIEW__MAXREQUESTBYTES
-VW_AIREVIEW__MAXREQUESTITEMS
-VW_AIREVIEW__MAXREQUESTTOKENS
-VW_AIREVIEW__LIVETESTS
-VW_AIAUTHORING__ENABLED
-VW_AIAUTHORING__PROVIDER
-VW_AIAUTHORING__MODEL
-VW_AIAUTHORING__TIMEOUTSECONDS
-VW_AIAUTHORING__MAXTOOLCALLSPERTURN
-VW_AIAUTHORING__OPENAI__APIKEY
-VW_AIAUTHORING__LIVETESTS
-```
-
-Store keys as repository or environment secrets, never in workflow files,
-command arguments, packages, logs, or project databases. Set only the
-feature-specific `__LIVETESTS` value(s) you intend to exercise to `true`; an
-unset, empty, or `false` value makes no call for that feature. Live provider
-checks run only from trusted code on `main` or an explicit trusted manual
-dispatch, with sequential paid calls.
+The standard unit and package workflow requires no repository secrets.
+The skill uses a host-spawned subagent for review and does not contain a model
+API client or API key setting. Model selection and usage charges belong to the
+host account. The current package has been exercised with a Codex Desktop
+no-history subagent; VS Code and GitHub Copilot adapters need separate testing.
 
 ## Release review
 
@@ -111,8 +94,8 @@ Before publishing a release:
 1. Verify every tracked `.vw.db` with the packaged Python command.
 2. Run the complete unit suite and package extraction smoke on Windows.
 3. Inspect the enabled Windows, Linux, and macOS GitHub Actions jobs.
-4. Confirm any explicitly required live-provider check separately from offline
-   success.
+4. Exercise the host-subagent review workflow separately from offline engine
+   tests on every host advertised as supported.
 5. Inspect archive contents, hashes, versions, licenses, and actual sizes.
 6. Install the exact candidate archive in a clean host and complete one
    disposable reviewed-write workflow.
