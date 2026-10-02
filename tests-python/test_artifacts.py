@@ -1,4 +1,5 @@
 import base64
+import ctypes
 import hashlib
 import os
 import sys
@@ -197,6 +198,95 @@ class ArtifactTests(unittest.TestCase):
 
         self.assertEqual(observed, {"file_descriptor": 41, "command": 50, "size": 1024})
         self.assertTrue(resolved.endswith("artifact.bin"), resolved)
+
+    def test_windows_final_path_resizes_and_normalizes_device_prefixes(self):
+        # Exercise the native adapter contract on every CI host. Real filesystem
+        # tests above still exercise the platform's actual handle implementation.
+        for native, normalized in (("\\\\?\\C:\\allowed\\file.bin", "C:\\allowed\\file.bin"),
+                                   ("\\\\?\\UNC\\server\\share\\file.bin", "\\\\server\\share\\file.bin")):
+            capacities = []
+
+            def resolve(handle, buffer, capacity, flags):
+                self.assertEqual((handle, flags), (41, 0))
+                capacities.append(capacity)
+                if len(capacities) == 1:
+                    return 700
+                buffer.value = native
+                return len(native)
+
+            function = mock.Mock(side_effect=resolve)
+            library = types.SimpleNamespace(GetFinalPathNameByHandleW=function)
+            with self.subTest(native=native), mock.patch.object(ctypes, "WinDLL", return_value=library, create=True):
+                self.assertEqual(artifact_module._windows_final_path(41), os.path.abspath(normalized))
+                self.assertEqual(capacities, [512, 701])
+
+    def test_windows_final_path_resolution_failure_is_reported(self):
+        library = types.SimpleNamespace(GetFinalPathNameByHandleW=mock.Mock(return_value=0))
+        with (mock.patch.object(ctypes, "WinDLL", return_value=library, create=True),
+              mock.patch.object(ctypes, "get_last_error", return_value=5, create=True)):
+            with self.assertRaisesRegex(OSError, "opened path could not be resolved"):
+                artifact_module._windows_final_path(41)
+
+    def test_windows_directory_handle_is_closed_even_if_resolution_fails(self):
+        library = types.SimpleNamespace(CreateFileW=mock.Mock(return_value=41), CloseHandle=mock.Mock())
+        windows_os = types.SimpleNamespace(name="nt")
+        for error in (None, OSError("resolution failed")):
+            library.CloseHandle.reset_mock()
+            with (self.subTest(error=error), mock.patch.object(artifact_module, "os", windows_os),
+                  mock.patch.object(ctypes, "WinDLL", return_value=library, create=True),
+                  mock.patch.object(artifact_module, "_windows_final_path", return_value="resolved-root", side_effect=error)):
+                if error:
+                    with self.assertRaisesRegex(OSError, "resolution failed"):
+                        artifact_module._opened_directory_path("allowed-root")
+                else:
+                    self.assertEqual(artifact_module._opened_directory_path("allowed-root"), "resolved-root")
+                library.CreateFileW.assert_called_with("allowed-root", 0, 0x7, None, 3, 0x02000000, None)
+                library.CloseHandle.assert_called_once_with(41)
+
+    def test_windows_invalid_directory_handles_are_not_resolved_or_closed(self):
+        windows_os = types.SimpleNamespace(name="nt")
+        for handle in (None, ctypes.c_void_p(-1).value):
+            library = types.SimpleNamespace(CreateFileW=mock.Mock(return_value=handle), CloseHandle=mock.Mock())
+            with (self.subTest(handle=handle), mock.patch.object(artifact_module, "os", windows_os),
+                  mock.patch.object(ctypes, "WinDLL", return_value=library, create=True),
+                  mock.patch.object(ctypes, "get_last_error", return_value=5, create=True),
+                  mock.patch.object(artifact_module, "_windows_final_path") as resolve):
+                with self.assertRaisesRegex(OSError, "allowed root could not be opened"):
+                    artifact_module._opened_directory_path("allowed-root")
+                resolve.assert_not_called()
+                library.CloseHandle.assert_not_called()
+
+    def test_file_descriptor_resolution_selects_handle_proc_or_fallback(self):
+        windows_os = types.SimpleNamespace(name="nt")
+        fake_msvcrt = types.ModuleType("msvcrt")
+        fake_msvcrt.get_osfhandle = mock.Mock(return_value=41)
+        with (mock.patch.object(artifact_module, "os", windows_os),
+              mock.patch.dict(sys.modules, {"msvcrt": fake_msvcrt}),
+              mock.patch.object(artifact_module, "_windows_final_path", return_value="opened-file") as resolve):
+            self.assertEqual(artifact_module._opened_path(7, "unused"), "opened-file")
+            fake_msvcrt.get_osfhandle.assert_called_once_with(7)
+            resolve.assert_called_once_with(41)
+
+        target = self.root / "file.bin"
+        target.write_bytes(b"file")
+        posix_os = types.SimpleNamespace(name="posix", path=mock.Mock(wraps=os.path), readlink=mock.Mock(return_value=str(target)))
+        posix_os.path.exists.return_value = True
+        with (mock.patch.object(artifact_module, "os", posix_os),
+              mock.patch.object(artifact_module.sys, "platform", "linux")):
+            self.assertEqual(artifact_module._opened_path(7, str(target)), str(target.resolve()))
+            posix_os.readlink.assert_called_once_with("/proc/self/fd/7")
+            posix_os.path.exists.return_value = False
+            posix_os.readlink.reset_mock()
+            self.assertEqual(artifact_module._opened_path(7, str(target)), str(target.resolve()))
+            posix_os.readlink.assert_not_called()
+
+    def test_posix_directory_descriptor_is_closed_on_resolution_failure(self):
+        posix_os = types.SimpleNamespace(name="posix", O_RDONLY=os.O_RDONLY, open=mock.Mock(return_value=7), close=mock.Mock())
+        with (mock.patch.object(artifact_module, "os", posix_os),
+              mock.patch.object(artifact_module, "_opened_path", side_effect=OSError("resolution failed"))):
+            with self.assertRaisesRegex(OSError, "resolution failed"):
+                artifact_module._opened_directory_path("allowed-root")
+            posix_os.close.assert_called_once_with(7)
 
     def test_caller_sized_sample_bound_does_not_preallocate_requested_capacity(self):
         content = b"tiny"

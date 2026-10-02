@@ -96,16 +96,13 @@ controls model choice, data handling, and any usage charges. ValidatedWorld
 has no built-in model API transport or API key setting. VS Code and GitHub
 Copilot support subagents, but are not yet tested with this package.
 
-Codex Desktop has demonstrated a fresh no-history subagent with a focused
-review result in a controlled proof of concept; a clean installed-skill run is
-the remaining acceptance check. [VS Code subagents](https://code.visualstudio.com/docs/agents/run/subagents)
-run in a separate context and allow custom agent configuration.
-[Forked VS Code skills](https://code.visualstudio.com/docs/agent-customization/agent-skills)
-are experimental and require a host setting. [GitHub Copilot IDE
-subagents](https://docs.github.com/en/copilot/how-tos/chat-with-copilot/chat-in-ide)
-also use a separate context. These capabilities do not establish that the
-current ValidatedWorld archive is supported on those hosts; an end-to-end
-adapter test is required before making that claim.
+Codex Desktop completed an installed-skill disposable-project test with fresh
+no-history subagents returning both block and allow decisions. GitHub documents
+[isolated Copilot subagents in VS Code](https://docs.github.com/en/copilot/how-tos/chat-with-copilot/chat-in-ide)
+and [Copilot CLI custom agents](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-custom-agents).
+Those capabilities do not establish that the current ValidatedWorld archive is
+supported on either host; an end-to-end adapter test is required before making
+that claim.
 
 ## Development checks
 
