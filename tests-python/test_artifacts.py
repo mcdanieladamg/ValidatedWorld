@@ -269,11 +269,15 @@ class ArtifactTests(unittest.TestCase):
 
         target = self.root / "file.bin"
         target.write_bytes(b"file")
-        posix_os = types.SimpleNamespace(name="posix", path=mock.Mock(wraps=os.path), readlink=mock.Mock(return_value=str(target)))
+        # A descriptor link names the opened file, independently of the fallback.
+        # abspath retains filesystem aliases (short names or /var on macOS);
+        # only the fallback uses resolve(strict=True).
+        opened_name = str(self.root / "descriptor-file.bin")
+        posix_os = types.SimpleNamespace(name="posix", path=mock.Mock(wraps=os.path), readlink=mock.Mock(return_value=opened_name))
         posix_os.path.exists.return_value = True
         with (mock.patch.object(artifact_module, "os", posix_os),
               mock.patch.object(artifact_module.sys, "platform", "linux")):
-            self.assertEqual(artifact_module._opened_path(7, str(target)), str(target.resolve()))
+            self.assertEqual(artifact_module._opened_path(7, str(target)), os.path.abspath(opened_name))
             posix_os.readlink.assert_called_once_with("/proc/self/fd/7")
             posix_os.path.exists.return_value = False
             posix_os.readlink.reset_mock()
