@@ -65,10 +65,7 @@ verified temporary backup outside the repository. After the write, run bounded
 semantic report in the human's review; then remove the temporary backup. If the
 application cannot safely update or diff its own database, report that as a
 blocker instead of silently allowing code and database meaning to diverge.
-Never invoke the built-in authoring model merely
-to update this repository's graph; the coding agent is already the author. Use
-the optional independent reviewer only when the task and configured cost
-boundary warrant it.
+The coding agent authors graph changes through the checkout CLI. For repository self-hosting, use the explicit `change.write` route after reviewing every exact preview page. Test the skill host-subagent route in disposable projects.
 
 ## Repository synchronization contract
 
@@ -183,8 +180,9 @@ the blueprint's explicit product status and acceptance criteria.
 - If no phase is current, make no changes. Report the recorded state and ask the
   human for direction.
 
-Do not launch another agent. This project uses sequential, one-person-driven
-development phases.
+Do not delegate implementation of a development phase to another agent. This
+does not prohibit spawning fresh read-only subagents when testing the product's
+host-subagent review feature in a disposable project.
 
 ## Bounded testing and retries
 
@@ -198,21 +196,10 @@ python -m unittest discover -s tests-python -v
 .\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
 ```
 
-Verify that the selected interpreter is Python 3.12 or newer. The default unit
-and package commands are offline and must not make provider calls. Live tests
-require separate explicit human opt-in and effective configuration; report them
-as excluded when they are not run, never passed.
+Verify that the selected interpreter is Python 3.12 or newer. The default unit and package commands are offline and make no product model API calls. Host-subagent integration needs a separately exercised host workflow.
 Also run `eng/Test-DeveloperTools.ps1` and `eng/Test-Blueprint.ps1` for changes to
 release tooling or blueprint conventions. The latter enforces this repository's
 roadmap rules through the public CLI; it is not a built-in domain profile.
-
-If an explicitly opted-in live OpenAI call fails with a transport or network
-access error inside the sandbox before receiving a provider response, rerun the
-exact authorized Python live-test command with the command tool's elevated,
-outside-sandbox permission and a narrowly scoped explanation that the call must
-reach the OpenAI API. This is a sandbox network workaround, not a provider or
-product failure. Do not print or inspect the API key or change the request
-merely to obtain permission.
 
 For the same failure, make at most two materially different repair attempts.
 Never rerun an unchanged failing command merely hoping it will pass. Give an
@@ -309,9 +296,7 @@ not a Git operation.
   reviewed graph atomically or change nothing. This is the current MVP scope;
   durable drafts are deferred, not permanently prohibited or an implicit
   prerequisite for plugin delivery.
-- Treat semantic judgment as human/optional-AI review, not deterministic proof.
-  When the optional reviewer is configured and enabled, its allow/block decision
-  is a required preflight gate for the exact database write attempt.
+- Treat semantic judgment as human or host-subagent review, not deterministic proof. The skill workflow requires an allow decision bound to the exact proposal before `change.agent-write`. The direct `change.write` command is an explicit human manual review route.
 - Keep Core independent of SQLite, JSON, files, providers, and UI.
 - Use the fixed four-table SQLite schema and current embedded provider recorded by
   the blueprint's `storage-four-tables` and `storage-provider-contract` nodes.
@@ -322,48 +307,9 @@ not a Git operation.
   extensions. Do not impose guessed size, count, or work ceilings.
 - Do not persist or log credentials.
 
-## Optional OpenAI tasks
+## Host-agent workflow
 
-OpenAI is the only supported built-in provider. The agent host is a client, not
-an additional built-in provider.
-AI prompts, tools, and responses are hardcoded in English. The AI features are
-optional at runtime, but their development phases have the strict prerequisites
-below. Transport, packaging, and offline protocol tests do not require a product
-API key; live-provider work still does.
-
-Before changing code for a live-AI task, check only whether an API key is
-available through the application's effective environment configuration. Use
-the public, non-secret `ai.status` request from the repository root:
-
-```powershell
-$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
-'{"version":1,"command":"ai.status","payload":{}}' | python -m validated_world ndjson
-```
-
-Proceed when its payload reports `configured: true`. This command reports only
-effective status and never the key. Never print, read back, copy, infer, obtain,
-or set the secret. If effective configuration is absent, make no live-AI code
-changes; ask the human to configure it locally and stop. Never seek out a key on
-your own.
-
-Live tests also require the documented explicit opt-in flag and effective
-feature configuration. Never override effective configuration in the test
-command. During each AI feature's
-development, an authorized live test must log
-and inspect the complete serialized request at least once during that task's
-development, validate the standalone prompt and coverage, and exercise meaningful
-known and control cases. There are zero automatic paid retries, parallel paid
-calls, or fallback providers/models.
-
-In normal product use, `VW_AIREVIEW__ENABLED` defaults true but is effective only
-when a key is configured. An enabled reviewer runs automatically when
-`change.write` is attempted, before SQLite opens a transaction. Only an `allow`
-decision bound to the exact current fingerprints permits the write. A `block`,
-refusal, timeout, malformed response, or provider failure leaves SQLite
-unchanged and returns feedback. An unchanged retry reuses a current bound
-`allow` or `block` decision; provider trouble can be retried deliberately.
-Changing the proposal invalidates any decision. Disabled or unconfigured review
-uses the complete manual workflow without a provider call.
+The main agent authors graph changes. In the skill-led workflow, a fresh host subagent reviews only the exact proposal evidence read-only and returns a cited allow/block decision. Submit that decision through change.agent-review and use change.agent-write only after allow. The engine validates the decision shape and proposal fingerprints but cannot authenticate reviewer identity. Keep host-subagent tests separate from offline product tests. No product model API client or key setting is supported.
 
 ## Repository layout
 

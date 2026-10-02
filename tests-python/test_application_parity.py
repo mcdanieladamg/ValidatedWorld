@@ -8,7 +8,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "src-python"))
 
 from validated_world.application import Application, sample_graph
-from validated_world.config import ReviewConfig
 from validated_world.models import EntityKind, Node, Operation, OperationKind
 from validated_world.storage import ProjectStore
 
@@ -53,7 +52,7 @@ class ApplicationParityTests(unittest.TestCase):
         session = application.apply(session.reference(), operations)
         session = self._review_and_preview(application, session)
 
-        result = application.write(session.reference(), bypass_ai_review=True)
+        result = application.write(session.reference())
 
         self.assertEqual(result["status"], "written")
         stored = ProjectStore().load(self.path)
@@ -65,7 +64,7 @@ class ApplicationParityTests(unittest.TestCase):
         application = Application()
         before = self.path.read_bytes()
         pending = self._replace_battery(application)
-        self.assertEqual(application.write(pending.reference(), bypass_ai_review=True)["status"], "reviewNotReady")
+        self.assertEqual(application.write(pending.reference())["status"], "reviewNotReady")
         self.assertEqual(self.path.read_bytes(), before)
         application.discard(pending.reference())
 
@@ -75,7 +74,7 @@ class ApplicationParityTests(unittest.TestCase):
             (Operation(OperationKind.REMOVE, EntityKind.EDGE, "battery-scope-parent"),),
         )
         self.assertEqual(invalid.proposed_validation.status, "invalid")
-        self.assertEqual(application.write(invalid.reference(), bypass_ai_review=True)["status"], "reviewNotReady")
+        self.assertEqual(application.write(invalid.reference())["status"], "reviewNotReady")
         self.assertEqual(self.path.read_bytes(), before)
         application.discard(invalid.reference())
 
@@ -86,7 +85,7 @@ class ApplicationParityTests(unittest.TestCase):
             max_affected_nodes=1,
         )
         self.assertTrue(bounded.omissions)
-        self.assertEqual(application.write(bounded.reference(), bypass_ai_review=True)["status"], "reviewNotReady")
+        self.assertEqual(application.write(bounded.reference())["status"], "reviewNotReady")
         self.assertEqual(self.path.read_bytes(), before)
 
     def test_written_and_discarded_references_cannot_authorize_later_sessions(self):
@@ -100,13 +99,13 @@ class ApplicationParityTests(unittest.TestCase):
         written = self._replace_battery(application, "Written")
         written = self._review_and_preview(application, written)
         written_reference = written.reference()
-        self.assertEqual(application.write(written_reference, bypass_ai_review=True)["status"], "written")
+        self.assertEqual(application.write(written_reference)["status"], "written")
         with self.assertRaisesRegex(ValueError, "session not found"):
             application.locate(written_reference)
 
         later = application.begin(str(self.path), "technical-project", "tester", "Later")
         with self.assertRaisesRegex(ValueError, "session not found"):
-            application.write(discarded_reference, bypass_ai_review=True)
+            application.write(discarded_reference)
         self.assertEqual(application.locate(later.reference()).session_id, later.session_id)
 
     def test_real_sqlite_lock_returns_bounded_busy_result_and_preserves_session(self):
@@ -117,7 +116,7 @@ class ApplicationParityTests(unittest.TestCase):
         try:
             lock.execute("BEGIN EXCLUSIVE")
             started = time.monotonic()
-            result = application.write(session.reference(), bypass_ai_review=True)
+            result = application.write(session.reference())
             elapsed = time.monotonic() - started
         finally:
             lock.rollback()
@@ -128,31 +127,57 @@ class ApplicationParityTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), before)
         self.assertEqual(application.locate(session.reference()).session_id, session.session_id)
 
-    def test_semantic_block_is_invalidated_by_repair_before_a_second_review(self):
-        decisions = iter(("block", "allow"))
-        requests = []
-
-        def reviewer(request, _config):
-            requests.append(request)
-            decision = next(decisions)
-            return {"status": "complete", "decision": decision, "summary": decision, "concerns": []}
-
-        config = ReviewConfig(True, "openai", "offline", 1, False, "offline-key", None, None, None)
-        application = Application(review_config_loader=lambda: config, semantic_reviewer=reviewer)
+    def test_agent_block_is_invalidated_by_repair_before_a_second_review(self):
+        application = Application()
         session = self._review_and_preview(application, self._replace_battery(application, "Needs clarification"))
-        blocked = application.write(session.reference())
-        self.assertEqual(blocked["status"], "semanticReviewBlocked")
+        before = self.path.read_bytes()
+        self.assertEqual(application.agent_write(session.reference())["status"], "agentReviewBlocked")
+        application.record_agent_review(session.reference(), {"decision": "block", "summary": "Missing support", "concerns": [{"code": "unsupported", "message": "Claim needs evidence", "citations": [{"entityId": "battery-assumption"}]}]})
+        self.assertEqual(application.agent_write(session.reference())["status"], "agentReviewBlocked")
+        with self.assertRaisesRegex(ValueError, "already recorded"):
+            application.record_agent_review(session.reference(), {"decision": "allow", "summary": "Changed mind", "concerns": []})
+        self.assertEqual(self.path.read_bytes(), before)
 
         repaired = application.apply(
             session.reference(),
             (Operation(OperationKind.REPLACE, EntityKind.NODE, "battery-assumption", node=Node("battery-assumption", "Target duty-cycle battery life", "assumption")),),
         )
         repaired = self._review_and_preview(application, repaired)
-        written = application.write(repaired.reference())
+        self.assertEqual(application.agent_write(repaired.reference())["status"], "agentReviewBlocked")
+        application.record_agent_review(repaired.reference(), {"decision": "allow", "summary": "Evidence is consistent", "concerns": []})
+        written = application.agent_write(repaired.reference())
 
         self.assertEqual(written["status"], "written")
-        self.assertEqual(len(requests), 2)
-        self.assertNotEqual(requests[0]["binding"]["operationFingerprint"], requests[1]["binding"]["operationFingerprint"])
+        self.assertEqual(written["agentReview"]["decision"], "allow")
+
+    def test_agent_review_requires_complete_preview_and_cited_exact_evidence(self):
+        application = Application()
+        session = self._replace_battery(application, "Claim requiring review")
+        allow = {"decision": "allow", "summary": "Checked", "concerns": []}
+        with self.assertRaisesRegex(ValueError, "complete exact proposal"):
+            application.record_agent_review(session.reference(), allow)
+        session = application.review(
+            session.reference(),
+            [{"nodeId": item["nodeId"], "kind": "updated" if item["isDirectChange"] else "reviewedNoChange"} for item in session.affected_nodes],
+            [item["nodeId"] for item in session.scope_context],
+        )
+        session.preview(1)
+        with self.assertRaisesRegex(ValueError, "complete exact proposal"):
+            application.record_agent_review(session.reference(), allow)
+        cursor = session.preview(1)["reviewPage"]["nextCursor"]
+        while cursor is not None:
+            cursor = session.preview(1, cursor)["reviewPage"]["nextCursor"]
+        for invalid in (
+            {"decision": "maybe", "summary": "Checked", "concerns": []},
+            {"decision": "allow", "summary": "Checked", "concerns": [{"code": "bad", "message": "Issue", "citations": [{"entityId": "battery-assumption"}]}]},
+            {"decision": "block", "summary": "Issue", "concerns": []},
+            {"decision": "block", "summary": "Issue", "concerns": [{"code": "bad", "message": "Issue", "citations": [{"entityId": "invented"}]}]},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                application.record_agent_review(session.reference(), invalid)
+        self.assertEqual(application.agent_write(session.reference())["status"], "agentReviewBlocked")
+        application.record_agent_review(session.reference(), allow)
+        self.assertEqual(application.agent_write(session.reference())["status"], "written")
 
 
 if __name__ == "__main__":

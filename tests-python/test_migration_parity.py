@@ -158,9 +158,9 @@ class MigrationParityTests(unittest.TestCase):
         app = Application(store); session = app.begin(str(path), "technical-project", "human", "atomic")
         session = app.apply(session.reference(), (Operation(OperationKind.REPLACE, EntityKind.NODE, "battery-assumption", node=Node("battery-assumption", "Retry", "assumption")),))
         session = app.review(session.reference(), [{"nodeId": item["nodeId"], "kind": "updated" if item["isDirectChange"] else "reviewedNoChange"} for item in session.affected_nodes], [item["nodeId"] for item in session.scope_context]); session.preview(1000)
-        before = path.read_bytes(); failed = app.write(session.reference(), bypass_ai_review=True)
+        before = path.read_bytes(); failed = app.write(session.reference())
         self.assertEqual(failed["status"], "failed"); self.assertEqual(path.read_bytes(), before); self.assertIn("technical-project", app.sessions)
-        fail["enabled"] = False; self.assertEqual(app.write(session.reference(), bypass_ai_review=True)["status"], "written")
+        fail["enabled"] = False; self.assertEqual(app.write(session.reference())["status"], "written")
 
     def test_independently_reviewed_golden_scenarios_match_affected_and_context_sets(self):
         fixture_root = Path(__file__).parents[1] / "samples" / "TechnicalProject"

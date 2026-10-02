@@ -166,7 +166,7 @@ class AffectedAnalysisTests(unittest.TestCase):
         purpose = next(item for item in graph.nodes if item.id == "purpose")
         other = external.apply(other.reference(), (Operation(OperationKind.REPLACE, EntityKind.NODE, purpose.id, node=Node(purpose.id, "Externally changed", purpose.kind)),))
         external.review(other.reference(), [{"nodeId": item["nodeId"], "kind": "updated" if item["isDirectChange"] else "reviewedNoChange"} for item in other.affected_nodes], [item["nodeId"] for item in other.scope_context])
-        other.preview(max(1, len(other.review_items()))); external.write(other.reference(), bypass_ai_review=True)
+        other.preview(max(1, len(other.review_items()))); external.write(other.reference())
         with self.assertRaisesRegex(ValueError, "stale-baseFingerprint"): app.session(session.reference())
 
 

@@ -34,12 +34,19 @@ try {
         $engine = Join-Path $destination 'src-python'
         if (-not (Test-Path -LiteralPath (Join-Path $engine 'validated_world') -PathType Container)) { throw "Python engine missing from $($archive.Name)" }
         $env:PYTHONPATH = $engine
-        & $python -m validated_world --version | Out-Null
+        $expectedVersion = $null
+        if ($archive.Name -match '-([0-9]+\.[0-9]+\.[0-9]+)-dev(?:\.([0-9]+))?\.zip$') {
+            $developmentNumber = if ([string]::IsNullOrWhiteSpace($Matches[2])) { '0' } else { $Matches[2] }
+            $expectedVersion = "$($Matches[1]).dev$developmentNumber"
+        }
+        $reportedVersion = & $python -m validated_world --version
         if ($LASTEXITCODE -ne 0) { throw "Extracted Python engine failed smoke launch: $($archive.Name)" }
+        if ($null -ne $expectedVersion -and $reportedVersion -notmatch [regex]::Escape($expectedVersion)) { throw "Extracted Python engine version differs from archive: $($archive.Name) reports $reportedVersion" }
         $launcher = Get-ChildItem -LiteralPath $destination -Filter 'validated_world.py' -File -Recurse | Select-Object -First 1
         if ($null -eq $launcher) { throw "Skill launcher missing from $($archive.Name)" }
-        & $python $launcher.FullName --version | Out-Null
+        $launcherVersion = & $python $launcher.FullName --version
         if ($LASTEXITCODE -ne 0) { throw "Extracted skill launcher failed smoke launch: $($archive.Name)" }
+        if ($null -ne $expectedVersion -and $launcherVersion -notmatch [regex]::Escape($expectedVersion)) { throw "Extracted skill launcher version differs from archive: $($archive.Name) reports $launcherVersion" }
     }
     Write-Output "Python package smoke passed: $packages"
 }

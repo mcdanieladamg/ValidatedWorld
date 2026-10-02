@@ -13,9 +13,7 @@ from typing import Any
 from . import __version__
 from .application import Application, sample_graph
 from .artifacts import check_artifacts
-from .authoring import AuthoringConversation, AuthoringToolHost
 from .bulk import plan_bulk
-from .config import load_authoring_config, load_review_config
 from .merge import merge_projects
 from .models import EntityKind, Graph, Operation, OperationKind, Node, Edge, ordinal_key
 from .protocol import graph_from_dto, json_loads_strict, operation_from_dto
@@ -40,7 +38,7 @@ def _print_help(out) -> None:
     out.write("ValidatedWorld - local semantic graph change control\n")
     out.write(f"Version {__version__}\n")
     out.write("Supported product language: English. Unicode graph text can be stored, but non-English workflows are unsupported and unvalidated.\n\n")
-    out.write("Commands:\n  project   Initialize, inspect, compare, verify, back up, or export a project\n  artifact  Check opt-in external artifact anchors\n  read      Run bounded graph queries\n  sample    List or create built-in disposable samples\n  template  List, export, describe, or instantiate graph templates\n  ai        Show nonsecret status or run the optional authoring assistant\n  shell     Run the stateful NDJSON workflow until EOF\n  ndjson    Run the structured automation interface\n")
+    out.write("Commands:\n  project   Initialize, inspect, compare, verify, back up, or export a project\n  artifact  Check opt-in external artifact anchors\n  read      Run bounded graph queries\n  sample    List or create built-in disposable samples\n  template  List, export, describe, or instantiate graph templates\n  shell     Run the stateful NDJSON workflow until EOF\n  ndjson    Run the structured automation interface\n")
 
 
 def _stored(project):
@@ -191,25 +189,6 @@ def direct_command(arguments: list[str], out, err) -> int:
             if len(arguments) == 7 and arguments[1] == "instantiate":
                 template = resolve(arguments[2]); graph = instantiate(template, arguments[4], arguments[5], arguments[6]); out.write(_json(_stored(store.initialize(arguments[3], graph))) + "\n"); return SUCCESS
             raise ValueError("incorrect template arguments")
-        if group == "ai":
-            if len(arguments) == 2 and arguments[1] == "status":
-                out.write(_json(load_review_config().public() | {"authoring": {key: value for key, value in load_authoring_config().items() if not key.startswith("_")}}) + "\n"); return SUCCESS
-            if len(arguments) == 3 and arguments[1] == "assistant":
-                configuration = load_authoring_config()
-                if not configuration["enabled"] or not configuration["configured"]:
-                    raise ValueError("AI authoring is not configured and enabled; set the documented environment variables or use the manual NDJSON workflow")
-                conversation = AuthoringConversation(AuthoringToolHost(Application(), arguments[2]), max_tool_calls=configuration["maxToolCallsPerTurn"])
-                out.write("ValidatedWorld AI authoring assistant. Type exit to stop.\n"); out.flush()
-                for line in sys.stdin:
-                    if line.strip().lower() in {"exit", "quit"}: break
-                    if not line.strip(): continue
-                    result = conversation.turn(line.strip())
-                    if result["text"]: out.write(result["text"] + "\n")
-                    for warning in result["warnings"]: err.write("warning[" + warning + "]\n")
-                    out.flush(); err.flush()
-                if conversation.host.session is not None: err.write("warning[session-loss]: an unwritten in-memory change was discarded when the assistant exited\n")
-                return SUCCESS
-            raise ValueError("expected 'ai status' or 'ai assistant <path>'")
         if group == "shell":
             return ndjson_loop(sys.stdin, out, err)
         if group == "ndjson": return ndjson_loop(sys.stdin, out, err)
@@ -253,7 +232,7 @@ _REFERENCE_FIELDS = {"projectId", "sessionId", "baseFingerprint", "operationFing
 
 def _validate_payload(command: str, payload: Any) -> dict:
     shapes = {
-        "host.help": (set(), set()), "host.exit": (set(), set()), "ai.status": (set(), set()),
+        "host.help": (set(), set()), "host.exit": (set(), set()),
         "project.init": ({"path", "projectId", "title", "purposeNodeId", "purposeText"}, set()),
         "project.status": ({"path"}, set()), "project.open": ({"path"}, set()),
         "project.verify": ({"path"}, set()), "project.export-sql": ({"path"}, set()),
@@ -291,7 +270,9 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "change.preview": ({"reference"}, {"limit", "cursor"}),
         "change.review": ({"reference", "dispositions", "presentedContextNodeIds"}, {"includeOperations", "includeProposedGraph"}),
         "change.validate": ({"reference"}, {"includeOperations", "includeProposedGraph"}),
-        "change.write": ({"reference"}, {"bypassAiReview"}),
+        "change.agent-review": ({"reference", "decision"}, set()),
+        "change.agent-write": ({"reference"}, set()),
+        "change.write": ({"reference"}, set()),
         "change.discard": ({"reference"}, set()),
     }
     if command not in shapes:
@@ -315,7 +296,7 @@ def _validate_payload(command: str, payload: Any) -> dict:
     for name in positive_fields & set(payload):
         if not isinstance(payload[name], int) or isinstance(payload[name], bool) or payload[name] < 1:
             raise ValueError(f"{name} must be a positive integer")
-    for name in {"includeOperations", "includeProposedGraph", "bypassAiReview"} & set(payload):
+    for name in {"includeOperations", "includeProposedGraph"} & set(payload):
         if not isinstance(payload[name], bool):
             raise ValueError(f"{name} must be Boolean")
     if "cursor" in payload and (not isinstance(payload["cursor"], str) or not payload["cursor"]):
@@ -367,11 +348,9 @@ def ndjson_loop(inp, out, err) -> int:
                 raise ValueError("protocol version 1 and a text command are required")
             payload = _validate_payload(command, request["payload"])
             if command == "host.help":
-                value = {"protocolVersion": 1, "framing": "One request and one result JSON object per line. Unknown fields are rejected.", "supportedProductLanguage": "English", "graphTextSupport": "Unicode text is stored without language interpretation; non-English workflows are unsupported and unvalidated.", "commands": ["host.help", "host.exit", "project.init", "project.status", "project.open", "project.verify", "project.backup", "project.export-sql", "project.diff", "project.merge", "project.bulk_plan", "artifact.check", "sample.list", "sample.create", "template.list", "template.describe", "template.export", "template.instantiate", "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope", "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report", "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand", "change.affected", "change.omission-details", "change.preview", "change.review", "change.validate", "change.write", "change.discard", "ai.status"]}
+                value = {"protocolVersion": 1, "framing": "One request and one result JSON object per line. Unknown fields are rejected.", "supportedProductLanguage": "English", "graphTextSupport": "Unicode text is stored without language interpretation; non-English workflows are unsupported and unvalidated.", "commands": ["host.help", "host.exit", "project.init", "project.status", "project.open", "project.verify", "project.backup", "project.export-sql", "project.diff", "project.merge", "project.bulk_plan", "artifact.check", "sample.list", "sample.create", "template.list", "template.describe", "template.export", "template.instantiate", "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope", "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report", "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand", "change.affected", "change.omission-details", "change.preview", "change.review", "change.validate", "change.agent-review", "change.agent-write", "change.write", "change.discard"]}
             elif command == "host.exit":
                 out.write(_json(_result(command, {"warnings": []})) + "\n"); out.flush(); return SUCCESS
-            elif command == "ai.status":
-                value = load_review_config().public() | {"authoring": {key: item for key, item in load_authoring_config().items() if not key.startswith("_")}}
             elif command.startswith("project."):
                 if command == "project.init": value = _stored(app.initialize(payload["path"], payload["projectId"], payload["title"], payload["purposeNodeId"], payload["purposeText"]))
                 elif command == "project.status": value = app.store.status(payload["path"])
@@ -417,8 +396,10 @@ def ndjson_loop(inp, out, err) -> int:
             elif command == "change.omission-details": value = app.session(payload["reference"]).read_omission_details(payload["fingerprint"], payload.get("limit", 100), payload.get("cursor"))
             elif command == "change.review": value = app.review(payload["reference"], payload.get("dispositions", []), payload.get("presentedContextNodeIds", [])).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.validate": value = app.session(payload["reference"]).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
+            elif command == "change.agent-review": value = app.record_agent_review(payload["reference"], payload["decision"]).snapshot()
+            elif command == "change.agent-write": value = app.agent_write(payload["reference"])
             elif command == "change.write":
-                value = app.write(payload["reference"], payload.get("bypassAiReview", False))
+                value = app.write(payload["reference"])
             elif command == "change.discard": value = app.discard(payload["reference"])
             else: raise ValueError(f"unknown NDJSON command '{command}'")
             out.write(_json(_result(command, value)) + "\n"); out.flush()

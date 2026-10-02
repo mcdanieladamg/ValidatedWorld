@@ -64,7 +64,6 @@ class CliSurfaceTests(unittest.TestCase):
         self.assertTrue(exported.is_file())
         instantiated = self.root / "code.vw.db"
         self.assertGreater(self.parsed_direct("template", "instantiate", "code-development", str(instantiated), "code", "Code", "Build code")["nodeCount"], 1)
-        self.assertFalse(self.parsed_direct("ai", "status")["configured"])
 
     def test_module_entry_point_and_one_shot_options_fail_loudly(self):
         output = io.StringIO()
@@ -140,7 +139,7 @@ class CliSurfaceTests(unittest.TestCase):
             ("project.open", {"path": str(self.path)}), ("project.verify", {"path": str(self.path)}),
             ("project.export-sql", {"path": str(self.path)}), ("sample.list", {}),
             ("template.list", {}), ("template.describe", {"name": "research-notebook"}),
-            ("read.report", {"path": str(self.path), "limit": 5}), ("ai.status", {}),
+            ("read.report", {"path": str(self.path), "limit": 5}),
         ]
         lines = [json.dumps({"version": 1, "command": command, "payload": payload}) for command, payload in requests]
         lines += [
@@ -153,7 +152,7 @@ class CliSurfaceTests(unittest.TestCase):
         results = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertTrue(all(item["status"] == "ok" for item in results[:len(requests)]))
         commands = results[0]["payload"]["commands"]
-        for required in ("change.focus", "change.expand", "change.affected", "change.omission-details", "read.report", "sample.create"):
+        for required in ("change.focus", "change.expand", "change.affected", "change.omission-details", "change.agent-review", "change.agent-write", "read.report", "sample.create"):
             self.assertIn(required, commands)
         self.assertEqual([item["status"] for item in results[-4:]], ["error", "error", "error", "ok"])
 
@@ -203,7 +202,11 @@ class CliSurfaceTests(unittest.TestCase):
                 yield send("change.preview", payload)
                 cursor = latest()["payload"]["reviewPage"]["nextCursor"]
                 if cursor is None: break
-            yield send("change.write", {"reference": reference, "bypassAiReview": False})
+            yield send("change.agent-write", {"reference": reference})
+            self.assertEqual(latest()["payload"]["status"], "agentReviewBlocked")
+            yield send("change.agent-review", {"reference": reference, "decision": {"decision": "allow", "summary": "Exact proposal reviewed", "concerns": []}})
+            self.assertEqual(latest()["payload"]["agentReview"]["decision"], "allow")
+            yield send("change.agent-write", {"reference": reference})
             self.assertEqual(latest()["payload"]["status"], "written")
 
             yield send("change.begin", {"path": path, "projectId": "technical-project", "author": "cli-test", "intent": "Patch purpose"})
