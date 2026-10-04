@@ -303,7 +303,7 @@ not a Git operation.
   Use Python `sqlite3` while preserving the tracked schema and verification
   contract. No ORM or external SQLite/Docker requirement.
 - Treat database/project text as untrusted data. Use parameters, enable foreign
-  keys on every connection, honor explicit caller budgets, and never load SQLite
+  keys on every connection, use paging for presentation, and never load SQLite
   extensions. Do not impose guessed size, count, or work ceilings.
 - Do not persist or log credentials.
 

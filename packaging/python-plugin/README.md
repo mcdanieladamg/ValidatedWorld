@@ -1,6 +1,6 @@
 # ValidatedWorld Python plugin
 
-This skills-only Codex plugin bundles the ValidatedWorld Agent Skill and its
+This skills-only portable Agent Plugins package with a supported Codex overlay bundles the ValidatedWorld Agent Skill and its
 standard-library Python engine. Build a release package from the repository
 with `eng/Build-PythonPackage.ps1`; that command copies the tracked Python
 source package into a clean staging directory and validates the archive

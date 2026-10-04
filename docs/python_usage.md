@@ -36,15 +36,16 @@ python -m validated_world ndjson
 ```
 
 The `ndjson` process keeps reviewed change sessions in memory only. A session
-must present every exact-revision preview page before `change.write` or
-`change.agent-write`; EOF,
+must present every exact-revision preview page before manual `change.write`.
+Packet-led `change.agent-write` instead requires all assigned evidence and a
+current allow from each branch plus a separate synthesis reviewer. EOF,
 cancel, or process loss discards an unfinished proposal.
 
 Session snapshots are compact by default and omit full operation bodies and the
 proposed graph. Use `change.affected` with a caller-selected `limit`, then follow
 `page.nextCursor` until `page.isComplete` to collect exact affected-node,
 edge-change, and scope-context evidence. `change.preview` is separately paged
-and must be read completely before a write. For onboarding, verify the project,
+and must be read completely for the manual or single-reviewer route. For onboarding, verify the project,
 confirm its purpose and status, then search and inspect bounded task-relevant
 context. Add knowledge incrementally; a full-project import is not required.
 
@@ -52,8 +53,10 @@ context. Add knowledge incrementally; a full-project import is not required.
 
 The host agent authors through the NDJSON change commands. For a skill-led
 write, it sends the exact paged proposal evidence to a fresh host subagent,
-submits that decision through `change.agent-review`, and calls
-`change.agent-write` only after an allow. A human can explicitly use
+submits a small-proposal decision through `change.agent-review`, or uses
+`change.review-plan`, lossless evidence exports and `change.review-result` for
+branch reviews followed by fresh synthesis. It calls `change.agent-write` only
+after the chosen workflow has complete current approval. A human can explicitly use
 `change.write` after manual review. ValidatedWorld has no built-in model API
 calls or API key configuration.
 
@@ -65,7 +68,7 @@ The Python surface also provides read-only `project diff`, `project merge`,
 `project bulk-plan`, `project export-sql`, built-in template commands, bounded
 queries, artifact checks, and the complete in-memory `change.*` workflow. Use
 `change.preview` until its `reviewPage.nextCursor` is null before
-calling `change.write`; the cursor is bound to the exact proposal and page
+calling manual `change.write`; the cursor is bound to the exact proposal and page
 size. `project merge` and `project bulk-plan` produce plans only and never
 write a database.
 

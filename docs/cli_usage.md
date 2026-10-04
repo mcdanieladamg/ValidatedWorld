@@ -97,8 +97,8 @@ one-shot surface. Change commands are stateful:
 2. `change.apply` replaces the operation batch; `change.patch` updates it.
 3. Inspect `change.show`, `change.affected`, and `change.validate` as needed.
    `change.focus` can add explicit scope-parent selections without mutating the
-   session. `change.expand` reruns affected analysis with new caller budgets;
-   `change.omission-details` pages a fingerprint-bound omission group.
+   session. `change.expand` reruns complete affected analysis and invalidates review.
+   Paging controls presentation; affected analysis has no resource-allocation caps.
 4. `change.review` records dispositions and presented scope context.
 5. Call `change.preview`, following every `nextCursor`
    for that exact revision and page size.
@@ -121,8 +121,8 @@ counts and readiness without operation bodies or the proposed graph. Request
 inspection. `change.affected` accepts `limit` and `cursor` and returns bounded
 `items` pages with `page.nextCursor`, `page.totalCount`, and `page.isComplete`.
 Its cursor is bound to the exact session revision and page size. `change.preview`
-remains the complete exact review evidence gate and is also paged; follow every
-cursor before writing.
+is the exact evidence gate for manual and single-reviewer writes. Broad reviews
+can use lossless packets with a separate synthesis gate instead.
 
 For onboarding and routine discovery, verify the database, read its status,
 confirm the purpose, then search task terms and inspect only the relevant nodes,
@@ -143,6 +143,43 @@ The returned `agentReview.binding` records the proposal reference.
 performs the ordinary atomic write checks. The engine cannot authenticate the
 subagent that supplied the decision; the host agent must maintain independence.
 No product API key is needed. The host controls model selection and charges.
+
+## Packet review commands
+
+After completing `change.review`, `change.review-plan` returns a paged manifest
+with one owner per exact review ordinal, a `planFingerprint`, algorithm, coverage
+count and `synthesisPacketId`. `change.review-packet` takes `reference`,
+`planFingerprint`, `packetId` and optional `limit`/`cursor`; it returns bound exact
+owned evidence plus labeled shared context. Cursors bind content and page size.
+
+`change.review-export` takes the same binding fields, an explicit nonexistent
+`destinationPath`, and optional page `limit`. Its compact result points to a
+manifest containing safe generated page paths and SHA-256 hashes. Export files
+are temporary immutable evidence, not restorable drafts or project authority.
+`change.review-cleanup` removes engine-owned exports. Successful writes/discards
+and graceful EOF clean them; the host cleans known directories after a crash.
+
+`change.review-result` takes `reference`, `binding` and `result`. Binding contains
+`reference`, `planFingerprint`, `packetId`, `packetFingerprint`; result contains
+`decision`, `summary`, `citations`, `concerns`, `questions`. All assigned pages must
+be presented. Allow has citations but no unresolved concerns/questions; block
+requires cited concerns; needs-context requires questions and cannot approve.
+Terminal results are immutable. Every branch must allow before synthesis is
+available. A separate fresh synthesis reviewer receives global rule/validation
+and root evidence, cross-branch edges/endpoints and branch summaries. Only its
+current allow together with all branch allows permits `change.agent-write`.
+
+`change.review-context` replaces registered supplements with exact old/new
+session evidence for its `entityIds` list and returns a new reference. It
+invalidates the entire plan/results. Explicit `refinements` on `change.review-plan`
+partition a branch's assigned ordinals losslessly; missing, duplicate or foreign
+ordinals fail. Refinement restarts all review. Proposal/disposition/context and
+external DB revisions also invalidate approvals. There are no cost, work, byte,
+item or token allocations; page sizes and deliberate read-query depth remain.
+
+See the skill's [packet workflow](../skills/validated-world/references/packet-review.md)
+for complete host instructions. The engine cannot authenticate reviewer identity,
+independence or reading. No API client or credential configuration is added.
 
 ## Exit codes
 

@@ -88,21 +88,12 @@ class GraphIndex:
         return result
 
 
-def validate_graph(graph: Graph, max_diagnostics: int = 2**31 - 1, max_traversal_depth: int = 2**31 - 1) -> ValidationResult:
-    if not isinstance(max_diagnostics, int) or isinstance(max_diagnostics, bool) or max_diagnostics < 1:
-        raise ValueError("max_diagnostics must be a positive integer")
-    if not isinstance(max_traversal_depth, int) or isinstance(max_traversal_depth, bool) or max_traversal_depth < 1:
-        raise ValueError("max_traversal_depth must be a positive integer")
+def validate_graph(graph: Graph) -> ValidationResult:
     index = GraphIndex(graph)
     diagnostics: list[Diagnostic] = []
-    inconclusive = False
 
     def add(code: str, message: str, entity: str | None = None, related: str | None = None, path: Iterable[str] = ()) -> None:
-        nonlocal inconclusive
-        if len(diagnostics) < max_diagnostics:
-            diagnostics.append(Diagnostic(code, message, entity, related, tuple(path)))
-        else:
-            inconclusive = True
+        diagnostics.append(Diagnostic(code, message, entity, related, tuple(path)))
 
     node_counts: dict[str, int] = {}
     edge_counts: dict[str, int] = {}
@@ -156,10 +147,6 @@ def validate_graph(graph: Graph, max_diagnostics: int = 2**31 - 1, max_traversal
             parents = index.scope_parents(current)
             if len(parents) != 1:
                 break
-            if len(path) >= max_traversal_depth:
-                inconclusive = True
-                add("traversal-depth-limit", f"Scope lineage validation for '{node.id}' reached the configured depth limit.", node.id, path=path)
-                break
             current = parents[0].target
             if current not in node_counts:
                 break
@@ -167,7 +154,7 @@ def validate_graph(graph: Graph, max_diagnostics: int = 2**31 - 1, max_traversal
             add("scope-does-not-reach-purpose", f"Scope lineage for '{node.id}' does not reach purpose node '{graph.purpose_node_id}'.", node.id, graph.purpose_node_id, path)
 
     diagnostics.sort(key=lambda item: (item.code, ordinal_key(item.entity_id or ""), ordinal_key(item.related_entity_id or ""), item.message))
-    return ValidationResult("inconclusive" if inconclusive else ("valid" if not diagnostics else "invalid"), tuple(diagnostics))
+    return ValidationResult("valid" if not diagnostics else "invalid", tuple(diagnostics))
 
 
 def project_graph(graph: Graph, operations: Iterable[Operation]) -> tuple[Graph, tuple[Operation, ...]]:
