@@ -193,6 +193,7 @@ class HtmlProjectTests(unittest.TestCase):
         result = app.write(session.reference())
         self.assertEqual(result['status'], 'written', result); self.assertEqual(result['project']['path'], str(self.folder))
         self.assertFalse(workspace.directory.exists()); self.assertEqual(app.sessions, {})
+        self.assertFalse(workspace.lock.path.exists())
         after = self.files(); changed = {name for name in before if before[name] != after[name]}
         self.assertEqual(changed, {'document.html'})
         import difflib
@@ -206,6 +207,7 @@ class HtmlProjectTests(unittest.TestCase):
         self.project = self.store.load(self.folder)
         app, session = self.proposal(keep=True); workspace = self.store.workspaces[str(self.folder)]
         result = app.write(session.reference()); self.assertEqual(result['workingDbPath'], str(workspace.db)); self.assertTrue(workspace.db.exists())
+        self.assertFalse(workspace.lock.path.exists())
         shutil.rmtree(workspace.directory)
 
     def test_explicit_db_workflow_retains_authority(self):
@@ -251,9 +253,79 @@ class HtmlProjectTests(unittest.TestCase):
     def test_preview_gate_source_conflict_and_lock(self):
         app, session = self.proposal(); workspace = self.store.workspaces[str(self.folder)]
         with self.assertRaises(RuntimeError): DocumentLock(self.folder).acquire()
+        self.assertTrue(workspace.lock.path.exists())  # Rejected acquisition must leave the owner's file alone.
         self.edit(new='Changed by an outside editor')
         self.assertEqual(app.write(session.reference())['status'], 'stale')
         app.close(); self.assertFalse(workspace.directory.exists())
+        self.assertFalse(workspace.lock.path.exists())
+
+    def test_creation_export_backup_and_repeated_export_remove_lock_files(self):
+        lock_path = self.folder.with_name('.' + self.folder.name + '.vw-lock')
+        self.assertFalse(lock_path.exists())  # Creation in setUp has already released it.
+        db = self.root / 'export.vw.db'; self.store.import_html(self.folder, db)
+        for _ in range(2):
+            lock_path.write_bytes(b'0')  # An old leftover must also disappear after use.
+            self.store.export_html(db, self.folder)
+            self.assertFalse(lock_path.exists())
+        backup = self.root / 'backup.html'; self.store.backup(self.folder, backup)
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
+        self.assertEqual(parse(backup).graph, self.project.graph)
+
+    def test_owned_temp_directory_alias_is_resolved_before_publication(self):
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        alias = self.root / 'temp-alias'
+        if os.name != 'nt':
+            alias.symlink_to(self.root, target_is_directory=True)
+        else:
+            # No symlink privilege is required to exercise canonicalization.
+            alias = self.root / '..' / self.root.name
+        original = tempfile.TemporaryDirectory
+
+        @contextmanager
+        def aliased_temp(**kwargs):
+            with original(dir=self.root, **kwargs) as directory:
+                yield str(alias / Path(directory).name)
+
+        destination = self.root / 'aliased-temp.html'
+        with patch('validated_world.document_store.tempfile.TemporaryDirectory', aliased_temp):
+            with patch.object(self.store.publisher, 'publish', wraps=self.store.publisher.publish) as publish:
+                self.store.initialize(destination, self.project.graph)
+                source = publish.call_args.kwargs['source']
+                self.assertEqual(source, source.resolve())
+            self.assertEqual(self.store.load(destination).graph, self.project.graph)
+            self.assertIn('CREATE TABLE', self.store.export_sql(destination))
+        if os.name != 'nt':
+            with self.assertRaisesRegex(ValueError, 'linked project path'):
+                self.store.load(alias / destination.name)
+            alias.unlink()
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
+
+    def test_session_close_removes_lock_and_working_db_without_changing_document(self):
+        before = self.folder.read_bytes()
+        app = Application(self.store); self.addCleanup(app.close)
+        app.begin(str(self.folder), self.project.graph.project_id, 'tester', 'Inspect then close')
+        workspace = self.store.workspaces[str(self.folder)]
+        self.assertTrue(workspace.lock.path.exists())
+        app.close(); app.close()  # Closing is idempotent.
+        self.assertFalse(workspace.lock.path.exists())
+        self.assertFalse(workspace.directory.exists())
+        self.assertEqual(self.folder.read_bytes(), before)
+
+    def test_lock_cleanup_failure_reports_published_document_and_can_be_cleaned_next_export(self):
+        from unittest.mock import patch
+        db = self.root / 'export.vw.db'; self.store.import_html(self.folder, db)
+        original = Path.unlink
+        def deny_lock(path, *args, **kwargs):
+            if path.name.endswith('.vw-lock'): raise PermissionError('injected lock deletion failure')
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'unlink', deny_lock):
+            result = self.store.export_html(db, self.folder)
+        self.assertEqual(result.graph, self.project.graph)
+        self.assertIn('Document published', self.store.last_warnings[0])
+        self.assertIn('.project.html.vw-lock', self.store.last_warnings[0])
+        self.store.export_html(db, self.folder)
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
 
     def test_committed_unpublished_result_retained_and_retried(self):
         def fault(stage):
@@ -261,8 +333,10 @@ class HtmlProjectTests(unittest.TestCase):
         failing = ProjectFiles(publication_fault=fault); self.addCleanup(failing.close)
         app, session = self.proposal(Application(failing)); before = self.files()
         result = app.write(session.reference()); self.assertEqual(result['status'], 'unpublished', result)
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
         db = Path(result['workingDbPath']); self.assertTrue(db.exists()); self.assertEqual(before, self.files()); self.assertFalse(app.sessions)
         recovered = ProjectFiles().retry_export(db); self.assertEqual(recovered.path, str(self.folder)); self.assertFalse(db.exists())
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
         self.assertIn('two duty cycles', next(n.text for n in recovered.graph.nodes if n.id == 'battery-assumption'))
 
     def test_retry_rejects_intervening_source_changes(self):
@@ -282,6 +356,7 @@ class HtmlProjectTests(unittest.TestCase):
                     if s == stage: raise RuntimeError(stage)
                 with self.assertRaises(RuntimeError): Publisher(fault).publish(project, self.folder)
                 self.assertEqual(before, self.files()); self.assertFalse(list(self.root.glob('.*.vw-stage-*')))
+                self.assertFalse(list(self.root.glob('.*.vw-lock')))
 
     def test_published_cleanup_failure_is_success_with_warning(self):
         def fault(stage):

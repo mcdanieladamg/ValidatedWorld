@@ -74,6 +74,7 @@ Create a unique OS temporary directory and use the public checkout commands:
 ```powershell
 $vwTrial = Join-Path ([IO.Path]::GetTempPath()) ('vw-smoke-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $vwTrial | Out-Null
+$vwTrial = & $vwPython -c 'import pathlib, sys; print(pathlib.Path(sys.argv[1]).resolve())' $vwTrial
 $vwDocs = Join-Path $vwTrial 'docs-vw.html'
 & $vwPython -m validated_world sample create technical-project $vwDocs
 & $vwPython -m validated_world project verify $vwDocs
@@ -89,6 +90,12 @@ page, then save. Compare bounded `project diff` with the backup, inspect changed
 HTML source, reimport into a new temporary DB and verify it. Confirm that default
 managed success removes the working DB. Exercise explicit `keepWorkingDb` and
 DB-authoritative paths separately when changing those contracts.
+Check that creation, export, backup, session close/discard and publication retry
+leave no `.vw-lock` sidecars. An open session holds its sidecar until release;
+an OS cleanup failure must report its path without reversing a successful export.
+Exercise temporary-directory aliases on macOS (where `/var` links to
+`/private/var`); engine-owned allocations are canonicalized before project-path
+checks, while explicitly linked project files remain rejected.
 
 For project isolation, create a second project at an explicit custom path and
 inspect both through the public CLI. A wrong project ID must reject change.begin.

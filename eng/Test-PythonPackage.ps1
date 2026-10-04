@@ -25,6 +25,9 @@ try {
     foreach ($archive in Get-ChildItem -LiteralPath $packages -Filter '*.zip' -File) {
         $destination = Join-Path $temporary $archive.BaseName
         Expand-Archive -LiteralPath $archive.FullName -DestinationPath $destination
+        # Canonicalize this owned allocation: macOS temp paths traverse /var.
+        $destination = & $python -c 'import pathlib, sys; print(pathlib.Path(sys.argv[1]).resolve())' $destination
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($destination)) { throw 'Cannot resolve extracted package path.' }
         $files = @(Get-ChildItem -LiteralPath $destination -File -Recurse -Force)
         if ($files.Count -eq 0) { throw "Empty Python package: $($archive.Name)" }
         $metadata = [IO.File]::ReadAllText((Join-Path $destination 'pyproject.toml'))
@@ -66,6 +69,8 @@ try {
         $trialDb = Join-Path $destination 'smoke-working.vw.db'
         $null = & $python $launcher.FullName sample create technical-project $trialDocs
         if ($LASTEXITCODE -ne 0) { throw "Packaged document creation failed: $($archive.Name)" }
+        $trialLock = Join-Path $destination '.smoke-project.html.vw-lock'
+        if (Test-Path -LiteralPath $trialLock) { throw "Packaged creation left a lock file: $($archive.Name)" }
         $verification = & $python $launcher.FullName project verify $trialDocs | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0 -or -not $verification.isValid) { throw "Packaged document verification failed: $($archive.Name)" }
         if (-not (Test-Path -LiteralPath $trialDocs -PathType Leaf)) { throw 'Documentation is not a single HTML file.' }
@@ -74,6 +79,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Packaged HTML import failed: $($archive.Name)" }
         $null = & $python $launcher.FullName project export-html $trialDb $trialDocs
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $trialDb)) { throw "Packaged HTML replacement or caller DB retention failed: $($archive.Name)" }
+        if (Test-Path -LiteralPath $trialLock) { throw "Packaged export left a lock file: $($archive.Name)" }
         $afterHash = (Get-FileHash -LiteralPath $trialDocs -Algorithm SHA256).Hash
         if ($beforeHash -ne $afterHash) { throw "Packaged no-op round trip changed bytes: $($archive.Name)" }
         $finalVerification = & $python $launcher.FullName project verify $trialDocs | ConvertFrom-Json

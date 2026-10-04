@@ -38,7 +38,7 @@ def _remove_owned(root):
 
 
 class DocumentLock:
-    """OS-held lock survives its file, while process exit releases the lock."""
+    """Hold an OS lock for an operation and remove its file on normal release."""
     def __init__(self, destination):
         self.destination = html.safe_path(destination); self.file = None
         self.path = self.destination.parent / ('.' + self.destination.name + '.vw-lock')
@@ -62,6 +62,11 @@ class DocumentLock:
     def close(self):
         if self.file is not None:
             self.file.close(); self.file = None
+            try:
+                html.safe_path(self.path)
+                self.path.unlink(missing_ok=True)
+            except OSError as exc:
+                raise OSError(f'lock-file cleanup requires attention: {self.path}: {exc}') from exc
 
     def __enter__(self): return self.acquire()
     def __exit__(self, *_): self.close()
@@ -117,7 +122,11 @@ class Publisher:
                     raise RuntimeError(f'publication failed: {exc}; staging cleanup requires {stage}: {cleanup}') from exc
                 raise
         finally:
-            if owned_lock: lock.close()
+            if owned_lock:
+                try: lock.close()
+                except OSError as exc:
+                    if not installed: raise
+                    warnings.append(f'Document published; {exc}')
         return replace(project, path=str(root)), warnings
 
 
@@ -160,13 +169,15 @@ class ProjectFiles(ProjectStore):
         if p.path in self.workspaces: return p
         # Exercise the verified SQLite mapping even for reads; leave the source alone.
         with tempfile.TemporaryDirectory(prefix='vw-read-') as directory:
-            imported = self.engine.initialize(str(Path(directory) / 'working.vw.db'), p.graph, created_utc=p.created_utc, updated_utc=p.updated_utc)
+            imported = self.engine.initialize(str(Path(directory).resolve() / 'working.vw.db'), p.graph, created_utc=p.created_utc, updated_utc=p.updated_utc)
             return replace(imported, path=p.path)
 
     def initialize(self, path, graph, **metadata):
         if is_database(path): return self.engine.initialize(path, graph, **metadata)
         with tempfile.TemporaryDirectory(prefix='vw-init-') as directory:
-            db = Path(directory) / 'working.vw.db'
+            # The OS temp directory can traverse a system alias (macOS /var).
+            # Canonicalize our own allocation before checking project paths.
+            db = Path(directory).resolve() / 'working.vw.db'
             project = self.engine.initialize(str(db), graph, **metadata)
             result, self.last_warnings = self.publisher.publish(project, path, source=db, require_absent=True)
             return result
@@ -186,7 +197,7 @@ class ProjectFiles(ProjectStore):
         if is_database(path): return self.engine.export_sql(path)
         p = self.load(path)
         with tempfile.TemporaryDirectory(prefix='vw-sql-') as directory:
-            db = Path(directory) / 'working.vw.db'
+            db = Path(directory).resolve() / 'working.vw.db'
             self.engine.initialize(str(db), p.graph, created_utc=p.created_utc, updated_utc=p.updated_utc)
             return self.engine.export_sql(str(db))
 
@@ -228,9 +239,11 @@ class ProjectFiles(ProjectStore):
         try:
             result, self.last_warnings = self.publisher.publish(project, workspace.source, source=workspace.db, lock=workspace.lock, expected_bytes=workspace.baseline)
         except Exception as exc:
-            workspace.lock.close(); self.workspaces.pop(str(workspace.source))
+            self.workspaces.pop(str(workspace.source))
+            try: workspace.lock.close()
+            except OSError as cleanup: exc = RuntimeError(f'{exc}; {cleanup}')
             raise PublicationError(f'SQLite committed but HTML publication failed: {exc}. Retry with project retry-export {workspace.db}', workspace) from exc
-        self.workspaces.pop(str(workspace.source)); workspace.lock.close()
+        self.workspaces.pop(str(workspace.source)); self._close_published_lock(workspace.lock)
         if workspace.keep or not DELETE_WORKING_DB_AFTER_PUBLICATION:
             self.retained_db = str(workspace.db)
             try: recovery.unlink()
@@ -248,10 +261,13 @@ class ProjectFiles(ProjectStore):
         project = self.engine.load(str(db))
         if project.state_fingerprint != data['fingerprint']: raise ValueError('committed recovery database changed')
         root = self.publisher.destination(data['source'], db)
-        with DocumentLock(root) as lock:
+        lock = DocumentLock(root).acquire()
+        try:
             current = html.parse(root) if root.exists() else None
             if current is not None and current.graph == project.graph and (current.created_utc, current.updated_utc) == (project.created_utc, project.updated_utc): result = replace(project, path=str(root))
             else: result, self.last_warnings = self.publisher.publish(project, root, source=db, lock=lock, expected_bytes=data['baseline'])
+        finally:
+            self._close_published_lock(lock)
         try:
             if data['keep'] or not DELETE_WORKING_DB_AFTER_PUBLICATION: record.unlink(); self.retained_db = str(db)
             else:
@@ -267,8 +283,13 @@ class ProjectFiles(ProjectStore):
     def close_workspace(self, path):
         workspace = self.workspaces.pop(str(html.safe_path(path)), None)
         if workspace is not None:
-            workspace.lock.close()
-            if not workspace.committed: _remove_owned(workspace.directory)
+            try: workspace.lock.close()
+            finally:
+                if not workspace.committed: _remove_owned(workspace.directory)
+
+    def _close_published_lock(self, lock):
+        try: lock.close()
+        except OSError as exc: self.last_warnings.append(f'Document publication lock released; {exc}')
 
     def close(self):
         for path in list(self.workspaces): self.close_workspace(path)
