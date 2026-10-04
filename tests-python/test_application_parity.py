@@ -60,7 +60,7 @@ class ApplicationParityTests(unittest.TestCase):
         self.assertTrue(set(incident_edges).isdisjoint(edge.id for edge in stored.graph.edges))
         self.assertEqual((len(stored.graph.nodes), len(stored.graph.edges)), (12, 14))
 
-    def test_unready_invalid_and_bounded_inconclusive_proposals_do_not_write(self):
+    def test_unready_and_invalid_proposals_do_not_write(self):
         application = Application()
         before = self.path.read_bytes()
         pending = self._replace_battery(application)
@@ -77,16 +77,6 @@ class ApplicationParityTests(unittest.TestCase):
         self.assertEqual(application.write(invalid.reference())["status"], "reviewNotReady")
         self.assertEqual(self.path.read_bytes(), before)
         application.discard(invalid.reference())
-
-        bounded = application.begin(str(self.path), "technical-project", "tester", "Bound analysis")
-        bounded = application.apply(
-            bounded.reference(),
-            (Operation(OperationKind.REPLACE, EntityKind.NODE, "battery-assumption", node=Node("battery-assumption", "Bounded", "assumption")),),
-            max_affected_nodes=1,
-        )
-        self.assertTrue(bounded.omissions)
-        self.assertEqual(application.write(bounded.reference())["status"], "reviewNotReady")
-        self.assertEqual(self.path.read_bytes(), before)
 
     def test_written_and_discarded_references_cannot_authorize_later_sessions(self):
         application = Application()

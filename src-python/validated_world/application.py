@@ -58,9 +58,8 @@ class Session:
     preview_seen: set[int] = field(default_factory=set)
     agent_decision: dict | None = None
     refresh: dict | None = None
-    max_traversal_depth: int = 2**31 - 1
-    max_affected_nodes: int = 2**31 - 1
-    max_output_items: int = 2**31 - 1
+    packet_review: Any = None
+    supplemental: list[dict] = field(default_factory=list)
     omissions: list[dict] = field(default_factory=list)
     omission_details: dict[str, list[dict]] = field(default_factory=dict)
 
@@ -72,8 +71,8 @@ class Session:
         self.proposed, self.operations = project_graph(self.base.graph, self.operations)
         self.current_validation = validate_graph(self.base.graph)
         self.proposed_validation = validate_graph(self.proposed)
-        self.current_rules = evaluate_rules(self.base.graph)
-        self.proposed_rules = evaluate_rules(self.proposed)
+        self.current_rules = evaluate_rules(self.base.graph, max_sample=None)
+        self.proposed_rules = evaluate_rules(self.proposed, max_sample=None)
         self._analyze()
         current_affected = {item["nodeId"]: _hash_json({"current": item.get("currentNode"), "proposed": item.get("proposedNode")}) for item in self.affected_nodes}
         current_context = {item["nodeId"]: _hash_json({"current": item.get("currentNode"), "proposed": item.get("proposedNode"), "lineages": item.get("lineages")}) for item in self.scope_context}
@@ -160,20 +159,14 @@ class Session:
             if node_id in seen: continue
             seen.add(node_id)
             nodes, edges, direct_flag = seed_paths[node_id]
-            current_node = next((node for node in self.base.graph.nodes if node.id == node_id), None)
-            proposed_node = next((node for node in self.proposed.nodes if node.id == node_id), None)
+            current_node = current.nodes_by_id.get(node_id)
+            proposed_node = proposed.nodes_by_id.get(node_id)
             records.append({"nodeId": node_id, "isDirectChange": direct_flag, "distance": max(0, len(edges)), "explanation": {"nodes": nodes, "edges": edges}, "currentNode": node_dto(current_node) if current_node else None, "proposedNode": node_dto(proposed_node) if proposed_node else None})
             for edge_id, target in arcs.get(node_id, []):
-                if len(edges) >= self.max_traversal_depth:
-                    omitted.append({"reason": "traversalDepthLimit", "nodeId": node_id, "edgeId": edge_id, "message": "Affected traversal reached its configured depth limit."})
-                    continue
                 if target not in seen and target not in seed_paths:
                     seed_paths[target] = (nodes + [target], edges + [edge_id], False)
                     queue.append(target)
         records = sorted(records, key=lambda value: ordinal_key(value["nodeId"]))
-        if len(records) > self.max_affected_nodes:
-            omitted.extend({"reason": "affectedNodeLimit", "nodeId": item["nodeId"], "edgeId": None, "message": "Affected-node collection reached its configured limit."} for item in records[self.max_affected_nodes:])
-            records = records[:self.max_affected_nodes]
         self.affected_nodes = records
         self.edge_changes = []
         for operation in self.operations:
@@ -204,17 +197,6 @@ class Session:
                 "currentNode": node_dto(current_node) if current_node else None,
                 "proposedNode": node_dto(proposed_node) if proposed_node else None,
             })
-        total_output = len(self.affected_nodes) + len(self.edge_changes) + len(self.scope_context)
-        if total_output > self.max_output_items:
-            remaining = self.max_output_items
-            affected = self.affected_nodes[:remaining]; remaining -= len(affected)
-            edges = self.edge_changes[:max(0, remaining)]; remaining -= len(edges)
-            context = self.scope_context[:max(0, remaining)]
-            included = {item["nodeId"] for item in affected} | {item["nodeId"] for item in context}
-            for item in (*self.affected_nodes, *self.scope_context):
-                if item["nodeId"] not in included:
-                    omitted.append({"reason": "outputLimit", "nodeId": item["nodeId"], "edgeId": None, "message": "Affected output reached its configured item limit."})
-            self.affected_nodes, self.edge_changes, self.scope_context = affected, edges, context
         grouped = []
         self.omission_details = {}
         for reason in sorted({item["reason"] for item in omitted}):
@@ -237,7 +219,7 @@ class Session:
     def affected_fingerprint(self) -> str: return _hash_json({"current": state_fingerprint(self.base.graph), "proposed": self.proposed_fingerprint, "operations": [operation_dto(item) for item in self.operations], "affected": self.affected_nodes, "context": self.scope_context})
 
     @property
-    def review_fingerprint(self) -> str: return _hash_json({"dispositions": [self.dispositions[key] for key in sorted(self.dispositions, key=ordinal_key)], "context": sorted(self.presented_context, key=ordinal_key)})
+    def review_fingerprint(self) -> str: return _hash_json({"dispositions": [self.dispositions[key] for key in sorted(self.dispositions, key=ordinal_key)], "context": sorted(self.presented_context, key=ordinal_key), "supplemental": self.supplemental})
 
     def reference(self) -> dict:
         return {"projectId": self.base.graph.project_id, "sessionId": self.session_id, "baseFingerprint": self.base_fingerprint, "operationFingerprint": self.operation_fingerprint, "proposedFingerprint": self.proposed_fingerprint, "affectedFingerprint": self.affected_fingerprint, "reviewFingerprint": self.review_fingerprint}
@@ -325,6 +307,19 @@ class Session:
             items.append({"ordinal": len(items), "kind": "currentValidationDiagnostic", "diagnostic": {"code": diagnostic.code, "message": diagnostic.message, "entityId": diagnostic.entity_id, "path": list(diagnostic.path)}})
         for diagnostic in self.proposed_validation.diagnostics:
             items.append({"ordinal": len(items), "kind": "proposedValidationDiagnostic", "diagnostic": {"code": diagnostic.code, "message": diagnostic.message, "entityId": diagnostic.entity_id, "path": list(diagnostic.path)}})
+        for prefix, result in (("current", self.current_rules), ("proposed", self.proposed_rules)):
+            for diagnostic in result.diagnostics:
+                items.append({"ordinal": len(items), "kind": prefix + "RuleDiagnostic", "diagnostic": _rule_dto(diagnostic)})
+        before, after = GraphIndex(self.base.graph), GraphIndex(self.proposed)
+        rule_ids = {node.id for graph in (self.base.graph, self.proposed) for node in graph.nodes
+                    if node.kind in {"validation-rule", "validation-view"}}
+        for eid in sorted(rule_ids, key=ordinal_key):
+            old, new = before.nodes_by_id.get(eid), after.nodes_by_id.get(eid)
+            items.append({"ordinal": len(items), "kind": "ruleEvidence", "ruleEvidence": {
+                "entityId": eid, "currentNode": node_dto(old) if old else None,
+                "proposedNode": node_dto(new) if new else None}})
+        for evidence in self.supplemental:
+            items.append({"ordinal": len(items), "kind": "supplementalEvidence", "supplementalEvidence": evidence})
         return items
 
     def preview(self, limit: int = 100, cursor: str | None = None) -> dict:
@@ -375,6 +370,85 @@ class Application:
     def __init__(self, store: ProjectStore | None = None):
         self.store = store or ProjectStore()
         self.sessions: dict[str, Session] = {}
+        self.review_exports: dict[str, tuple[str, int, int]] = {}
+
+    def review_plan(self, reference, limit=100, cursor=None, refinements=None):
+        from .review_packets import PacketReview
+        session = self.session(reference)
+        if not session.readiness()["isReady"] or not session.review_items():
+            raise ValueError("resolve all dispositions, context and validation before planning review")
+        if session.packet_review is None:
+            if cursor is not None: raise ValueError("no current review plan")
+            session.packet_review = PacketReview(session)
+        if refinements is not None:
+            if cursor is not None: raise ValueError("refinement cannot use a cursor")
+            session.packet_review.refine(refinements)
+            session.agent_decision = None
+        return session.packet_review.manifest(limit, cursor)
+
+    def packet_review(self, reference, plan_fingerprint):
+        session = self.session(reference)
+        review = session.packet_review
+        if review is None: raise ValueError("no current review plan")
+        review.check(plan_fingerprint)
+        return review
+
+    def review_packet(self, reference, plan_fingerprint, packet_id, limit=100, cursor=None):
+        return self.packet_review(reference, plan_fingerprint).packet(packet_id, limit, cursor)
+
+    def review_result(self, reference, binding, result):
+        review = self.packet_review(reference, binding.get("planFingerprint") if isinstance(binding, dict) else None)
+        review.record(binding, result)
+        return {"planFingerprint": review.plan_fingerprint, "packetId": binding["packetId"],
+                "decision": result["decision"], "allAllowed": review.complete()}
+
+    def review_context(self, reference, entity_ids):
+        from .review_packets import fingerprint
+        session = self.session(reference)
+        before, after = GraphIndex(session.base.graph), GraphIndex(session.proposed)
+        evidence = []
+        for eid in sorted(set(entity_ids), key=ordinal_key):
+            if eid in before.nodes_by_id or eid in after.nodes_by_id:
+                old, new = before.nodes_by_id.get(eid), after.nodes_by_id.get(eid)
+                evidence.append({"entityId": eid, "currentNode": node_dto(old) if old else None,
+                                 "proposedNode": node_dto(new) if new else None})
+            elif eid in before.edges_by_id or eid in after.edges_by_id:
+                old, new = before.edges_by_id.get(eid), after.edges_by_id.get(eid)
+                evidence.append({"entityId": eid, "currentEdge": edge_dto(old) if old else None,
+                                 "proposedEdge": edge_dto(new) if new else None})
+            else: raise ValueError("supplemental entity is absent from both exact graph states")
+        session.supplemental = evidence
+        session.packet_review = None
+        session.agent_decision = None
+        session.preview_seen.clear()
+        return {"reference": session.reference(), "supplementalFingerprint": fingerprint(evidence),
+                "entityIds": [v["entityId"] for v in evidence], "requiresNewPlan": True}
+
+    def review_export(self, reference, plan_fingerprint, packet_id, destination, limit=100):
+        from .review_packets import export_packet
+        review = self.packet_review(reference, plan_fingerprint)
+        result = export_packet(review, packet_id, destination, limit)
+        path = Path(result["manifestPath"]).parent
+        stat = path.stat()
+        self.review_exports[str(path)] = (reference["sessionId"], stat.st_dev, stat.st_ino)
+        return result
+
+    def cleanup_review_exports(self, session_id=None):
+        import shutil
+        cleaned = []
+        for name, (owner, device, inode) in list(self.review_exports.items()):
+            if session_id is not None and owner != session_id: continue
+            path = Path(name)
+            if path.exists():
+                stat = path.stat()
+                if path.is_symlink() or path.is_junction() or (stat.st_dev, stat.st_ino) != (device, inode):
+                    raise ValueError(f"review export directory changed; cleanup requires host inspection: {name}")
+                if any(p.is_dir() or p.is_symlink() or not (p.name == "manifest.json" or __import__("re").fullmatch(r"page-\d{6}\.json", p.name)) for p in path.iterdir()):
+                    raise ValueError(f"review export contains unknown files; cleanup requires host inspection: {name}")
+                shutil.rmtree(path)
+            cleaned.append(name)
+            del self.review_exports[name]
+        return {"removedDirectories": cleaned}
 
     def initialize(self, path: str, project_id: str, title: str, purpose_node_id: str, purpose_text: str) -> StoredProject:
         return self.store.initialize(path, Graph(project_id, title, purpose_node_id, (Node(purpose_node_id, purpose_text),), ()))
@@ -403,27 +477,22 @@ class Application:
             raise ValueError("session not found")
         return session
 
-    def apply(self, reference: dict, operations: tuple[Operation, ...], patch: bool = False, *,
-              max_traversal_depth: int = 2**31 - 1, max_affected_nodes: int = 2**31 - 1,
-              max_output_items: int = 2**31 - 1) -> Session:
+    def apply(self, reference: dict, operations: tuple[Operation, ...], patch: bool = False) -> Session:
         session = self.session(reference)
-        for name, value in (("maxTraversalDepth", max_traversal_depth), ("maxAffectedNodes", max_affected_nodes), ("maxOutputItems", max_output_items)):
-            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-                raise ValueError(f"{name} must be a positive integer")
         if patch:
             patched, _ = project_graph(session.proposed, operations)
             operations = _operations_between(session.base.graph, patched)
+        # Validate operation preconditions before mutating the live session.
+        project_graph(session.base.graph, operations)
         session.operations = operations
-        session.max_traversal_depth = max_traversal_depth
-        session.max_affected_nodes = max_affected_nodes
-        session.max_output_items = max_output_items
-        session.preview_signature = None; session.preview_limit = None; session.preview_seen.clear(); session.agent_decision = None; session.rebuild(); return session
+        session.preview_signature = None; session.preview_limit = None; session.preview_seen.clear()
+        session.agent_decision = None; session.packet_review = None; session.supplemental.clear()
+        session.rebuild()
+        return session
 
-    def expand(self, reference: dict, *, max_traversal_depth: int = 2**31 - 1,
-               max_affected_nodes: int = 2**31 - 1, max_output_items: int = 2**31 - 1) -> Session:
+    def expand(self, reference: dict) -> Session:
         session = self.session(reference)
-        return self.apply(reference, session.operations, False, max_traversal_depth=max_traversal_depth,
-                          max_affected_nodes=max_affected_nodes, max_output_items=max_output_items)
+        return self.apply(reference, session.operations)
 
     def focus(self, reference: dict, operations: tuple[Operation, ...], selections: list[dict]) -> dict:
         self.session(reference)
@@ -459,6 +528,7 @@ class Application:
             session.preview_limit = None
             session.preview_seen.clear()
             session.agent_decision = None
+            session.packet_review = None
         return session
 
     def record_agent_review(self, reference: dict, decision: dict) -> Session:
@@ -493,6 +563,14 @@ class Application:
 
     def agent_write(self, reference: dict) -> dict:
         session = self.session(reference)
+        if session.packet_review is not None:
+            review = session.packet_review
+            if not review.complete():
+                return {"status": "agentReviewBlocked", "message": "All branch packets and current synthesis must allow."}
+            session.preview_seen = set(range(len(session.review_items())))
+            result = self.write(reference)
+            result["packetReview"] = {"planFingerprint": review.plan_fingerprint, "results": review.results}
+            return result
         result = session.agent_decision
         if result is None or result["binding"] != session.reference():
             return {"status": "agentReviewBlocked", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": None, "message": "A current host-subagent review decision is required before agent write.", "agentReview": None}
@@ -529,11 +607,20 @@ class Application:
         except Exception as exc:
             return {"status": "failed", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": "storage-failure", "message": str(exc)}
         self.sessions.pop(session.base.graph.project_id, None)
-        return {"status": "written", "projectId": project.graph.project_id, "sessionId": session.session_id, "project": _stored(project), "storageErrorCode": None, "message": "The reviewed proposal was written atomically."}
+        warnings = self._cleanup_warnings(session.session_id)
+        return {"status": "written", "projectId": project.graph.project_id, "sessionId": session.session_id, "project": _stored(project), "storageErrorCode": None, "message": "The reviewed proposal was written atomically.", "warnings": warnings}
+
+    def _cleanup_warnings(self, session_id):
+        try:
+            self.cleanup_review_exports(session_id)
+            return []
+        except (OSError, ValueError) as exc:
+            return [f"Reviewed state was retained; temporary export cleanup requires host attention: {exc}"]
 
     def discard(self, reference: dict) -> dict:
         session = self.session(reference); self.sessions.pop(session.base.graph.project_id, None)
-        return {"projectId": session.base.graph.project_id, "sessionId": session.session_id, "discardedUtc": session.base.updated_utc}
+        warnings = self._cleanup_warnings(session.session_id)
+        return {"projectId": session.base.graph.project_id, "sessionId": session.session_id, "discardedUtc": session.base.updated_utc, "warnings": warnings}
 
 
 def _operations_between(base: Graph, target: Graph) -> tuple[Operation, ...]:

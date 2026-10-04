@@ -80,7 +80,7 @@ class QueryTests(unittest.TestCase):
         context = queries.context(["battery-assumption", "retention-policy"])
         self.assertEqual([item["id"] for item in context["contextNodes"]], ["battery-assumption", "purpose", "retention-policy", "scope-power", "scope-privacy"])
 
-        bounded = queries.scope("purpose", max_depth=1, max_visited=100)
+        bounded = queries.scope("purpose", max_depth=1)
         self.assertTrue(any(item["reason"] == "traversalDepthLimit" for item in bounded["omissions"]))
         self.assertEqual([item["id"] for item in bounded["descendants"]["items"]], ["scope-accessibility", "scope-documentation", "scope-power", "scope-privacy"])
         not_found = queries.path("battery-assumption", "retention-policy", max_depth=0)

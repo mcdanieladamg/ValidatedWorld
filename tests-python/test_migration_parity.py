@@ -40,7 +40,7 @@ class MigrationParityTests(unittest.TestCase):
         self.assertEqual(index.upstream("retention-policy"), ["retention-policy", "scope-privacy", "purpose"])
         self.assertNotIn("scope-power-parent", {item[0] for item in index.review_arcs})
         self.assertTrue(validate_graph(graph).is_valid)
-        self.assertEqual(validate_graph(graph, max_traversal_depth=1).status, "inconclusive")
+        with self.assertRaises(TypeError): validate_graph(graph, max_traversal_depth=1)
         duplicate = Graph(graph.project_id, graph.title, graph.purpose_node_id, (*graph.nodes, graph.nodes[0]), graph.edges)
         codes = {item.code for item in validate_graph(duplicate).diagnostics}; self.assertIn("duplicate-node-id", codes)
         with self.assertRaises(ValueError): operation_batch((Operation(OperationKind.REMOVE, EntityKind.NODE, "retention-policy"), Operation(OperationKind.REMOVE, EntityKind.NODE, "retention-policy")))
@@ -48,8 +48,9 @@ class MigrationParityTests(unittest.TestCase):
         self.assertIn("missing-edge-source", {item.code for item in validate_graph(projected).diagnostics})
         with self.assertRaisesRegex(ValueError, "cannot add existing"): project_graph(graph, (Operation(OperationKind.ADD, EntityKind.NODE, "purpose", node=Node("purpose", "duplicate")),))
         many_orphans = Graph("invalid", "Invalid", "purpose", (Node("purpose", "Purpose"), Node("a", "A"), Node("b", "B")), ())
-        bounded = validate_graph(many_orphans, max_diagnostics=1)
-        self.assertEqual((bounded.status, len(bounded.diagnostics)), ("inconclusive", 1))
+        complete = validate_graph(many_orphans)
+        self.assertEqual(complete.status, "invalid")
+        self.assertEqual(len(complete.diagnostics), 4)
 
     def test_diff_is_complete_page_bound_and_rejects_project_mismatch(self):
         base = self.root / "base.vw.db"; target = self.root / "target.vw.db"

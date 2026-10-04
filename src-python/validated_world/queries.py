@@ -135,8 +135,8 @@ class Queries:
         hits.sort(key=lambda item: (-item["score"], ordinal_key(item["entityId"]), 0 if item["entityKind"] == "node" else 1))
         return _page(hits, _signature("ranked-search", self.project.state_fingerprint + text), limit, cursor)
 
-    def scope(self, node_id: str, limit=100, cursor=None, max_depth=2**31 - 1, max_visited=2**31 - 1) -> dict:
-        if max_depth < 0 or max_visited < 1:
+    def scope(self, node_id: str, limit=100, cursor=None, max_depth=None) -> dict:
+        if max_depth is not None and (not isinstance(max_depth, int) or isinstance(max_depth, bool) or max_depth < 0):
             raise ValueError("query traversal limits are invalid")
         node = self.index.nodes_by_id.get(node_id)
         if node is None:
@@ -148,15 +148,12 @@ class Queries:
         depth = 0
         while current not in seen_upstream:
             seen_upstream.add(current)
-            if len(seen_upstream) > max_visited:
-                _add_omission(omissions, "visitedNodeLimit", "Scope traversal reached its node limit.")
-                break
             upstream_ids.append(current)
             parents = self.index.scope_parents(current)
             if len(parents) != 1:
                 break
             depth += 1
-            if depth > max_depth:
+            if max_depth is not None and depth > max_depth:
                 _add_omission(omissions, "traversalDepthLimit", "Scope traversal reached its depth limit.")
                 break
             current = parents[0].target
@@ -165,16 +162,14 @@ class Queries:
         seen = {node_id}
         while queue:
             current, depth = queue.popleft()
-            if depth > max_depth:
+            if max_depth is not None and depth > max_depth:
                 _add_omission(omissions, "traversalDepthLimit", "Scope traversal reached its depth limit.")
                 continue
             if current in seen: continue
             seen.add(current)
-            if len(seen) > max_visited:
-                _add_omission(omissions, "visitedNodeLimit", "Scope traversal reached its node limit."); break
             descendants.append(node_dto(self.index.nodes_by_id[current]))
             queue.extend((child, depth + 1) for child in self.index.scope_children(current))
-        signature_value = f"{self.project.state_fingerprint}\0{node_id}\0{max_depth}\0{max_visited}"
+        signature_value = f"{self.project.state_fingerprint}\0{node_id}\0{max_depth}"
         result = _page(descendants, _signature("scope-descendants", signature_value), limit, cursor)
         return {"node": node_dto(node), "upstream": [node_dto(self.index.nodes_by_id[item]) for item in upstream_ids[1:]], "descendants": result, "omissions": omissions}
 
@@ -191,8 +186,8 @@ class Queries:
         values.sort(key=lambda item: (0 if item["isOutgoing"] else 1, ordinal_key(item["from"]), ordinal_key(item["to"]), ordinal_key(item["edgeId"])))
         return _page(values, _signature("dependencies", self.project.state_fingerprint + node_id), limit, cursor)
 
-    def path(self, source: str, target: str, max_depth=2**31 - 1, max_visited=2**31 - 1) -> dict:
-        if max_depth < 0 or max_visited < 1:
+    def path(self, source: str, target: str, max_depth=None) -> dict:
+        if max_depth is not None and (not isinstance(max_depth, int) or isinstance(max_depth, bool) or max_depth < 0):
             raise ValueError("query traversal limits are invalid")
         if source not in self.index.nodes_by_id or target not in self.index.nodes_by_id: raise KeyError(source if source not in self.index.nodes_by_id else target)
         if source == target: return {"found": True, "nodes": [source], "edges": [], "omissions": []}
@@ -203,13 +198,10 @@ class Queries:
             current = queue.popleft()
             for edge_id, nxt in arcs.get(current, []):
                 depth = depths[current] + 1
-                if depth > max_depth:
+                if max_depth is not None and depth > max_depth:
                     _add_omission(omissions, "traversalDepthLimit", "Path traversal reached its depth limit.")
                     continue
                 if nxt in depths: continue
-                if len(depths) >= max_visited:
-                    _add_omission(omissions, "visitedNodeLimit", "Path traversal reached its visited-node limit.")
-                    continue
                 depths[nxt] = depth; previous[nxt] = (current, edge_id)
                 if nxt == target:
                     nodes = [target]; edges = []; cur = target
@@ -219,8 +211,8 @@ class Queries:
                 queue.append(nxt)
         return {"found": False, "nodes": [], "edges": [], "omissions": omissions}
 
-    def context(self, node_ids: Iterable[str], max_depth=2**31 - 1, max_visited=2**31 - 1) -> dict:
-        if max_depth < 0 or max_visited < 1:
+    def context(self, node_ids: Iterable[str], max_depth=None) -> dict:
+        if max_depth is not None and (not isinstance(max_depth, int) or isinstance(max_depth, bool) or max_depth < 0):
             raise ValueError("query traversal limits are invalid")
         requested = sorted(set(node_ids), key=ordinal_key)
         for node_id in requested:
@@ -238,12 +230,10 @@ class Queries:
                 if len(parents) != 1:
                     break
                 depth += 1
-                if depth > max_depth:
+                if max_depth is not None and depth > max_depth:
                     _add_omission(omissions, "traversalDepthLimit", "Scope traversal reached its depth limit.")
                     break
                 current = parents[0].target
-            if len(context) > max_visited:
-                _add_omission(omissions, "visitedNodeLimit", "Context collection reached its node limit."); context = set(sorted(context, key=ordinal_key)[:max_visited]); break
         return {"requestedNodeIds": requested, "contextNodes": [node_dto(self.index.nodes_by_id[item]) for item in sorted(context, key=ordinal_key)], "omissions": omissions}
 
     def health(self, limit=100) -> dict:

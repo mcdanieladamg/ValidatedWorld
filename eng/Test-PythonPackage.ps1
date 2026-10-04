@@ -30,6 +30,15 @@ try {
         if ($files.Name -match '\.mcp\.json$|\.dll$|\.exe$|\.vw\.db$|(^|/)\.env($|\.)') { throw "Forbidden runtime or secret in $($archive.Name)" }
         if (-not (Get-ChildItem -LiteralPath $destination -Filter 'SKILL.md' -File -Recurse)) { throw "Skill instructions missing from $($archive.Name)" }
         if ($archive.Name -like '*plugin*' -and -not (Test-Path -LiteralPath (Join-Path $destination '.codex-plugin/plugin.json') -PathType Leaf)) { throw "Plugin manifest missing from $($archive.Name)" }
+        if ($archive.Name -like '*plugin*') {
+            $portable = Get-Content -LiteralPath (Join-Path $destination 'plugin.json') -Raw | ConvertFrom-Json
+            $overlay = Get-Content -LiteralPath (Join-Path $destination '.codex-plugin/plugin.json') -Raw | ConvertFrom-Json
+            if ($portable.'$schema' -ne 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json') { throw 'Unsupported portable plugin schema' }
+            foreach ($field in @('name', 'version', 'description', 'homepage', 'repository', 'license')) {
+                if ($portable.$field -ne $overlay.$field) { throw "Plugin manifests disagree on $field" }
+            }
+            if ($overlay.skills -ne './skills/') { throw 'Skill discovery path is incorrect' }
+        }
         if (Get-ChildItem -LiteralPath $destination -Directory -Filter '__pycache__' -Recurse -Force) { throw "Python cache directory leaked into $($archive.Name)" }
         $engine = Join-Path $destination 'src-python'
         if (-not (Test-Path -LiteralPath (Join-Path $engine 'validated_world') -PathType Container)) { throw "Python engine missing from $($archive.Name)" }
@@ -44,6 +53,10 @@ try {
         if ($null -ne $expectedVersion -and $reportedVersion -notmatch [regex]::Escape($expectedVersion)) { throw "Extracted Python engine version differs from archive: $($archive.Name) reports $reportedVersion" }
         $launcher = Get-ChildItem -LiteralPath $destination -Filter 'validated_world.py' -File -Recurse | Select-Object -First 1
         if ($null -eq $launcher) { throw "Skill launcher missing from $($archive.Name)" }
+        foreach ($reference in @('packet-review.md', 'question-worker.md', 'graph-authoring.md')) {
+            $referencePath = Join-Path (Split-Path -Parent (Split-Path -Parent $launcher.FullName)) "references/$reference"
+            if (-not (Test-Path -LiteralPath $referencePath -PathType Leaf)) { throw "Missing skill reference: $reference" }
+        }
         $launcherVersion = & $python $launcher.FullName --version
         if ($LASTEXITCODE -ne 0) { throw "Extracted skill launcher failed smoke launch: $($archive.Name)" }
         if ($null -ne $expectedVersion -and $launcherVersion -notmatch [regex]::Escape($expectedVersion)) { throw "Extracted skill launcher version differs from archive: $($archive.Name) reports $launcherVersion" }

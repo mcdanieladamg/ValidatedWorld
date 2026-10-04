@@ -3,7 +3,7 @@
 ValidatedWorld is distributed as source in two archives:
 
 - a standalone Agent Skill; and
-- a skills-only Codex plugin containing the same skill and Python package.
+- a skills-only portable Agent Plugins package containing the same skill and Python package.
 
 Both require Python 3.12 or newer, either from the host system or an explicitly
 managed `uv` environment. Installation never creates or modifies a system
@@ -47,6 +47,11 @@ py -3.12 -m venv .venv
 .venv\Scripts\python.exe -m coverage report
 ```
 
+The plugin has a root `plugin.json` using the Agent Plugins schema and fixed
+`skills/` discovery. Its `.codex-plugin/plugin.json` supplies the supported Codex
+overlay; metadata and release versions are checked together. The package has no
+MCP server, hooks or compiled runtime. See the [official packaging contract](https://developers.openai.com/plugins/build/plugins).
+
 ## Plugin installation
 
 Codex installs plugins from marketplaces. For a local Codex test of the Python
@@ -85,7 +90,11 @@ The standard unit and package workflow requires no repository secrets.
 The skill uses a host-spawned subagent for review and does not contain a model
 API client or API key setting. Model selection and usage charges belong to the
 host account. The current package has been exercised with a Codex Desktop
-no-history subagent; VS Code and GitHub Copilot adapters need separate testing.
+no-history subagent and branch/synthesis packet workflow. Claude Code and selected
+Copilot surfaces are candidates with documented isolated workers, not accepted
+adapters. Dots' exact reviewer isolation remains unverified and is not a release
+prerequisite. Every advertised host must deliver complete exact evidence and a
+fresh read-only reviewer; broader compatibility does not override that gate.
 
 ## Release review
 

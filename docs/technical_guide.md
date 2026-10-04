@@ -87,6 +87,15 @@ not from graph text.
 
 ## Host subagent review
 
+Broad proposals use deterministic scope packets with unique ownership of each
+review ordinal and explicitly repeated context. Workers read immutable temporary
+evidence pages without filling the author's context. Lossless refinement handles
+actual worker capacity. A separate fresh synthesis reviewer receives global rule
+evidence, cross-branch dependencies/endpoints and cited branch results. Every
+branch and synthesis must allow the same exact proposal before one atomic write.
+Registered supplemental evidence or revised claims invalidate all approvals.
+Workers may remain available for discussion after their initial response.
+
 In Codex Desktop, the main agent can spawn a fresh no-history subagent to review
 the exact paged proposal evidence read-only. The subagent returns an allow or
 block decision and cites stable IDs for blocking concerns. The engine checks

@@ -142,7 +142,7 @@ def direct_command(arguments: list[str], out, err) -> int:
             while index < len(arguments):
                 item = arguments[index]
                 if item.startswith("--"):
-                    if item not in {"--limit", "--cursor", "--max-depth", "--max-visited-nodes"} or index + 1 >= len(arguments):
+                    if item not in {"--limit", "--cursor", "--max-depth"} or index + 1 >= len(arguments):
                         raise ValueError(f"unsupported or incomplete read option '{item}'")
                     if item in opts:
                         raise ValueError(f"duplicate read option '{item}'")
@@ -150,7 +150,7 @@ def direct_command(arguments: list[str], out, err) -> int:
                 else:
                     positional.append(item); index += 1
             limit = int(opts.get("--limit", 100)); cursor = opts.get("--cursor")
-            max_depth = int(opts.get("--max-depth", 2**31 - 1)); max_visited = int(opts.get("--max-visited-nodes", 2**31 - 1))
+            max_depth = int(opts["--max-depth"]) if "--max-depth" in opts else None
             expected = {"node": 1, "edge": 1, "nodes": 0, "edges": 0, "search": 1, "ranked-search": 1, "tag": 1, "scope": 1, "neighbors": 1, "dependencies": 1, "path": 2, "context": 1, "health": 0, "report": 0}
             if command not in expected: raise ValueError(f"unknown read command '{command}'")
             if len(positional) != expected[command]: raise ValueError(f"read {command} expects {expected[command]} argument(s) after the database path")
@@ -161,11 +161,11 @@ def direct_command(arguments: list[str], out, err) -> int:
             elif command == "search": result = query.search(positional[0], limit, cursor)
             elif command == "ranked-search": result = query.ranked_search(positional[0], limit, cursor)
             elif command == "tag": result = query.tag(positional[0], limit, cursor)
-            elif command == "scope": result = query.scope(positional[0], limit, cursor, max_depth, max_visited)
+            elif command == "scope": result = query.scope(positional[0], limit, cursor, max_depth)
             elif command == "neighbors": result = query.neighbors(positional[0], limit, cursor)
             elif command == "dependencies": result = query.dependencies(positional[0], limit, cursor)
-            elif command == "path": result = query.path(positional[0], positional[1], max_depth, max_visited)
-            elif command == "context": result = query.context(positional[0].split(","), max_depth, max_visited)
+            elif command == "path": result = query.path(positional[0], positional[1], max_depth)
+            elif command == "context": result = query.context(positional[0].split(","), max_depth)
             else: result = query.health(limit)
             out.write(_json(result) + "\n"); return SUCCESS
         if group == "artifact" and len(arguments) >= 3 and arguments[1] == "check":
@@ -252,11 +252,11 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "read.search": ({"path", "text"}, {"limit", "cursor", "expectedProjectId"}),
         "read.ranked_search": ({"path", "text"}, {"limit", "cursor", "expectedProjectId"}),
         "read.tag": ({"path", "tag"}, {"limit", "cursor", "expectedProjectId"}),
-        "read.scope": ({"path", "nodeId"}, {"limit", "cursor", "maxDepth", "maxVisitedNodes", "expectedProjectId"}),
+        "read.scope": ({"path", "nodeId"}, {"limit", "cursor", "maxDepth", "expectedProjectId"}),
         "read.neighbors": ({"path", "entityId"}, {"limit", "cursor", "expectedProjectId"}),
         "read.dependencies": ({"path", "entityId"}, {"limit", "cursor", "expectedProjectId"}),
-        "read.path": ({"path", "sourceNodeId", "targetNodeId"}, {"maxDepth", "maxVisitedNodes", "expectedProjectId"}),
-        "read.context": ({"path", "nodeIds"}, {"maxDepth", "maxVisitedNodes", "expectedProjectId"}),
+        "read.path": ({"path", "sourceNodeId", "targetNodeId"}, {"maxDepth", "expectedProjectId"}),
+        "read.context": ({"path", "nodeIds"}, {"maxDepth", "expectedProjectId"}),
         "read.health": ({"path"}, {"limit", "expectedProjectId"}),
         "read.report": ({"path"}, {"limit", "expectedProjectId"}),
         "change.begin": ({"path", "projectId", "author", "intent"}, {"includeOperations", "includeProposedGraph"}),
@@ -264,10 +264,16 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "change.affected": ({"session"}, {"limit", "cursor"}),
         "change.omission-details": ({"reference", "fingerprint"}, {"limit", "cursor"}),
         "change.focus": ({"reference", "operations", "scopeParents"}, set()),
-        "change.apply": ({"reference", "operations"}, {"includeOperations", "includeProposedGraph", "maxTraversalDepth", "maxAffectedNodes", "maxOutputItems"}),
-        "change.patch": ({"reference", "operations"}, {"includeOperations", "includeProposedGraph", "maxTraversalDepth", "maxAffectedNodes", "maxOutputItems"}),
-        "change.expand": ({"reference"}, {"includeOperations", "includeProposedGraph", "maxTraversalDepth", "maxAffectedNodes", "maxOutputItems"}),
+        "change.apply": ({"reference", "operations"}, {"includeOperations", "includeProposedGraph"}),
+        "change.patch": ({"reference", "operations"}, {"includeOperations", "includeProposedGraph"}),
+        "change.expand": ({"reference"}, {"includeOperations", "includeProposedGraph"}),
         "change.preview": ({"reference"}, {"limit", "cursor"}),
+        "change.review-plan": ({"reference"}, {"limit", "cursor", "refinements"}),
+        "change.review-packet": ({"reference", "planFingerprint", "packetId"}, {"limit", "cursor"}),
+        "change.review-context": ({"reference", "entityIds"}, set()),
+        "change.review-result": ({"reference", "binding", "result"}, set()),
+        "change.review-export": ({"reference", "planFingerprint", "packetId", "destinationPath"}, {"limit"}),
+        "change.review-cleanup": ({"reference"}, set()),
         "change.review": ({"reference", "dispositions", "presentedContextNodeIds"}, {"includeOperations", "includeProposedGraph"}),
         "change.validate": ({"reference"}, {"includeOperations", "includeProposedGraph"}),
         "change.agent-review": ({"reference", "decision"}, set()),
@@ -288,11 +294,11 @@ def _validate_payload(command: str, payload: Any) -> dict:
         _exact(payload["session"], {"projectId", "sessionId"}, set(), "session locator")
         if any(not isinstance(value, str) or not value for value in payload["session"].values()):
             raise ValueError("session locator members must be nonempty text")
-    text_fields = {"path", "sourcePath", "destinationPath", "basePath", "targetPath", "oursPath", "theirsPath", "manifestPath", "projectId", "title", "purposeNodeId", "purposeText", "sampleName", "name", "entityId", "text", "tag", "nodeId", "sourceNodeId", "targetNodeId", "author", "intent", "fingerprint"}
+    text_fields = {"path", "sourcePath", "destinationPath", "basePath", "targetPath", "oursPath", "theirsPath", "manifestPath", "projectId", "title", "purposeNodeId", "purposeText", "sampleName", "name", "entityId", "text", "tag", "nodeId", "sourceNodeId", "targetNodeId", "author", "intent", "fingerprint", "planFingerprint", "packetId"}
     for name in text_fields & set(payload):
         if not isinstance(payload[name], str) or not payload[name].strip():
             raise ValueError(f"{name} must be nonempty text")
-    positive_fields = {"limit", "chunkSize", "maxAnchors", "maxSampleBytes", "maxDepth", "maxVisitedNodes", "maxTraversalDepth", "maxAffectedNodes", "maxOutputItems"}
+    positive_fields = {"limit", "chunkSize", "maxAnchors", "maxSampleBytes", "maxDepth"}
     for name in positive_fields & set(payload):
         if not isinstance(payload[name], int) or isinstance(payload[name], bool) or payload[name] < 1:
             raise ValueError(f"{name} must be a positive integer")
@@ -332,6 +338,10 @@ def _validate_payload(command: str, payload: Any) -> dict:
             _exact(item, {"childNodeId", "parentNodeId", "edgeId"}, set(), "scope-parent selection")
             if any(not isinstance(value, str) or not value for value in item.values()):
                 raise ValueError("scope-parent selection members must be nonempty text")
+    if "entityIds" in payload and (not isinstance(payload["entityIds"], list) or any(not isinstance(v, str) or not v for v in payload["entityIds"])):
+        raise ValueError("entityIds must be an array of nonempty text")
+    if "refinements" in payload and not isinstance(payload["refinements"], list):
+        raise ValueError("refinements must be an array")
     return payload
 
 
@@ -348,8 +358,9 @@ def ndjson_loop(inp, out, err) -> int:
                 raise ValueError("protocol version 1 and a text command are required")
             payload = _validate_payload(command, request["payload"])
             if command == "host.help":
-                value = {"protocolVersion": 1, "framing": "One request and one result JSON object per line. Unknown fields are rejected.", "supportedProductLanguage": "English", "graphTextSupport": "Unicode text is stored without language interpretation; non-English workflows are unsupported and unvalidated.", "commands": ["host.help", "host.exit", "project.init", "project.status", "project.open", "project.verify", "project.backup", "project.export-sql", "project.diff", "project.merge", "project.bulk_plan", "artifact.check", "sample.list", "sample.create", "template.list", "template.describe", "template.export", "template.instantiate", "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope", "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report", "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand", "change.affected", "change.omission-details", "change.preview", "change.review", "change.validate", "change.agent-review", "change.agent-write", "change.write", "change.discard"]}
+                value = {"protocolVersion": 1, "framing": "One request and one result JSON object per line. Unknown fields are rejected.", "supportedProductLanguage": "English", "graphTextSupport": "Unicode text is stored without language interpretation; non-English workflows are unsupported and unvalidated.", "commands": ["host.help", "host.exit", "project.init", "project.status", "project.open", "project.verify", "project.backup", "project.export-sql", "project.diff", "project.merge", "project.bulk_plan", "artifact.check", "sample.list", "sample.create", "template.list", "template.describe", "template.export", "template.instantiate", "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope", "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report", "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand", "change.affected", "change.omission-details", "change.preview", "change.review-plan", "change.review-packet", "change.review-context", "change.review-result", "change.review-export", "change.review-cleanup", "change.review", "change.validate", "change.agent-review", "change.agent-write", "change.write", "change.discard"]}
             elif command == "host.exit":
+                app.cleanup_review_exports()
                 out.write(_json(_result(command, {"warnings": []})) + "\n"); out.flush(); return SUCCESS
             elif command.startswith("project."):
                 if command == "project.init": value = _stored(app.initialize(payload["path"], payload["projectId"], payload["title"], payload["purposeNodeId"], payload["purposeText"]))
@@ -382,16 +393,29 @@ def ndjson_loop(inp, out, err) -> int:
                 if payload.get("expectedProjectId") is not None and payload["expectedProjectId"] != project.graph.project_id:
                     raise ValueError("project mismatch")
                 query = Queries(project); name = command[5:]; limit = payload.get("limit", 100); cursor = payload.get("cursor")
-                value = {"node": lambda: query.node(payload["entityId"]), "edge": lambda: query.edge(payload["entityId"]), "nodes": lambda: query.nodes(limit, cursor), "edges": lambda: query.edges(limit, cursor), "search": lambda: query.search(payload["text"], limit, cursor), "ranked_search": lambda: query.ranked_search(payload["text"], limit, cursor), "tag": lambda: query.tag(payload["tag"], limit, cursor), "scope": lambda: query.scope(payload["nodeId"], limit, cursor, payload.get("maxDepth", 2**31 - 1), payload.get("maxVisitedNodes", 2**31 - 1)), "neighbors": lambda: query.neighbors(payload["entityId"], limit, cursor), "dependencies": lambda: query.dependencies(payload["entityId"], limit, cursor), "path": lambda: query.path(payload["sourceNodeId"], payload["targetNodeId"], payload.get("maxDepth", 2**31 - 1), payload.get("maxVisitedNodes", 2**31 - 1)), "context": lambda: query.context(payload["nodeIds"], payload.get("maxDepth", 2**31 - 1), payload.get("maxVisitedNodes", 2**31 - 1)), "health": lambda: query.health(limit), "report": lambda: query.health(limit)}[name]()
+                value = {"node": lambda: query.node(payload["entityId"]), "edge": lambda: query.edge(payload["entityId"]), "nodes": lambda: query.nodes(limit, cursor), "edges": lambda: query.edges(limit, cursor), "search": lambda: query.search(payload["text"], limit, cursor), "ranked_search": lambda: query.ranked_search(payload["text"], limit, cursor), "tag": lambda: query.tag(payload["tag"], limit, cursor), "scope": lambda: query.scope(payload["nodeId"], limit, cursor, payload.get("maxDepth")), "neighbors": lambda: query.neighbors(payload["entityId"], limit, cursor), "dependencies": lambda: query.dependencies(payload["entityId"], limit, cursor), "path": lambda: query.path(payload["sourceNodeId"], payload["targetNodeId"], payload.get("maxDepth")), "context": lambda: query.context(payload["nodeIds"], payload.get("maxDepth")), "health": lambda: query.health(limit), "report": lambda: query.health(limit)}[name]()
             elif command == "change.begin": value = app.begin(payload["path"], payload["projectId"], payload["author"], payload["intent"]).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command in {"change.apply", "change.patch"}:
-                session = app.apply(payload["reference"], _ops(payload), command.endswith("patch"), max_traversal_depth=payload.get("maxTraversalDepth", 2**31 - 1), max_affected_nodes=payload.get("maxAffectedNodes", 2**31 - 1), max_output_items=payload.get("maxOutputItems", 2**31 - 1)); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
+                session = app.apply(payload["reference"], _ops(payload), command.endswith("patch")); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.expand":
-                session = app.expand(payload["reference"], max_traversal_depth=payload.get("maxTraversalDepth", 2**31 - 1), max_affected_nodes=payload.get("maxAffectedNodes", 2**31 - 1), max_output_items=payload.get("maxOutputItems", 2**31 - 1)); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
+                session = app.expand(payload["reference"]); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.focus": value = app.focus(payload["reference"], _ops(payload), payload["scopeParents"])
             elif command == "change.show": value = app.locate(payload["session"]).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.preview":
                 value = app.session(payload["reference"]).preview(payload.get("limit", 100), payload.get("cursor"))
+            elif command == "change.review-plan":
+                value = app.review_plan(payload["reference"], payload.get("limit", 100), payload.get("cursor"), payload.get("refinements"))
+            elif command == "change.review-packet":
+                value = app.review_packet(payload["reference"], payload["planFingerprint"], payload["packetId"], payload.get("limit", 100), payload.get("cursor"))
+            elif command == "change.review-context":
+                value = app.review_context(payload["reference"], payload["entityIds"])
+            elif command == "change.review-result":
+                value = app.review_result(payload["reference"], payload["binding"], payload["result"])
+            elif command == "change.review-export":
+                value = app.review_export(payload["reference"], payload["planFingerprint"], payload["packetId"], payload["destinationPath"], payload.get("limit", 100))
+            elif command == "change.review-cleanup":
+                app.session(payload["reference"])
+                value = app.cleanup_review_exports(payload["reference"]["sessionId"])
             elif command == "change.affected": value = app.locate(payload["session"]).affected(payload.get("limit", 100), payload.get("cursor"))
             elif command == "change.omission-details": value = app.session(payload["reference"]).read_omission_details(payload["fingerprint"], payload.get("limit", 100), payload.get("cursor"))
             elif command == "change.review": value = app.review(payload["reference"], payload.get("dispositions", []), payload.get("presentedContextNodeIds", [])).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
@@ -405,6 +429,7 @@ def ndjson_loop(inp, out, err) -> int:
             out.write(_json(_result(command, value)) + "\n"); out.flush()
         except Exception as exc:
             out.write(_json(_error(command, "invalid-request", str(exc))) + "\n"); out.flush()
+    app.cleanup_review_exports()
     return SUCCESS
 
 

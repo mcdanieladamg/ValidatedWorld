@@ -146,17 +146,15 @@ class AffectedAnalysisTests(unittest.TestCase):
         reverted = app.apply(changed.reference(), (Operation(OperationKind.REPLACE, EntityKind.NODE, battery.id, node=battery),), patch=True)
         self.assertNotIn("battery-assumption", [item.entity_id for item in reverted.operations])
 
-    def test_bounds_are_inconclusive_and_omission_details_are_revision_bound(self):
+    def test_complete_analysis_survives_small_presentation_pages(self):
         graph = sample_graph(); temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
-        path = Path(temporary.name) / "bounded.vw.db"; ProjectStore().initialize(path, graph)
+        path = Path(temporary.name) / "complete.vw.db"; ProjectStore().initialize(path, graph)
         app = Application(); session = app.begin(str(path), graph.project_id, "human", "purpose")
         purpose = next(item for item in graph.nodes if item.id == "purpose")
-        bounded = app.apply(session.reference(), (Operation(OperationKind.REPLACE, EntityKind.NODE, purpose.id, node=Node(purpose.id, "Revised purpose", purpose.kind)),), max_output_items=1)
-        self.assertEqual(bounded.affected()["status"], "inconclusive")
-        self.assertFalse(bounded.readiness()["isReady"])
-        omission = bounded.omissions[0]
-        self.assertEqual(len(bounded.read_omission_details(omission["detailsFingerprint"], 1)["items"]), 1)
-        with self.assertRaises(ValueError): bounded.read_omission_details("0" * 64, 1)
+        session = app.apply(session.reference(), (Operation(OperationKind.REPLACE, EntityKind.NODE, purpose.id, node=Node(purpose.id, "Revised purpose", purpose.kind)),))
+        self.assertEqual(session.affected(1)["status"], "complete")
+        self.assertEqual(len(session.affected_nodes), len(graph.nodes))
+        self.assertEqual(session.omissions, [])
 
     def test_external_database_change_makes_session_explicitly_stale(self):
         graph = sample_graph(); temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)

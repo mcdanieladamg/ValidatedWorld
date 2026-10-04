@@ -47,12 +47,14 @@ $plugin = Join-Path $stage 'validated-world-python-plugin'
 Copy-Item -LiteralPath (Join-Path $root 'packaging/python-plugin') -Destination $plugin -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $plugin 'LICENSE') -Force
 Copy-PythonEngine $plugin
-$manifestPath = Join-Path $plugin '.codex-plugin/plugin.json'
-$manifestText = [IO.File]::ReadAllText($manifestPath)
-$manifestText = [regex]::Replace($manifestText, '"version":\s*"[^"]+"', "`"version`": `"$Version`"")
-[IO.File]::WriteAllText($manifestPath, $manifestText, [Text.UTF8Encoding]::new($false))
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ($manifest.version -ne $Version) { throw "Plugin manifest version does not match requested version: $($manifest.version)" }
+foreach ($manifestRelative in @('plugin.json', '.codex-plugin/plugin.json')) {
+    $manifestPath = Join-Path $plugin $manifestRelative
+    $manifestText = [IO.File]::ReadAllText($manifestPath)
+    $manifestText = [regex]::Replace($manifestText, '"version":\s*"[^"]+"', "`"version`": `"$Version`"")
+    [IO.File]::WriteAllText($manifestPath, $manifestText, [Text.UTF8Encoding]::new($false))
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if ($manifest.version -ne $Version) { throw "Plugin manifest version does not match requested version: $($manifest.version)" }
+}
 
 $forbidden = @('*.mcp.json', '*.dll', '*.exe', '*.vw.db', '*.key', '.env*')
 foreach ($file in Get-ChildItem -LiteralPath $stage -File -Recurse -Force) {

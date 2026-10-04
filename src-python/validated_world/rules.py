@@ -36,30 +36,14 @@ class _DuplicateJsonKey(ValueError):
     pass
 
 
-class _Budget:
-    def __init__(self, maximum: int | None):
-        if maximum is not None and maximum < 1:
-            raise ValueError("max_work must be positive")
-        self.maximum = maximum
-        self.used = 0
-
-    def take(self) -> None:
-        self.used += 1
-        if self.maximum is not None and self.used > self.maximum:
-            raise RuleEvaluationError(f"rule evaluation exceeded the work limit of {self.maximum}")
-
-
 def evaluate_rules(
     graph: Graph,
     *,
-    max_diagnostics: int = 2**31 - 1,
-    max_sample: int = 20,
-    max_work: int | None = None,
+    max_sample: int | None = 20,
 ) -> RuleResult:
     """Parse and evaluate every active rule over the complete candidate graph."""
-    if max_diagnostics < 1 or max_sample < 1:
+    if max_sample is not None and max_sample < 1:
         raise ValueError("rule diagnostic limits must be positive")
-    budget = _Budget(max_work)
     try:
         views = _read_views(graph)
         rules = _read_rules(graph)
@@ -70,15 +54,13 @@ def evaluate_rules(
     diagnostics: list[RuleDiagnostic] = []
     for rule_id, message, expression in rules:
         try:
-            passed, offenders = _evaluate_bool(expression, graph, views, set(), budget)
+            passed, offenders = _evaluate_bool(expression, graph, views, set())
             if not passed:
                 diagnostics.append(_diagnostic(rule_id, "invalid", message, offenders, max_sample))
         except (RuleEvaluationError, TypeError, ValueError) as exc:
             diagnostics.append(
                 RuleDiagnostic(rule_id, "inconclusive", f"Rule '{rule_id}' could not be evaluated: {exc}")
             )
-        if len(diagnostics) >= max_diagnostics:
-            break
     status = "inconclusive" if any(item.status == "inconclusive" for item in diagnostics) else (
         "invalid" if diagnostics else "valid"
     )
@@ -299,53 +281,51 @@ def _validate_view_references(views: dict[str, Any]) -> None:
         visit(name, [])
 
 
-def _diagnostic(rule_id: str, status: str, message: str, offenders: Iterable[str], max_sample: int) -> RuleDiagnostic:
+def _diagnostic(rule_id: str, status: str, message: str, offenders: Iterable[str], max_sample: int | None) -> RuleDiagnostic:
     values = sorted(set(offenders), key=ordinal_key)
-    return RuleDiagnostic(rule_id, status, message, tuple(values[:max_sample]), max(0, len(values) - max_sample))
+    return RuleDiagnostic(rule_id, status, message, tuple(values[:max_sample]), max(0, len(values) - max_sample) if max_sample is not None else 0)
 
 
-def _evaluate_bool(expression: Any, graph: Graph, views: dict[str, Any], stack: set[str], budget: _Budget) -> tuple[bool, set[str]]:
-    budget.take()
+def _evaluate_bool(expression: Any, graph: Graph, views: dict[str, Any], stack: set[str]) -> tuple[bool, set[str]]:
     operator, value = _single(expression, "Boolean")
     if operator in {"and", "or"}:
-        results = [_evaluate_bool(item, graph, views, stack, budget) for item in value]
+        results = [_evaluate_bool(item, graph, views, stack) for item in value]
         passed = all(item[0] for item in results) if operator == "and" else any(item[0] for item in results)
         relevant = [item for item in results if not item[0]] if operator == "and" else ([] if passed else results)
         return passed, set().union(*(item[1] for item in relevant)) if relevant else set()
     if operator == "not":
-        passed, offenders = _evaluate_bool(value, graph, views, stack, budget)
+        passed, offenders = _evaluate_bool(value, graph, views, stack)
         return not passed, set() if not passed else offenders
     if operator == "exists":
-        selected = _select(value, graph, views, stack, budget)
+        selected = _select(value, graph, views, stack)
         return bool(selected), set()
     if operator == "count":
-        selected = _select(value["set"], graph, views, stack, budget)
+        selected = _select(value["set"], graph, views, stack)
         passed = _compare(len(selected), value["compare"], value["value"])
         return passed, set() if passed else _ids(selected)
     if operator in {"subset", "equalSets"}:
-        left = _select(value[0], graph, views, stack, budget)
-        right = _select(value[1], graph, views, stack, budget)
+        left = _select(value[0], graph, views, stack)
+        right = _select(value[1], graph, views, stack)
         missing = left - right if operator == "subset" else left ^ right
         return not missing, _ids(missing)
     if operator == "all":
-        selected = _select(value["set"], graph, views, stack, budget)
-        offenders = {item for item in selected if not _condition(value["condition"], item, budget)}
+        selected = _select(value["set"], graph, views, stack)
+        offenders = {item for item in selected if not _condition(value["condition"], item)}
         return not offenders, _ids(offenders)
     if operator in {"acyclic", "singleChain"}:
-        nodes = _select(value["nodes"], graph, views, stack, budget)
-        edges = _select(value["edges"], graph, views, stack, budget)
-        passed = not _has_cycle(nodes, edges, budget) if operator == "acyclic" else _single_chain(nodes, edges, budget)
+        nodes = _select(value["nodes"], graph, views, stack)
+        edges = _select(value["edges"], graph, views, stack)
+        passed = not _has_cycle(nodes, edges) if operator == "acyclic" else _single_chain(nodes, edges)
         return passed, set() if passed else _ids(nodes)
-    left = _select(value["left"], graph, views, stack, budget)
-    right = _select(value["right"], graph, views, stack, budget)
+    left = _select(value["left"], graph, views, stack)
+    right = _select(value["right"], graph, views, stack)
     left_tags = [tag[len(value["leftPrefix"]):] for item in left for tag in item.tags if tag.startswith(value["leftPrefix"])]
     right_tags = [tag[len(value["rightPrefix"]):] for item in right for tag in item.tags if tag.startswith(value["rightPrefix"])]
     passed = len(left) == len(right) == 1 and len(left_tags) == len(right_tags) == 1 and left_tags[0] == right_tags[0]
     return passed, set() if passed else _ids(left | right)
 
 
-def _condition(condition: Any, item: Node | Edge, budget: _Budget) -> bool:
-    budget.take()
+def _condition(condition: Any, item: Node | Edge) -> bool:
     operator, value = _single(condition, "condition")
     if operator == "hasTag":
         return value in item.tags
@@ -353,15 +333,14 @@ def _condition(condition: Any, item: Node | Edge, budget: _Budget) -> bool:
     return _compare(count, value["compare"], value["value"])
 
 
-def _select(expression: Any, graph: Graph, views: dict[str, Any], stack: set[str], budget: _Budget) -> set[Node | Edge]:
-    budget.take()
+def _select(expression: Any, graph: Graph, views: dict[str, Any], stack: set[str]) -> set[Node | Edge]:
     operator, value = _single(expression, "set")
     if operator == "view":
         if value in stack:
             raise RuleEvaluationError(f"view cycle at '{value}'")
-        return _select(views[value], graph, views, stack | {value}, budget)
+        return _select(views[value], graph, views, stack | {value})
     if operator in {"union", "intersect", "except"}:
-        operands = [_select(item, graph, views, stack, budget) for item in value]
+        operands = [_select(item, graph, views, stack) for item in value]
         result = set(operands[0])
         for operand in operands[1:]:
             if operator == "union": result.update(operand)
@@ -369,12 +348,12 @@ def _select(expression: Any, graph: Graph, views: dict[str, Any], stack: set[str
             else: result.difference_update(operand)
         return result
     if operator == "nodes":
-        return {item for item in graph.nodes if _matches(item, value, graph, views, stack, budget)}
+        return {item for item in graph.nodes if _matches(item, value, graph, views, stack)}
     if operator == "edges":
-        return {item for item in graph.edges if _matches(item, value, graph, views, stack, budget)}
+        return {item for item in graph.edges if _matches(item, value, graph, views, stack)}
 
-    starts = _select(value["from"], graph, views, stack, budget)
-    edges = _select(value["edges"], graph, views, stack, budget)
+    starts = _select(value["from"], graph, views, stack)
+    edges = _select(value["edges"], graph, views, stack)
     adjacency: dict[str, set[str]] = {}
     for edge in edges:
         if isinstance(edge, Edge):
@@ -387,7 +366,6 @@ def _select(expression: Any, graph: Graph, views: dict[str, Any], stack: set[str
     while queue:
         current = queue.pop(0)
         for target in sorted(adjacency.get(current, ()), key=ordinal_key):
-            budget.take()
             node = nodes.get(target)
             if node is not None:
                 result.add(node)
@@ -396,8 +374,7 @@ def _select(expression: Any, graph: Graph, views: dict[str, Any], stack: set[str
     return result
 
 
-def _matches(item: Node | Edge, spec: dict[str, Any], graph: Graph, views: dict[str, Any], stack: set[str], budget: _Budget) -> bool:
-    budget.take()
+def _matches(item: Node | Edge, spec: dict[str, Any], graph: Graph, views: dict[str, Any], stack: set[str]) -> bool:
     if "id" in spec and item.id != spec["id"]: return False
     if "kind" in spec and (not isinstance(item, Node) or item.kind != spec["kind"]): return False
     if "relationship" in spec and (not isinstance(item, Edge) or item.relationship != spec["relationship"]): return False
@@ -407,8 +384,8 @@ def _matches(item: Node | Edge, spec: dict[str, Any], graph: Graph, views: dict[
         expected = _graph_value(match["kind"], match["value"])
         if not any(attribute.name == match["name"] and attribute.value == expected for attribute in item.attributes): return False
     if isinstance(item, Edge):
-        if "sourceIn" in spec and item.source not in _ids(_select(spec["sourceIn"], graph, views, stack, budget)): return False
-        if "targetIn" in spec and item.target not in _ids(_select(spec["targetIn"], graph, views, stack, budget)): return False
+        if "sourceIn" in spec and item.source not in _ids(_select(spec["sourceIn"], graph, views, stack)): return False
+        if "targetIn" in spec and item.target not in _ids(_select(spec["targetIn"], graph, views, stack)): return False
     elif "sourceIn" in spec or "targetIn" in spec:
         return False
     return True
@@ -428,7 +405,7 @@ def _graph_value(kind: Any, value: Any) -> GraphValue:
     raise RuleEvaluationError(f"unsupported or mismatched attribute kind '{kind}'")
 
 
-def _has_cycle(nodes: set[Node | Edge], edges: set[Node | Edge], budget: _Budget) -> bool:
+def _has_cycle(nodes: set[Node | Edge], edges: set[Node | Edge]) -> bool:
     node_ids = {item.id for item in nodes if isinstance(item, Node)}
     adjacency: dict[str, set[str]] = {}
     for edge in edges:
@@ -436,7 +413,6 @@ def _has_cycle(nodes: set[Node | Edge], edges: set[Node | Edge], budget: _Budget
             adjacency.setdefault(edge.source, set()).add(edge.target)
     visiting: set[str] = set(); done: set[str] = set()
     def visit(node_id: str) -> bool:
-        budget.take()
         if node_id in visiting: return True
         if node_id in done: return False
         visiting.add(node_id)
@@ -445,13 +421,13 @@ def _has_cycle(nodes: set[Node | Edge], edges: set[Node | Edge], budget: _Budget
     return any(visit(node_id) for node_id in sorted(node_ids, key=ordinal_key))
 
 
-def _single_chain(nodes: set[Node | Edge], edges: set[Node | Edge], budget: _Budget) -> bool:
+def _single_chain(nodes: set[Node | Edge], edges: set[Node | Edge]) -> bool:
     node_ids = {item.id for item in nodes if isinstance(item, Node)}
     selected = [item for item in edges if isinstance(item, Edge) and item.source in node_ids and item.target in node_ids]
-    if _has_cycle(nodes, edges, budget): return False
+    if _has_cycle(nodes, edges): return False
     incoming = {node_id: 0 for node_id in node_ids}; outgoing = {node_id: 0 for node_id in node_ids}
     for edge in selected:
-        budget.take(); incoming[edge.target] += 1; outgoing[edge.source] += 1
+        incoming[edge.target] += 1; outgoing[edge.source] += 1
     return not node_ids or (len(selected) == len(node_ids) - 1 and sum(value == 0 for value in incoming.values()) == 1 and sum(value == 0 for value in outgoing.values()) == 1 and all(value <= 1 for value in incoming.values()) and all(value <= 1 for value in outgoing.values()))
 
 

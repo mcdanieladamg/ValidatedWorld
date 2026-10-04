@@ -103,7 +103,7 @@ class CliSurfaceTests(unittest.TestCase):
             (("read", "search", path, "battery"), lambda value: value["totalCount"] > 0),
             (("read", "ranked-search", path, '"battery lasts"'), lambda value: value["totalCount"] > 0),
             (("read", "tag", path, "artifact"), lambda value: value["totalCount"] > 0),
-            (("read", "scope", path, "scope-power", "--max-depth", "4", "--max-visited-nodes", "20"), lambda value: value["node"]["id"] == "scope-power"),
+            (("read", "scope", path, "scope-power", "--max-depth", "4"), lambda value: value["node"]["id"] == "scope-power"),
             (("read", "neighbors", path, "battery-assumption"), lambda value: value["totalCount"] > 0),
             (("read", "dependencies", path, "battery-assumption"), lambda value: value["totalCount"] > 0),
             (("read", "path", path, "battery-assumption", "runtime-test"), lambda value: value["found"]),
@@ -156,7 +156,7 @@ class CliSurfaceTests(unittest.TestCase):
             self.assertIn(required, commands)
         self.assertEqual([item["status"] for item in results[-4:]], ["error", "error", "error", "ok"])
 
-    def test_stateful_ndjson_focus_bounds_expand_review_preview_write_patch_and_discard(self):
+    def test_stateful_ndjson_focus_expand_review_preview_write_patch_and_discard(self):
         output = io.StringIO()
         path = str(self.path)
 
@@ -172,13 +172,10 @@ class CliSurfaceTests(unittest.TestCase):
             node_operation = operation_dto(Operation(OperationKind.ADD, EntityKind.NODE, node.id, node=node))
             yield send("change.focus", {"reference": reference, "operations": {"operations": [node_operation]}, "scopeParents": [{"childNodeId": node.id, "parentNodeId": "purpose", "edgeId": "new-scope-parent"}]})
             focused = latest()["payload"]
-            yield send("change.apply", {"reference": reference, "operations": focused["operations"], "maxAffectedNodes": 1, "includeOperations": False, "includeProposedGraph": False})
+            yield send("change.apply", {"reference": reference, "operations": focused["operations"], "includeOperations": False, "includeProposedGraph": False})
             bounded = latest()["payload"]; bounded_reference = bounded["reference"]
-            self.assertEqual(bounded["affected"]["status"], "inconclusive")
-            omission = bounded["affected"]["omissions"][0]
-            yield send("change.omission-details", {"reference": bounded_reference, "fingerprint": omission["detailsFingerprint"], "limit": 1})
-            self.assertGreaterEqual(latest()["payload"]["totalCount"], 1)
-            yield send("change.expand", {"reference": bounded_reference, "maxTraversalDepth": 100, "maxAffectedNodes": 100, "maxOutputItems": 100, "includeOperations": True, "includeProposedGraph": False})
+            self.assertEqual(bounded["affected"]["status"], "complete")
+            yield send("change.expand", {"reference": bounded_reference, "includeOperations": True, "includeProposedGraph": False})
             expanded = latest()["payload"]; reference = expanded["reference"]
             yield send("change.show", {"session": {"projectId": reference["projectId"], "sessionId": reference["sessionId"]}, "includeOperations": False, "includeProposedGraph": False})
             self.assertEqual(latest()["payload"]["operationCount"], 2)
@@ -258,11 +255,11 @@ class CliSurfaceTests(unittest.TestCase):
             ("read.search", {"path": path, "text": "battery", "limit": 1}),
             ("read.ranked_search", {"path": path, "text": "battery", "limit": 1}),
             ("read.tag", {"path": path, "tag": "artifact", "limit": 1}),
-            ("read.scope", {"path": path, "nodeId": "scope-power", "limit": 1, "maxDepth": 2, "maxVisitedNodes": 10}),
+            ("read.scope", {"path": path, "nodeId": "scope-power", "limit": 1, "maxDepth": 2}),
             ("read.neighbors", {"path": path, "entityId": "battery-assumption", "limit": 1}),
             ("read.dependencies", {"path": path, "entityId": "battery-assumption", "limit": 1}),
-            ("read.path", {"path": path, "sourceNodeId": "battery-assumption", "targetNodeId": "runtime-test", "maxDepth": 3, "maxVisitedNodes": 20}),
-            ("read.context", {"path": path, "nodeIds": ["battery-assumption"], "maxDepth": 3, "maxVisitedNodes": 20}),
+            ("read.path", {"path": path, "sourceNodeId": "battery-assumption", "targetNodeId": "runtime-test", "maxDepth": 3}),
+            ("read.context", {"path": path, "nodeIds": ["battery-assumption"], "maxDepth": 3}),
             ("read.health", {"path": path, "limit": 2}),
         )
         lines = [json.dumps({"version": 1, "command": command, "payload": payload}) for command, payload in requests]

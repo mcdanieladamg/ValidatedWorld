@@ -96,13 +96,14 @@ class RuleTests(unittest.TestCase):
         )
         self.assertTrue(evaluate_rules(candidate).is_valid)
 
-    def test_explicit_work_budget_is_inconclusive_without_a_hidden_default_cap(self):
+    def test_complete_evaluation_has_no_work_ceiling(self):
         expression = '{"exists":{"nodes":{}}}'
         for _ in range(80):
             expression = '{"not":' + expression + "}"
         candidate = graph(*(rule(f"rule-{index}", "Some nodes exist", expression) for index in range(129)))
         self.assertTrue(evaluate_rules(candidate).is_valid)
-        self.assertEqual(evaluate_rules(candidate, max_work=1).status, "inconclusive")
+        with self.assertRaises(TypeError):
+            evaluate_rules(candidate, max_work=1)
 
     def test_tracked_blueprint_rules_remain_valid(self):
         project = ProjectStore().load(Path(__file__).parents[1] / "ValidatedWorld.Blueprint.vw.db")

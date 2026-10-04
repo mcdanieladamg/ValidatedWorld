@@ -188,7 +188,7 @@ class CliProtocolTests(unittest.TestCase):
         output, error = io.StringIO(), io.StringIO()
         self.assertEqual(direct_command(["project", "status", str(self.root / "missing.vw.db")], output, error), DOMAIN)
         output, error = io.StringIO(), io.StringIO()
-        code = direct_command(["read", "scope", str(self.path), "purpose", "--max-depth", "1", "--max-visited-nodes", "100"], output, error)
+        code = direct_command(["read", "scope", str(self.path), "purpose", "--max-depth", "1"], output, error)
         self.assertEqual(code, SUCCESS, error.getvalue())
         result = json.loads(output.getvalue())
         self.assertTrue(any(item["reason"] == "traversalDepthLimit" for item in result["omissions"]))
