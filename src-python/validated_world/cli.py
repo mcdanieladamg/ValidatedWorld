@@ -116,7 +116,7 @@ def direct_command(arguments: list[str], out, err) -> int:
     try:
         if group == "change":
             if len(arguments) < 2 or arguments[1] in {"help", "--help", "-h"}:
-                out.write("change write <database> <operation-batch.json> --skip-dependencies\nReview the operation file before invoking this immediate atomic write. Prints only its before/after edits. Highly discouraged for routine changes. The agent selects rare cleanup only for absent downstream consequences or specific known consequential edits contained in the batch. Uncertain impact needs ordinary review. Structural validity, active graph rules and stale-write protection remain. For preview before a separate save, use NDJSON change.apply with skipDependencies:true, change.preview, then change.agent-write.\n")
+                out.write("change write <database> <operation-batch.json> --skip-dependencies\nReview the operation file before invoking this immediate atomic write. Prints only its before/after edits. Highly discouraged for routine changes. Use rare cleanup only for absent downstream consequences or specific known consequential edits contained in the batch. Uncertain impact needs ordinary review. Structural validity, active graph rules and stale-write protection remain. For preview before a separate save, use NDJSON change.apply with skipDependencies:true, change.preview, then change.write.\n")
                 return SUCCESS
             if len(arguments) != 5 or arguments[1] != "write" or arguments[4] != "--skip-dependencies":
                 raise ValueError("use change write <database> <operation-batch.json> --skip-dependencies; ordinary changes use the NDJSON review workflow")
