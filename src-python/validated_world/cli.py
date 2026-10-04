@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import base64
 import hashlib
 import json
@@ -15,8 +14,8 @@ from .application import Application, sample_graph
 from .artifacts import check_artifacts
 from .bulk import plan_bulk
 from .merge import merge_projects
-from .models import EntityKind, Graph, Operation, OperationKind, Node, Edge, ordinal_key
-from .protocol import graph_from_dto, json_loads_strict, operation_from_dto
+from .models import Operation, ordinal_key
+from .protocol import json_loads_strict, operation_from_dto
 from .queries import Queries
 from .storage import ProjectStore
 from .templates import descriptor, dto, instantiate, resolve
@@ -38,7 +37,7 @@ def _print_help(out) -> None:
     out.write("ValidatedWorld - local semantic graph change control\n")
     out.write(f"Version {__version__}\n")
     out.write("Supported product language: English. Unicode graph text can be stored, but non-English workflows are unsupported and unvalidated.\n\n")
-    out.write("Commands:\n  project   Initialize, inspect, compare, verify, back up, or export a project\n  artifact  Check opt-in external artifact anchors\n  read      Run bounded graph queries\n  sample    List or create built-in disposable samples\n  template  List, export, describe, or instantiate graph templates\n  shell     Run the stateful NDJSON workflow until EOF\n  ndjson    Run the structured automation interface\n")
+    out.write("Commands:\n  project   Initialize, inspect, compare, verify, back up, or export a project\n  artifact  Check opt-in external artifact anchors\n  read      Run bounded graph queries\n  change    Explicit dependency-skip batch write (highly discouraged for routine changes)\n  sample    List or create built-in disposable samples\n  template  List, export, describe, or instantiate graph templates\n  shell     Run the stateful NDJSON workflow until EOF\n  ndjson    Run the structured automation interface\n")
 
 
 def _stored(project):
@@ -59,7 +58,7 @@ def _diff(base_path: str, target_path: str, limit: int = 100, cursor: str | None
     changes = []
     base_nodes = {item.id: item for item in base.graph.nodes}; target_nodes = {item.id: item for item in target.graph.nodes}
     base_edges = {item.id: item for item in base.graph.edges}; target_edges = {item.id: item for item in target.graph.edges}
-    from .protocol import node_dto, edge_dto, operation_dto
+    from .protocol import node_dto, edge_dto
     for entity_id in sorted(set(base_nodes) | set(target_nodes), key=ordinal_key):
         left, right = base_nodes.get(entity_id), target_nodes.get(entity_id)
         if left is None: changes.append({"kind": "add", "entityKind": "node", "entityId": entity_id, "oldNode": None, "newNode": node_dto(right), "oldEdge": None, "newEdge": None, "changedFields": []})
@@ -115,6 +114,27 @@ def direct_command(arguments: list[str], out, err) -> int:
         out.write(f"ValidatedWorld.Cli {__version__}\n"); return SUCCESS
     store = ProjectStore(); group = arguments[0]
     try:
+        if group == "change":
+            if len(arguments) < 2 or arguments[1] in {"help", "--help", "-h"}:
+                out.write("change write <database> <operation-batch.json> --skip-dependencies\nReview the operation file before invoking this immediate atomic write. Prints only its before/after edits. Highly discouraged for routine changes. The agent selects rare cleanup only for absent downstream consequences or specific known consequential edits contained in the batch. Uncertain impact needs ordinary review. Structural validity, active graph rules and stale-write protection remain. For preview before a separate save, use NDJSON change.apply with skipDependencies:true, change.preview, then change.agent-write.\n")
+                return SUCCESS
+            if len(arguments) != 5 or arguments[1] != "write" or arguments[4] != "--skip-dependencies":
+                raise ValueError("use change write <database> <operation-batch.json> --skip-dependencies; ordinary changes use the NDJSON review workflow")
+            operations = _ops({"operations": json_loads_strict(Path(arguments[3]).read_text(encoding="utf-8"))})
+            app = Application(store)
+            project = store.load(arguments[2])
+            session = app.begin(arguments[2], project.graph.project_id, "direct-command", "Explicit dependency-skip batch write")
+            session = app.apply(session.reference(), operations, skip_dependencies=True)
+            cursor = None
+            while True:
+                preview = session.preview(100, cursor)
+                out.write(_json(preview) + "\n"); out.flush()
+                cursor = preview["reviewPage"]["nextCursor"]
+                if cursor is None:
+                    break
+            result = app.write(session.reference())
+            out.write(_json(result) + "\n")
+            return SUCCESS if result["status"] == "written" else DOMAIN
         if group == "project":
             if len(arguments) < 2 or arguments[1] in {"help", "--help", "-h"}:
                 out.write("project init <path> <projectId> <title> <purposeNodeId> <purposeText>\nproject status|open|verify <path>\nproject backup <source> <destination>\nproject export-sql <path>\nproject diff <base> <target> [--limit N] [--cursor TOKEN]\nproject merge <base> <ours> <theirs>\nproject bulk-plan <path> <manifest> [--chunk-size N] [--cursor TOKEN]\n"); return SUCCESS
@@ -264,8 +284,8 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "change.affected": ({"session"}, {"limit", "cursor"}),
         "change.omission-details": ({"reference", "fingerprint"}, {"limit", "cursor"}),
         "change.focus": ({"reference", "operations", "scopeParents"}, set()),
-        "change.apply": ({"reference", "operations"}, {"includeOperations", "includeProposedGraph"}),
-        "change.patch": ({"reference", "operations"}, {"includeOperations", "includeProposedGraph"}),
+        "change.apply": ({"reference", "operations"}, {"includeOperations", "includeProposedGraph", "skipDependencies"}),
+        "change.patch": ({"reference", "operations"}, {"includeOperations", "includeProposedGraph", "skipDependencies"}),
         "change.expand": ({"reference"}, {"includeOperations", "includeProposedGraph"}),
         "change.preview": ({"reference"}, {"limit", "cursor"}),
         "change.review-plan": ({"reference"}, {"limit", "cursor", "refinements"}),
@@ -302,7 +322,7 @@ def _validate_payload(command: str, payload: Any) -> dict:
     for name in positive_fields & set(payload):
         if not isinstance(payload[name], int) or isinstance(payload[name], bool) or payload[name] < 1:
             raise ValueError(f"{name} must be a positive integer")
-    for name in {"includeOperations", "includeProposedGraph"} & set(payload):
+    for name in {"includeOperations", "includeProposedGraph", "skipDependencies"} & set(payload):
         if not isinstance(payload[name], bool):
             raise ValueError(f"{name} must be Boolean")
     if "cursor" in payload and (not isinstance(payload["cursor"], str) or not payload["cursor"]):
@@ -396,7 +416,7 @@ def ndjson_loop(inp, out, err) -> int:
                 value = {"node": lambda: query.node(payload["entityId"]), "edge": lambda: query.edge(payload["entityId"]), "nodes": lambda: query.nodes(limit, cursor), "edges": lambda: query.edges(limit, cursor), "search": lambda: query.search(payload["text"], limit, cursor), "ranked_search": lambda: query.ranked_search(payload["text"], limit, cursor), "tag": lambda: query.tag(payload["tag"], limit, cursor), "scope": lambda: query.scope(payload["nodeId"], limit, cursor, payload.get("maxDepth")), "neighbors": lambda: query.neighbors(payload["entityId"], limit, cursor), "dependencies": lambda: query.dependencies(payload["entityId"], limit, cursor), "path": lambda: query.path(payload["sourceNodeId"], payload["targetNodeId"], payload.get("maxDepth")), "context": lambda: query.context(payload["nodeIds"], payload.get("maxDepth")), "health": lambda: query.health(limit), "report": lambda: query.health(limit)}[name]()
             elif command == "change.begin": value = app.begin(payload["path"], payload["projectId"], payload["author"], payload["intent"]).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command in {"change.apply", "change.patch"}:
-                session = app.apply(payload["reference"], _ops(payload), command.endswith("patch")); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
+                session = app.apply(payload["reference"], _ops(payload), command.endswith("patch"), skip_dependencies=payload.get("skipDependencies", False)); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.expand":
                 session = app.expand(payload["reference"]); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.focus": value = app.focus(payload["reference"], _ops(payload), payload["scopeParents"])

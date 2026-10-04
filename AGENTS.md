@@ -285,18 +285,21 @@ not a Git operation.
   commands, help, diagnostics, bundled content, documentation, search tuning,
   and optional AI workflows. Unicode graph text may be stored and round-tripped,
   but non-English workflows are unsupported and unvalidated.
-- Store one current human-readable graph in an embedded SQLite `.vw.db` file.
+- Store one current readable graph in an embedded SQLite `.vw.db` file.
 - Use stable-ID text nodes and explicit stable-ID labeled edges whose review
   direction controls affected propagation.
-- Maintain one purpose-rooted `scope-parent` tree. Include every changed or
+- Maintain one purpose-rooted `scope-parent` tree. In ordinary review, include every changed or
   affected node's full scope-upstream lineage as review context without sibling
   fan-out. Direct scope changes select descendants; a purpose change selects the
-  project.
+  project. The main agent may select a rare dependency-skip cleanup when downstream
+  consequences are absent or specific, already known and contained in the batch.
+  It presents only its own node/edge edits; structural validity and active graph
+  rules still apply. Uncertain impact requires ordinary review.
 - Keep unfinished changes and review data in process memory. Write the complete
   reviewed graph atomically or change nothing. This is the current MVP scope;
   durable drafts are deferred, not permanently prohibited or an implicit
   prerequisite for plugin delivery.
-- Treat semantic judgment as human or host-subagent review, not deterministic proof. The skill workflow requires an allow decision bound to the exact proposal before `change.agent-write`. The direct `change.write` command is an explicit human manual review route.
+- Treat semantic judgment as independent agent review, not deterministic proof. The ordinary skill workflow requires an allow decision bound to the exact proposal before `change.agent-write`, then saves without routine end-user approval. Ask for clarification when needed and honor requests for extra review. If a decision warrants approval, summarize intended changes in natural language. A rare agent-selected dependency-skip proposal needs only its own complete preview before saving, with no separate authorization request. Broad review, a block or an unavailable host alone does not justify skipping. Keep optional direct/manual product command instructions in `docs/cli_usage.md`, outside the skill's happy path. Product usage instructions must not include internal development-phase identifiers. Blueprint self-hosting updates continue to use ordinary review and explicit `change.write` as required above.
 - Keep Core independent of SQLite, JSON, files, providers, and UI.
 - Use the fixed four-table SQLite schema and current embedded provider recorded by
   the blueprint's `storage-four-tables` and `storage-provider-contract` nodes.
