@@ -222,7 +222,7 @@ class ProjectStore:
         os.link(temporary, destination)
         Path(temporary).unlink()
 
-    def initialize(self, path: str, graph: Graph) -> StoredProject:
+    def initialize(self, path: str, graph: Graph, *, created_utc: str | None = None, updated_utc: str | None = None) -> StoredProject:
         full = str(Path(path).expanduser().resolve())
         if Path(full).exists():
             raise FileExistsError(f"destination already exists: {full}")
@@ -236,7 +236,7 @@ class ProjectStore:
             try:
                 self._apply_schema(connection)
                 now = utc_now()
-                self._insert_graph(connection, graph, now)
+                self._insert_graph(connection, graph, now if created_utc is None else created_utc, now if updated_utc is None else updated_utc)
                 connection.commit()
                 result = self._load_connection(connection, temporary)
             finally:
@@ -354,7 +354,7 @@ class ProjectStore:
                     edge = operation.edge
                     connection.execute("insert into edges(edge_id,project_id,source_node_id,target_node_id,relationship,review_direction,rationale,tags_json,attributes_json) values(?,?,?,?,?,?,?,?,?)", (edge.id, project_id, edge.source, edge.target, edge.relationship, int(edge.review_direction), edge.rationale, tags_json(edge.tags), attributes_json(edge.attributes)))
             self._fault("edges-written")
-            connection.execute("update projects set updated_utc=?,state_fingerprint=? where project_id=?", (utc_now(), expected, project_id))
+            connection.execute("update projects set updated_utc=?,state_fingerprint=? where project_id=?", (utc_now() if expected != base_fingerprint else current.updated_utc, expected, project_id))
             self._fault("metadata-written")
             if connection.execute("pragma foreign_key_check").fetchone() is not None:
                 raise ValueError("SQLite foreign-key check failed before commit")
@@ -383,10 +383,10 @@ class ProjectStore:
         connection.execute("pragma trusted_schema = ON")
 
     @staticmethod
-    def _insert_graph(connection: sqlite3.Connection, graph: Graph, now: str) -> None:
+    def _insert_graph(connection: sqlite3.Connection, graph: Graph, created_utc: str, updated_utc: str) -> None:
         connection.execute("pragma defer_foreign_keys = on")
         fingerprint = state_fingerprint(graph)
-        connection.execute("insert into projects(project_id,title,purpose_node_id,created_utc,updated_utc,state_fingerprint) values(?,?,?,?,?,?)", (graph.project_id, graph.title, graph.purpose_node_id, now, now, fingerprint))
+        connection.execute("insert into projects(project_id,title,purpose_node_id,created_utc,updated_utc,state_fingerprint) values(?,?,?,?,?,?)", (graph.project_id, graph.title, graph.purpose_node_id, created_utc, updated_utc, fingerprint))
         for node in graph.nodes:
             connection.execute("insert into nodes(node_id,project_id,text,kind,tags_json,attributes_json) values(?,?,?,?,?,?)", (node.id, graph.project_id, node.text, node.kind, tags_json(node.tags), attributes_json(node.attributes)))
         for edge in graph.edges:

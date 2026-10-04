@@ -2,70 +2,29 @@
 
 [![CI](https://github.com/mcdanieladamg/ValidatedWorld/actions/workflows/ci.yml/badge.svg)](https://github.com/mcdanieladamg/ValidatedWorld/actions/workflows/ci.yml)
 
-ValidatedWorld is a local AI agent plugin that keeps project facts, decisions,
-and their dependencies in one SQLite file. When an agent changes a fact, it can
-see which connected claims need review, check the project's rules, and save the
-reviewed change atomically. The current package uses the Codex plugin format.
+ValidatedWorld is a graph of project knowledge: facts, decisions, evidence and
+the relationships between them. It serves as project documentation and gives
+an AI agent the context and consequences it needs to keep a project consistent.
+Changing a claim brings its downstream dependencies into review, along with
+the upstream scope that gives those claims meaning.
 
-Use it to document a project's entire knowledge base in an organized manner, to
-prevent it from growing in a disorganized or undocumented manner. The eventual
-goal is to organize every project from inception all the way up to the point that
-it has accrued enough connected knowledge that keeping consistent is becoming
-difficult even for high context-window AI agents to manage in one-shot prompts.
-When adding content through this plugin, the agent must maintain the dependency edges:
-missing links can hide stale claims, and a successful write does not prove the
-text is true. Small projects may be better served by ordinary notes and tests.
+Use it through an **AI agent skill**. Ask the agent to understand the project or
+make a change; it retrieves relevant context, reviews the affected knowledge and
+saves the update in `docs-vw.html` or a custom project file. You can also browse
+the same graph by opening that HTML file in a browser with JavaScript enabled.
 
-ValidatedWorld is a Python 3.12+ source package delivered as a standalone Agent
-Skill and a skills-only Codex plugin; public catalog distribution is still in
-preparation. The main agent authors changes in the host. In the skill workflow,
-a fresh host subagent reviews each exact proposal before the atomic write.
-Codex Desktop is the initial host target; it requires no product API key.
+Dependency links make review possible; missing links can hide consequences.
+Review helps maintain consistency but does not prove that claims are true.
 
-The initial public release is supported in English only. Graph text uses Unicode
-and can store and round-trip other languages, but the product instructions,
-diagnostics, bundled content, ranked-search tuning, and optional AI workflows are
-authored and validated only in English; non-English workflow quality is not
-currently supported.
+The local packages require Python 3.12+ and a host with fresh read-only subagents
+for reviewed updates. Codex Desktop is the exercised host. The current workflow
+is English-only; Unicode graph text is preserved. Public distribution is pending.
 
-## Build the Python packages
+- [Installation and packages](docs/release_distribution.md)
+- [Agent skill instructions](skills/validated-world/SKILL.md)
+- [Optional command reference](docs/cli_usage.md)
+- [Documentation format](docs/document_format.md)
+- [This project's browsable graph](docs-vw.html)
+- [Developer verification](docs/developer_testing.md)
 
-```powershell
-# Build source-based skill and skills-only plugin archives
-.\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
-.\eng\Test-PythonPackage.ps1
-
-# Development checkout usage
-$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
-python -m validated_world project verify .\project.vw.db
-```
-
-## Use it
-
-Install the skills-only plugin archive through the host's normal local-plugin
-workflow, ensure Python 3.12+ or an explicitly managed `uv` runtime is
-available, then start a new agent chat. Direct local commands include:
-
-```text
-python -m validated_world project status <absolute-path>.vw.db
-
-python -m validated_world project verify <absolute-path>.vw.db
-
-python -m validated_world read ranked-search <absolute-path>.vw.db "authentication"
-
-python -m validated_world ndjson
-```
-
-The `ndjson` process keeps reviewed proposals in memory, requires every exact
-preview page before writing, and discards unfinished work on EOF or process
-loss. See [Python usage](docs/python_usage.md).
-
-## Further reading
-
-- [Technical guide](docs/technical_guide.md) — how the graph and review workflow work, and a CLI quick start.
-- [Installation and releases](docs/release_distribution.md) — packaging, updates, and other local agent hosts.
-- [CLI reference](docs/cli_usage.md) — commands and the persistent NDJSON workflow.
-
-## License
-
-See [LICENSE](LICENSE).
+[License](LICENSE)

@@ -1,9 +1,9 @@
 # Review packet smoke foundation
 
-Create a disposable game-world DB through the public checkout CLI with Python 3.12+:
+Create a disposable game-world documentation file with Python 3.12+:
 
 ```text
-python samples/ReviewPackets/create_fixture.py <new-absolute-path>.vw.db
+python samples/ReviewPackets/create_fixture.py <new-absolute-html-path>
 ```
 
 Use `--extra-npcs 1000` for a broader purpose-change review. Data is fictional

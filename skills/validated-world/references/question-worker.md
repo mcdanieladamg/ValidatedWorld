@@ -2,7 +2,7 @@
 
 Delegate a broad question when it will keep the controller context useful.
 Direct retrieval is also appropriate. Launch without parent history, supplying
-the absolute Python executable and skill launcher, authorized DB path, expected
+the absolute Python executable and skill launcher, authorized project folder, expected
 project ID/fingerprint, focused question, scope hints, this reference and any
 trusted task context. Never assume inherited skills.
 
