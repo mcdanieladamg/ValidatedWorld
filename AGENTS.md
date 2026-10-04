@@ -1,328 +1,125 @@
-# ValidatedWorld Agent Instructions
+# ValidatedWorld development
 
-## Authority and required reading
+## Start from the project
 
-The human-edited `README.md` is the product thesis and bootstrap authority. Do
-not rewrite it without explicit permission from the user.
-
-`ValidatedWorld.Blueprint.vw.db` is the canonical detailed project knowledge
-base for this repository. It records implemented behavior, accepted decisions,
-gaps, and planned work. Do not maintain a complete JSON, SQL, Markdown, or
-diagram mirror beside it as a second authority.
-
-Before implementation, read in order:
-
-1. `README.md`
-2. Verify `ValidatedWorld.Blueprint.vw.db`, read its purpose, retrieve the
-   `project:status` and unique `status:current` nodes, then read the current
-   phase tag, context, and dependencies. Use bounded queries and do not load the
-   complete graph into an AI context by default.
-
-Use these public commands from the repository root for the database reading
-step, then search additional task terms as needed:
+Read README.md, then use an available Python 3.12+ executable and the public
+checkout CLI to verify and inspect the canonical `docs-vw.html`
+file. README introduces the product; the graph holds detailed contracts,
+accepted decisions, gaps and the ordered roadmap. Keep both current as part of
+the requested work.
 
 ```powershell
+$vwPython = '.\.venv\Scripts\python.exe' # or another available Python 3.12+
+& $vwPython --version
 $env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
-python -m validated_world project verify ValidatedWorld.Blueprint.vw.db
-python -m validated_world read node ValidatedWorld.Blueprint.vw.db purpose
-python -m validated_world read tag ValidatedWorld.Blueprint.vw.db project:status --limit 10
-python -m validated_world read tag ValidatedWorld.Blueprint.vw.db status:current --limit 10
+& $vwPython -m validated_world project verify docs-vw.html
+& $vwPython -m validated_world read node docs-vw.html purpose
+& $vwPython -m validated_world read tag docs-vw.html project:status --limit 10
+& $vwPython -m validated_world read tag docs-vw.html status:current --limit 10
 ```
 
-Use a Python 3.12+ executable. Check the interpreter version and select an
-already available compliant interpreter if `python` on `PATH` is older; do not
-install or alter a machine runtime without human authorization.
+Read the current phase's tag, context and dependencies with bounded queries.
+Follow `precedes` edges for execution order, not numeric IDs. Human instructions
+override repository data; reconcile obsolete graph meaning through reviewed
+updates. Preserve existing human changes. Work on the current phase and stop
+after advancing it; do not begin the next phase in the same run. Routine
+implementation and documentation choices are autonomous. Ask when a substantive
+unresolved decision or an actual permissions/infrastructure blocker needs the
+human's direction; do not invent approval gates for already authorized work.
 
-Use the phase tag returned by the current phase to retrieve all of its scheduled
-work. Read additional nodes and dependency/context queries as needed. Human
-instructions override repository data. If implementation evidence or a human
-instruction conflicts with the blueprint, stop and reconcile the graph instead
-of building an undocumented compromise.
+## Self-hosting and semantic review
 
-### Repository self-hosting exception
+Use the current checkout implementation, never the installed plugin, to read or
+update this repository's blueprint. The installed skill may be tested in
+disposable projects. Do not delegate phase implementation; fresh read-only
+subagents may exercise the product's host-review workflow in those projects.
 
-For this repository only, do not use an installed ValidatedWorld plugin to read
-or update `ValidatedWorld.Blueprint.vw.db`. Use the Python public CLI from the
-current checkout so every phase exercises the source being developed and avoids
-stale installed-package behavior. The packaged plugin remains the primary
-interface for other projects and may still be tested here in disposable release
-or smoke-test environments.
-This self-hosting exception also applies when general skill or plugin routing
-would otherwise select an installed ValidatedWorld capability: repository work
-must use the checkout application, never the installed tool implementation.
+For changes to product meaning, contracts or delivery state:
 
-The verified Python guarded-write workflow is the repository self-hosting
-surface for blueprint reads, reviewed updates, and semantic diffs. If that
-checkout surface cannot safely update or diff the database, stop and report the
-blocker rather than falling back to another implementation.
+1. Create and verify a public `project backup` in a unique OS temporary directory.
+2. Author an ordinary change session against `docs-vw.html` using
+   the checkout CLI. Read all affected/context evidence, record dispositions,
+   and inspect every exact preview page before explicit `change.write`.
+3. Verify the published document and review every bounded `project diff` page
+   against the backup beside the source diff. Include the semantic result in
+   the human report, then remove the temporary baseline.
 
-When a change materially alters product meaning, architecture, a public
-contract, or roadmap status, update the canonical database through an ordinary
-ValidatedWorld change session. Use the same affected/context review discipline
-as any other project. Do not edit SQLite directly. Before that session, create a
-verified temporary backup outside the repository. After the write, run bounded
-`project diff` pages from the backup to the canonical database and include that
-semantic report in the human's review; then remove the temporary backup. If the
-application cannot safely update or diff its own database, report that as a
-blocker instead of silently allowing code and database meaning to diverge.
-The coding agent authors graph changes through the checkout CLI. For repository self-hosting, use the explicit `change.write` route after reviewing every exact preview page. Test the skill host-subagent route in disposable projects.
+Never edit SQLite or authoritative HTML records directly to update the blueprint.
+If the checkout cannot safely update or diff its own project, report the blocker.
+The document adapter manages temporary SQLite and publication. Preserve a committed
+unpublished DB until recovery; a successful DB commit alone is not a published
+document update.
 
-## Repository synchronization contract
+Meaningful artifact changes normally include the matching graph delta. Record
+delivered work with status markers, rather than restating plans. A corrective
+change that alters neither recorded meaning nor delivery state may omit a graph
+edit; explain that narrow exception. The last verified snapshot accepted into
+version control is the reviewed baseline, not proof of truth. Review deltas and
+affected context rather than re-reviewing the whole graph for every task.
 
-ValidatedWorld provides soft semantic validation: it standardizes evidence and
-review but does not prove that project claims are true. Treat the last verified
-`.vw.db` version accepted into version control as a previously reviewed semantic
-baseline. Do not re-review the entire graph for every task. `project verify`
-establishes file and structural validity only; an uncommitted database edit is a
-candidate delta, and an abandoned in-memory change session was never part of the
-database.
+## Completion
 
-An independent project may build a deterministic publisher that consumes the
-public graph and generates its own artifacts. Treat that as external project
-tooling, not a ValidatedWorld plugin contract, bundled feature, or roadmap
-requirement. The default repository workflow is one cohesive change unit:
+Run the checks and informal public/host/browser smoke methods in
+[developer verification](docs/developer_testing.md). Add meaningful regressions
+for changed behavior. Documentation-only edits need link, format and consistency
+checks. For one failure, use at most two materially different repairs; give an
+infrastructure failure one diagnostic retry after a concrete repair. Never
+weaken acceptance or rerun an unchanged failure hoping for success.
 
-- Every meaningful pull request that changes tracked project artifacts normally
-  includes a `.vw.db` delta in the same change.
-- When intended behavior, content, architecture, or design changes, update the
-  corresponding graph meaning. When already-planned work is implemented, update
-  its explicit phase, status, or progress nodes, tags, and edges to record
-  delivery rather than restating the requirement.
-- Review the bounded semantic `project diff` beside the Git/source diff. Use
-  bounded tag, search, dependency, affected, and context queries when needed to
-  compare the implementation with its graph claims.
-- Merge the database and matching artifacts together so the accepted result is
-  the next trusted baseline.
-- A fix, refactor, formatting change, or test improvement that only brings the
-  project into agreement with already-correct graph meaning and changes no
-  recorded delivery state may omit a database edit. Treat this as a narrow
-  exception, state the reason in the human report, and update the graph if the
-  work exposes a missing or incorrect contract.
-- The graph may lead implementation when explicit phase/status metadata clearly
-  distinguishes planned, current, and implemented work. When planned work is
-  delivered, change its implementation markers in the same change unit as the
-  code or other artifacts.
+When all current-phase work and acceptance pass, use one ordinary reviewed
+transaction to mark it `status:complete`, select the next pending phase as
+`status:current`, and update the project-status tag and `current-phase` edge.
+Only the current phase carries one `estimate:small|medium|large|gigantic` tag.
+Estimate the next phase's total implementation, uncertainty and verification
+burden; record dominant difficulty in its description. Read back and report the
+completed phase and newly current ID, description and estimate directly to the
+human. If none remains, say so and omit the estimate. On failure leave phase
+state unchanged and report the cause and attempted repairs.
 
-This protocol is a review obligation, not currently an automatic Git invariant.
-Phase and status tags are project-defined vocabulary rather than hidden engine
-semantics, but they are explicit, queryable, and reviewable. External artifact
-drift detection remains optional integration work.
+## Portable state and cleanup
 
-## Portable work state and cleanup
+Keep durable meaning, decisions and remaining work in the canonical graph;
+instructions and reusable tools/fixtures belong in tracked sources. No workflow
+may depend on chat history, app memory, ignored handoff notes or external files.
+Keep user docs focused on current behavior, without development transcripts.
+Do not maintain a complete Markdown, JSON, SQL or diagram mirror of the graph.
 
-- Put durable project meaning, decisions, open questions and remaining work in
-  the canonical blueprint. Put human instructions in README or existing docs,
-  agent instructions here, and reusable tooling/fixtures in their tracked folders.
-  No workflow may depend on a chat transcript, app memory, ignored handoff note,
-  or files outside the checkout. Leave changes unstaged for the human as usual.
-  Keep README and user-facing documentation focused on the project as it exists;
-  do not leak prompts, rejected ideas, corrections, development deliberations, or
-  other conversational residue into it. Mention negative constraints or excluded
-  alternatives only when they are materially necessary for correct usage, compatibility,
-  safety, or maintenance.
-- Ignored files are only regenerable outputs/caches or local settings/secrets.
-  Build outputs and extracted installations must have documented regeneration
-  commands. Never use `artifacts/`, `.tmp/`, or another ignored directory as
-  durable project memory or as the only copy of useful smoke-test foundations.
-- Use a unique OS temporary directory for one-off scripts, proposal payloads,
-  trial databases and diagnostics. Clean it up when done, including on failure.
-  Before pausing, preserve necessary meaning in the tracked sources above;
-  do not create an ignored resume document. If cleanup is blocked, report the
-  exact remaining path and reason, then clean it up at the next opportunity.
-- Preserve useful smoke-test starting graphs as sanitized tracked fixtures with
-  a short command for creating disposable copies. These are foundations for
-  exploratory testing, not mandatory scripted scenarios. They are more like a replacement
-  for human-style smoke QA, but run typically by agents. Remove duplicate runs and stale
-  logs after recording any actionable finding in the graph or the corresponding regression
-  test. Check a file's contents/role before deleting it. Do not delete the canonical
-  database, user settings, unknown user data, or an active installation during
-  cleanup. Completed release archives may remain as documented build outputs.
-- Keep the workflow usable by other agents through the tracked Python CLI and
-  skill sources. Host-specific installation adapters are optional setup;
-  distinguish them from portable project knowledge and unverified client support.
+Ignored files are regenerable outputs/caches or local settings/secrets. Preserve
+useful sanitized smoke foundations in tracked samples. Put trial DBs, proposals,
+evidence and diagnostics in unique OS temporary directories and remove them
+after review. Inspect contents and resolved containment before recursive cleanup;
+preserve canonical data, unknown user files, settings and active installations.
+Report exact paths for blocked cleanup. Completed release archives may remain
+as documented regenerable outputs.
 
-## One-phase development loop
+## Implementation invariants
 
-The blueprint contains exactly one phase tagged `status:current`; `precedes`
-edges and the remaining phase nodes hold the complete ordered backlog. A human
-prompt starts each development run.
-
-Follow `precedes` edges for execution order; stable phase IDs need not be in
-numeric order. A human-authorized roadmap-only revision may add or reorder
-pending phases and explicitly replace the current selection without implementing
-them or marking the displaced phase complete.
-Completed foundation phases do not by themselves declare MVP readiness; use
-the blueprint's explicit product status and acceptance criteria.
-
-- Implement only the current phase. Do not begin or delegate the next phase.
-- Inspect and preserve existing human changes.
-- Make routine reversible implementation choices autonomously. Ask before a
-  material product, schema, provider, dependency, or scope change.
-- Add meaningful automated tests for changed behavior and perform the current
-  phase's informal user-style smoke check.
-- On success, use one reviewed graph transaction to replace `status:current`
-  with `status:complete` on the finished phase, replace `status:pending` with
-  `status:current` on the next phase, move its
-  `estimate:small|medium|large|gigantic` tag, and update the `project:status`
-  node's `current-phase:<id>` tag and `current-phase` edge. This delivery-state
-  change is required even when the implemented requirements were already fully
-  recorded, so a successful phase pull request always has a semantic database
-  diff. In the final response directly to the user, state the completed phase
-  and the newly current phase's ID, short description, and recorded work
-  estimate (`small`, `medium`, `large`, or `gigantic`). Read these values back
-  from the updated database; do not substitute the completed phase's estimate
-  or leave this information only in a file, link, or database update. If no phase
-  remains current, explicitly say so and omit an estimate. Report exact checks
-  and smoke findings, then stop. The human reviews and merges before starting
-  another run.
-- On failure, leave phase state unchanged, report the command/output/cause/
-  repairs to the human, and stop.
-- If no phase is current, make no changes. Report the recorded state and ask the
-  human for direction.
-
-Do not delegate implementation of a development phase to another agent. This
-does not prohibit spawning fresh read-only subagents when testing the product's
-host-subagent review feature in a disposable project.
-
-## Bounded testing and retries
-
-Use focused tests while developing. When ready, run:
-
-```powershell
-$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
-python -m validated_world project verify ValidatedWorld.Blueprint.vw.db
-python -m unittest discover -s tests-python -v
-.\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
-.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
-```
-
-Verify that the selected interpreter is Python 3.12 or newer. The default unit and package commands are offline and make no product model API calls. Host-subagent integration needs a separately exercised host workflow.
-Also run `eng/Test-DeveloperTools.ps1` and `eng/Test-Blueprint.ps1` for changes to
-release tooling or blueprint conventions. The latter enforces this repository's
-roadmap rules through the public CLI; it is not a built-in domain profile.
-
-For the same failure, make at most two materially different repair attempts.
-Never rerun an unchanged failing command merely hoping it will pass. Give an
-infrastructure/dependency failure one diagnostic retry after a concrete repair;
-if it remains, report and stop. Never weaken acceptance criteria to escape a
-test failure.
-
-Documentation-only changes need link/format/consistency checks, not artificial
-production tests.
-
-## Human-style smoke testing
-
-The smoke check is informal product QA, not another fully standardized test
-suite. Keep a small repeatable spine: enter through the public surface, use
-disposable realistic data, attempt the phase's main user goal, and record the
-commands or calls and observed result. Within that spine, deliberately make
-room for creative one-off exploration chosen from the behavior just changed and
-anything confusing observed during the run.
-
-Act like a curious human tester. Follow help without relying on implementation
-knowledge, vary plausible inputs and operation order, make at least one natural
-mistake when useful, inspect recovery and diagnostics, and try an alternate path
-that a real user might choose. These probes need not become permanent scripts or
-be identical across runs. Automated tests remain the deterministic regression
-layer; the smoke check should retain its ability to uncover surprising usability
-or integration problems.
-
-Fix a smoke finding during the current phase when the correction is clearly
-in-scope, small, and straightforward, then add an appropriate regression test.
-If the finding implies a material product, schema, dependency, provider, or
-scope decision; reveals an inherent contradiction; or has no clear low-risk
-repair, stop and escalate it to the human instead of improvising a redesign.
-Report both the repeatable walkthrough and the exploratory probes to the human,
-including confusing behavior and confidence. Do not append dated implementation
-history, test transcripts, or corrective-addendum prose to the README or
-blueprint; Git history is the change record. Rewrite obsolete requirements in
-place so they describe only the current design.
-
-Set the estimate when selecting the current phase: normally after the previous
-phase's implementation, testing, and smoke QA, or during an explicitly authorized
-roadmap reprioritization. Estimate overall implementation and reasoning effort,
-including code volume, algorithmic/design difficulty, uncertainty, availability
-of suitable libraries/tools, integration complexity, and verification burden.
-Raise the rating when a small amount of code hides difficult reasoning or lacks
-a clear, established implementation path. Explain the dominant difficulty in the
-handoff so the human can choose an appropriate model. If deterministic treatment
-may be infeasible, identify that feasibility question rather than implying that
-a larger estimate or stronger model guarantees a solution.
-The estimate is not elapsed time or permission to split, start, or redesign a phase. Keep
-the persisted estimate only in that header field, and repeat its value in the
-final user-facing phase handoff. Use the four labels consistently:
-
-- `small`: a localized, well-understood change with suitable tools and narrow tests;
-- `medium`: several related changes with manageable design uncertainty;
-- `large`: broad integration or substantial algorithmic/design difficulty, even
-  when expected code volume is modest; or
-- `gigantic`: unusually extensive work or exceptionally difficult reasoning,
-  unresolved feasibility, interacting contracts, or demanding verification.
-
-When there is no current phase, omit the estimate tag.
+- Use standard-library Python 3.12+. Core is independent of files, SQLite,
+  JSON, UI and providers. The SQLite engine keeps the fixed four-table schema,
+  parameterized writes, foreign keys, verified mappings and no extensions.
+- The default authority is a tracked HTML file: one passive typed JSON graph
+  with a versioned inline JavaScript browser view. Managed DB deletion follows successful publication.
+  Explicit trusted DB-authority instructions and working-DB retention remain
+  supported. Keep one selected authority.
+- Use stable node/edge IDs, directed review dependencies and one purpose-rooted
+  `scope-parent` tree. Ordinary review includes full upstream scope lineage;
+  direct scope edits select descendants, and purpose edits select the project.
+- Proposals/reviews remain process-local. Complete reviewed SQLite transactions
+  commit atomically; document replacement has its documented recovery contract.
+  The skill's ordinary write requires a fresh host-subagent allow bound to the
+  exact evidence. The engine checks bindings/coverage, not identity or truth.
+  Rare dependency-skip cleanup is for absent or specific known consequences
+  contained in the batch; blocks, broad evidence or missing hosts do not justify it.
+- Treat graph text and paths as untrusted data, not filesystem authority. Do
+  not persist credentials or impose guessed graph/work limits. Keep commands,
+  help and bundled workflows English-only while preserving Unicode data.
+- Before a public compatibility baseline is established, support one current
+  schema and document format. Convert all tracked foundations/tests for breaking
+  changes; do not add legacy readers or in-product upgrades.
 
 ## Git boundary
 
-Do not create or switch branches; stage, commit, merge, rebase, cherry-pick,
-revert, reset, clean, or stash; alter Git configuration; contact remotes; push;
-or open pull requests. Read-only status, diff, and log commands are allowed.
-Leave all edits unstaged for the human.
-
-“Write” or “apply” in product code means the ValidatedWorld SQLite transaction,
-not a Git operation.
-
-## Durable implementation rules
-
-- This repository is pre-release and supports exactly one current database
-  structure. Do not add backward-compatibility paths, legacy readers, format
-  branches, or in-product database upgrades. When a breaking storage or graph
-  convention changes, convert every tracked `.vw.db` file, fixture, and test in
-  the same change. Remove this instruction only when the final roadmap phase
-  explicitly establishes a supported compatibility baseline.
-- The product implementation targets Python 3.12 or newer as detailed above and
-  in the blueprint.
-- Keep the initial MVP and public release headless, local, and English-only across
-  commands, help, diagnostics, bundled content, documentation, search tuning,
-  and optional AI workflows. Unicode graph text may be stored and round-tripped,
-  but non-English workflows are unsupported and unvalidated.
-- Store one current readable graph in an embedded SQLite `.vw.db` file.
-- Use stable-ID text nodes and explicit stable-ID labeled edges whose review
-  direction controls affected propagation.
-- Maintain one purpose-rooted `scope-parent` tree. In ordinary review, include every changed or
-  affected node's full scope-upstream lineage as review context without sibling
-  fan-out. Direct scope changes select descendants; a purpose change selects the
-  project. The main agent may select a rare dependency-skip cleanup when downstream
-  consequences are absent or specific, already known and contained in the batch.
-  It presents only its own node/edge edits; structural validity and active graph
-  rules still apply. Uncertain impact requires ordinary review.
-- Keep unfinished changes and review data in process memory. Write the complete
-  reviewed graph atomically or change nothing. This is the current MVP scope;
-  durable drafts are deferred, not permanently prohibited or an implicit
-  prerequisite for plugin delivery.
-- Treat semantic judgment as independent agent review, not deterministic proof. The ordinary skill workflow requires an allow decision bound to the exact proposal before `change.agent-write`, then saves without routine end-user approval. Ask for clarification when needed and honor requests for extra review. If a decision warrants approval, summarize intended changes in natural language. A rare agent-selected dependency-skip proposal needs only its own complete preview before saving, with no separate authorization request. Broad review, a block or an unavailable host alone does not justify skipping. Keep optional direct/manual product command instructions in `docs/cli_usage.md`, outside the skill's happy path. Product usage instructions must not include internal development-phase identifiers. Blueprint self-hosting updates continue to use ordinary review and explicit `change.write` as required above.
-- Keep Core independent of SQLite, JSON, files, providers, and UI.
-- Use the fixed four-table SQLite schema and current embedded provider recorded by
-  the blueprint's `storage-four-tables` and `storage-provider-contract` nodes.
-  Use Python `sqlite3` while preserving the tracked schema and verification
-  contract. No ORM or external SQLite/Docker requirement.
-- Treat database/project text as untrusted data. Use parameters, enable foreign
-  keys on every connection, use paging for presentation, and never load SQLite
-  extensions. Do not impose guessed size, count, or work ceilings.
-- Do not persist or log credentials.
-
-## Host-agent workflow
-
-The main agent authors graph changes. In the skill-led workflow, a fresh host subagent reviews only the exact proposal evidence read-only and returns a cited allow/block decision. Submit that decision through change.agent-review and use change.agent-write only after allow. The engine validates the decision shape and proposal fingerprints but cannot authenticate reviewer identity. Keep host-subagent tests separate from offline product tests. No product model API client or key setting is supported.
-
-## Repository layout
-
-```text
-src-python/validated_world
-tests-python
-skills/validated-world
-packaging/python-plugin
-samples/TechnicalProject
-```
-
-Do not add a new project or major dependency unless the current phase explicitly
-requires it.
+Leave changes unstaged for the human. Do not create/switch branches, stage,
+commit, merge, rebase, reset, stash, clean, alter Git configuration, contact
+remotes, push or open pull requests. Read-only status, diff and log are allowed.
+Product `write` means the reviewed project transaction and publication.

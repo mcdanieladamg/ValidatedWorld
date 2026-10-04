@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src-python"))
 from validated_world.models import Attribute, Edge, Graph, GraphValue, Node
 from validated_world.rules import evaluate_rules
 from validated_world.storage import ProjectStore
+from validated_world.document_store import ProjectFiles
 
 
 def rule(identifier, message, expression, *, version=1):
@@ -106,7 +107,7 @@ class RuleTests(unittest.TestCase):
             evaluate_rules(candidate, max_work=1)
 
     def test_tracked_blueprint_rules_remain_valid(self):
-        project = ProjectStore().load(Path(__file__).parents[1] / "ValidatedWorld.Blueprint.vw.db")
+        project = ProjectFiles().load(Path(__file__).parents[1] / "docs-vw.html")
         self.assertTrue(evaluate_rules(project.graph).is_valid)
 
 

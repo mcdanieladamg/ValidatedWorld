@@ -2,7 +2,7 @@
 
 These fixtures describe the disposable `technical-project` sample
 created by `sample create technical-project`. The JSON files are portable,
-text-only inputs to deterministic scenario tests. The separate SQLite foundation
+text-only inputs to deterministic scenario tests. The separate HTML foundation
 below is a starting graph for exploratory smoke testing.
 
 The fixtures use English, the supported product language.
@@ -39,13 +39,13 @@ From the repository root in PowerShell:
 $smokeDir = Join-Path ([IO.Path]::GetTempPath()) ('vw-smoke-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $smokeDir | Out-Null
 # Broader technical-project graph: power, privacy, accessibility, documentation
-python -m validated_world sample create technical-project (Join-Path $smokeDir 'technical.vw.db')
+python -m validated_world sample create technical-project (Join-Path $smokeDir 'technical.html')
 # Small synthetic privacy graph: purpose, policy, dependent check, unrelated control
-python -m validated_world project backup samples/TechnicalProject/semantic-review-foundation.vw.db (Join-Path $smokeDir 'privacy.vw.db')
+python -m validated_world project backup samples/TechnicalProject/semantic-review-foundation.html (Join-Path $smokeDir 'privacy.html')
 ```
 
 Open either copy through the CLI or persistent NDJSON interface.
-`semantic-review-foundation.vw.db` contains only fictional data (five nodes and
-five edges). Delete the disposable folder after testing. Optional independent
-review sends evidence to OpenAI and incurs API charges when enabled and
-configured.
+`semantic-review-foundation.html` contains only fictional data (five nodes and
+five edges). Delete the disposable folder after testing. Host-subagent review
+uses the host account and its model usage/data-handling terms. Developer smoke
+methods are in [developer verification](../../docs/developer_testing.md).

@@ -25,7 +25,8 @@ function Copy-PythonEngine([string] $destination) {
     New-Item -ItemType Directory -Force -Path (Join-Path $destination 'src-python') | Out-Null
     Copy-Item -LiteralPath (Join-Path $root 'src-python/validated_world') -Destination (Join-Path $destination 'src-python') -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $root 'pyproject.toml') -Destination $destination -Force
-    Copy-Item -LiteralPath (Join-Path $root 'docs/python_usage.md') -Destination $destination -Force
+    Copy-Item -LiteralPath (Join-Path $root 'packaging/python-plugin/README.md') -Destination $destination -Force
+    Copy-Item -LiteralPath (Join-Path $root 'docs/document_format.md') -Destination $destination -Force
     Get-ChildItem -LiteralPath (Join-Path $destination 'src-python') -Directory -Filter '__pycache__' -Recurse -Force | Remove-Item -Recurse -Force
     $projectFile = Join-Path $destination 'pyproject.toml'
     $projectText = [IO.File]::ReadAllText($projectFile)

@@ -7,7 +7,7 @@ from typing import Any
 from .canonical import state_fingerprint
 from .models import Edge, EntityKind, Graph, Node, Operation, OperationKind, ordinal_key
 from .protocol import edge_dto, graph_dto, node_dto, operation_dto
-from .storage import ProjectStore
+from .document_store import ProjectFiles as ProjectStore
 from .validation import validate_graph
 
 

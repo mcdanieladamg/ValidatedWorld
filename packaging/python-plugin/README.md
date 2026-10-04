@@ -1,10 +1,14 @@
-# ValidatedWorld Python plugin
+# ValidatedWorld
 
-This skills-only portable Agent Plugins package with a supported Codex overlay bundles the ValidatedWorld Agent Skill and its
-standard-library Python engine. Build a release package from the repository
-with `eng/Build-PythonPackage.ps1`; that command copies the tracked Python
-source package into a clean staging directory and validates the archive
-contents.
+Use the ValidatedWorld Agent Skill to maintain connected project documentation
+and review the consequences of changes. The bundled Python engine saves the
+graph as browsable HTML; open the project's HTML file to read it.
 
-The host must have Python 3.12 or newer or an explicitly managed `uv` runtime.
-The plugin does not install an operating-system runtime automatically.
+These source packages require Python 3.12+ and a host that can provide fresh
+read-only subagents for reviewed updates. Codex Desktop is the exercised host.
+The engine has no third-party runtime dependencies or product API key setting.
+
+Project documentation belongs outside the package or installation directory.
+See the bundled `document_format.md` and the
+[repository](https://github.com/mcdanieladamg/ValidatedWorld) for installation,
+agent instructions and optional command details.

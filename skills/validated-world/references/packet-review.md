@@ -49,7 +49,7 @@ the exact current `reference`; save new references after mutations.
    single-reviewer workflow.
 
 Apply, patch, expansion, disposition/context changes, registered supplements,
-refinement and external DB changes invalidate exact bindings. Terminal blocks
+refinement and external project changes invalidate exact bindings. Terminal blocks
 cannot be edited into allows; revise/replan and use fresh review. Session IDs
 prevent old files/results from authorizing new sessions. Files are temporary
 evidence, not drafts. Finish required dialogue before cleanup. Successful writes,

@@ -245,15 +245,16 @@ class StorageTests(unittest.TestCase):
         store.write(path, graph.project_id, baseline.state_fingerprint, state_fingerprint(proposed), operations)
         self.assertTrue(store.verify(path)["isValid"])
 
-    def test_disposable_copies_of_every_tracked_database_can_continue_under_python(self):
+    def test_imports_of_every_tracked_documentation_foundation_can_continue_under_python(self):
         repository = Path(__file__).parents[1]
-        tracked = [repository / "ValidatedWorld.Blueprint.vw.db", *sorted((repository / "samples").rglob("*.vw.db"))]
+        tracked = [repository / "docs-vw.html", *sorted(p for p in (repository / "samples").rglob("*.html") if p.parent == repository / "samples" / "TechnicalProject")]
         self.assertGreaterEqual(len(tracked), 2)
         for index, source in enumerate(tracked):
             with self.subTest(source=str(source.relative_to(repository))):
                 destination = self.root / f"tracked-{index}.vw.db"
                 store = ProjectStore()
-                baseline = store.backup(source, destination)
+                from validated_world.document_store import ProjectFiles
+                baseline = ProjectFiles().import_html(source, destination)
                 current = next(item for item in baseline.graph.nodes if item.id == baseline.graph.purpose_node_id)
                 changed = Node(current.id, current.text + " [continuation test]", current.kind, current.tags, current.attributes)
                 operation = Operation(OperationKind.REPLACE, EntityKind.NODE, changed.id, node=changed)

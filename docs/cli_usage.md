@@ -1,12 +1,12 @@
 # ValidatedWorld manual command reference
 
 This standalone reference covers optional direct/manual command use: you, a
-local project database, and Python. You author the edits, inspect their
+local HTML project file, and Python. You author the edits, inspect their
 consequences, and save the reviewed proposal yourself. The application does not
 call model APIs, accept model API keys, or launch agents or subagents.
 
 The normal product workflow is to ask an agent using the ValidatedWorld skill to
-manage the database. That host supplies any subagents separately. These manual
+manage the project. That host supplies any subagents separately. These manual
 instructions require no agent host or agent review results.
 
 ValidatedWorld runs locally with Python 3.12+. From a source
@@ -18,8 +18,62 @@ py -3.12 -m validated_world --help
 ```
 
 An installed package also provides the `validated-world` command. Quote paths
-and text containing spaces. Project and backup destinations are never
-overwritten.
+and text containing spaces. New projects, backups and imported DB destinations are never overwritten.
+Export replaces the selected HTML file; neighboring files are untouched.
+
+The source skill invokes its bundled engine through `scripts/validated_world.py`
+with Python 3.12+; it does not need a global package installation. The runtime
+uses only the standard library. Development setup and tests are documented in
+[developer verification](developer_testing.md).
+
+## Graph and rules
+
+Every project has one purpose node and a `scope-parent` tree. Stable-ID nodes
+hold claims, kinds, tags and typed attributes; stable-ID edges hold endpoints,
+relationships, rationale and a review direction. Dependency propagation uses
+that review direction, independently of the edge's source/target order.
+Ordinary changes include every affected claim's upstream scope lineage without
+selecting siblings. Direct scope changes select descendants; purpose changes
+select the whole project. See [the record format](document_format.md) for fields.
+
+Rules are graph nodes with kind `validation-rule`, tag `rule:active`, integer
+`rule:version` and text `rule:expression`. Named views use kind `validation-view`
+and attributes `view:name`, `view:version`, `view:expression`. Expressions are
+JSON selectors and conditions evaluated against the complete candidate graph.
+They support sets, reachability, Boolean/count/tag conditions and chain/cycle
+checks. Unsupported or malformed expressions do not pass. `project verify`
+reports rule diagnostics; a structurally valid rule-invalid baseline can be
+opened for repair, while writes require valid proposed rules. Export a bundled
+template to inspect working examples.
+
+## Documentation storage
+
+The normal path names one browsable `.html` file. A passive JSON block contains
+the complete graph; the inline JavaScript viewer builds the view from it. [The format](document_format.md)
+separates data from presentation. Reads leave the file unchanged. Managed changes
+import once into temporary SQLite, use the guarded workflow, atomically replace
+the HTML file, then delete the working DB after success.
+
+Prefer `docs-vw.html` for a new project. Choose another name only when explicitly
+requested, occupied by unrelated content, or needed for an explicitly multi-project
+or multi-database workspace. Reuse existing custom names. Commands take an explicit
+path; check project identity before an update. Filenames are not project IDs.
+
+Explicit import creates a new caller-owned DB; explicit export leaves that DB
+untouched. A trusted project or human requirement may select a `.vw.db` path as
+the authority, using the same existing commands without a required export.
+Set strict Boolean `keepWorkingDb: true` on `change.begin`, or use
+`--keep-working-db` with the exceptional direct write, only when instructed to
+retain the managed working DB. Retention does not change the document's authority.
+
+An `unpublished` write result means the reviewed DB committed but publication
+failed; the session is consumed. Preserve `workingDbPath`, resolve the reported
+cause, then use `project retry-export`. Retry refuses an intervening source change.
+Cleanup warnings mean the complete new file was published, with remaining paths
+reported separately. The publisher writes and verifies a sibling temporary file,
+then atomically replaces the destination. An interrupted replacement leaves the
+old or new complete file; no directory recovery command is needed. Simultaneous
+edits are unsupported. A managed update checks source bytes before publication.
 
 ## Project commands
 
@@ -29,6 +83,9 @@ project status <path>
 project open <path>
 project verify <path>
 project backup <source> <destination>
+project import-html <html> <new-db>
+project export-html <db> <html>
+project retry-export <working-db>
 project export-sql <path>
 project diff <base> <target> [--limit N] [--cursor TOKEN]
 project merge <base> <ours> <theirs>
@@ -48,7 +105,7 @@ sample create technical-project <path>
 template list
 template describe <name-or-template-path>
 template export <name-or-template-path> <destination.json>
-template instantiate <name-or-template-path> <database> <project-id> <title> <purpose-text>
+template instantiate <name-or-template-path> <project-html> <project-id> <title> <purpose-text>
 ```
 
 The built-in templates are `code-development` and `research-notebook`.
@@ -56,16 +113,16 @@ The built-in templates are `code-development` and `research-notebook`.
 ## Bounded reads
 
 ```text
-read node <database> <node-id>
-read edge <database> <edge-id>
-read nodes|edges <database> [--limit N] [--cursor TOKEN]
-read search|ranked-search <database> <text> [--limit N] [--cursor TOKEN]
-read tag <database> <exact-tag> [--limit N] [--cursor TOKEN]
-read scope <database> <node-id> [--limit N] [--cursor TOKEN]
-read neighbors|dependencies <database> <node-id> [--limit N] [--cursor TOKEN]
-read path <database> <source-node-id> <target-node-id>
-read context <database> <node-id[,node-id...]>
-read health|report <database> [--limit N]
+read node <project-html> <node-id>
+read edge <project-html> <edge-id>
+read nodes|edges <project-html> [--limit N] [--cursor TOKEN]
+read search|ranked-search <project-html> <text> [--limit N] [--cursor TOKEN]
+read tag <project-html> <exact-tag> [--limit N] [--cursor TOKEN]
+read scope <project-html> <node-id> [--limit N] [--cursor TOKEN]
+read neighbors|dependencies <project-html> <node-id> [--limit N] [--cursor TOKEN]
+read path <project-html> <source-node-id> <target-node-id>
+read context <project-html> <node-id[,node-id...]>
+read health|report <project-html> [--limit N]
 ```
 
 Page cursors are bound to the project fingerprint and query. A cursor from a
@@ -78,7 +135,7 @@ Artifact anchors are ordinary graph nodes with kind `external-anchor` or tag
 roots:
 
 ```text
-artifact check <database> --allow-root <directory> [--allow-root <directory> ...]
+artifact check <project-html> --allow-root <directory> [--allow-root <directory> ...]
 ```
 
 The check reports matched, drifted, missing, invalid, unauthorized, and
@@ -101,7 +158,7 @@ py -3.12 -m validated_world ndjson
 Each input line is a JSON request and each output line is its JSON result:
 
 ```json
-{"version":1,"command":"project.verify","payload":{"path":"C:\\work\\project.vw.db"}}
+{"version":1,"command":"project.verify","payload":{"path":"C:\\work\\project"}}
 ```
 
 Use `host.help` to discover the command catalog and `host.exit` to close the
@@ -124,13 +181,14 @@ one-shot surface. Change commands are stateful:
 5. Call `change.preview`, following every `nextCursor`
    for that exact revision and page size.
 6. Call `change.write` to save the completely reviewed and previewed proposal
-   atomically. This manual route requires no agent decision and launches no agent.
+   through the guarded transaction and document publication. This manual route
+   requires no agent decision and launches no agent.
 7. Use `change.discard` to abandon the in-memory proposal.
 
 Keep the returned reference from each response and pass it to the next mutating
 request. Any proposal or review change makes an earlier reference stale.
-Incomplete review, incomplete preview evidence, a stale database fingerprint,
-or failed graph rules leave the database
+Incomplete review, incomplete preview evidence, a stale project fingerprint,
+or failed graph rules leave the durable project
 unchanged. EOF or process loss discards unfinished sessions.
 
 Snapshots from `change.begin`, `change.show`, `change.apply`, `change.patch`,
@@ -144,11 +202,11 @@ is the exact evidence gate for manual writes. Read every page yourself, includin
 downstream claims and upstream context; the application presents evidence and
 checks recorded completeness, but cannot prove that you read it or judged it correctly.
 
-For onboarding and routine discovery, verify the database, read its status,
+For onboarding and routine discovery, verify the project, read its status,
 confirm the purpose, then search task terms and inspect only the relevant nodes,
 dependencies, scope, and context. Use bounded reads and follow cursors when
-additional results matter. Knowledge is added incrementally; a complete graph
-import is not required. Do not use `project.open` for routine discovery because
+additional results matter. Knowledge is added incrementally; complete graph
+presentation is not required. Do not use `project.open` for routine discovery because
 it returns the whole graph.
 
 The shared `host.help` catalog also lists host-integration commands for accepting
@@ -181,7 +239,7 @@ The immediate direct command accepts the same strict operation-batch JSON
 (`{"operations":[...]}`) used inside an NDJSON `operations` payload:
 
 ```text
-change write <database> <operation-batch.json> --skip-dependencies
+change write <project-html> <operation-batch.json> --skip-dependencies [--keep-working-db]
 ```
 
 Review that file before invoking the command. It prints paged before/after edits

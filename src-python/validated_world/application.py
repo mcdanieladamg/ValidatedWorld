@@ -15,6 +15,7 @@ from .models import Edge, EntityKind, Graph, Node, Operation, OperationKind, ord
 from .protocol import edge_dto, graph_dto, node_dto, operation_dto
 from .rules import RuleResult, evaluate_rules
 from .storage import ProjectStore, StoredProject
+from .document_store import ProjectFiles, PublicationError
 from .validation import GraphIndex, ValidationResult, project_graph, validate_graph
 
 
@@ -411,7 +412,7 @@ class Session:
 
 class Application:
     def __init__(self, store: ProjectStore | None = None):
-        self.store = store or ProjectStore()
+        self.store = store or ProjectFiles()
         self.sessions: dict[str, Session] = {}
         self.review_exports: dict[str, tuple[str, int, int]] = {}
 
@@ -500,9 +501,16 @@ class Application:
     def initialize(self, path: str, project_id: str, title: str, purpose_node_id: str, purpose_text: str) -> StoredProject:
         return self.store.initialize(path, Graph(project_id, title, purpose_node_id, (Node(purpose_node_id, purpose_text),), ()))
 
-    def begin(self, path: str, project_id: str, author: str, intent: str) -> Session:
-        project = self.store.load(path)
-        if project.graph.project_id != project_id: raise ValueError("project mismatch")
+    def begin(self, path: str, project_id: str, author: str, intent: str, *, keep_working_db: bool = False) -> Session:
+        if not isinstance(keep_working_db, bool): raise ValueError("keepWorkingDb must be Boolean")
+        if project_id in self.sessions: raise ValueError("project already has an active session")
+        if isinstance(self.store, ProjectFiles):
+            project = self.store.begin_workspace(path, keep_working_db)
+        else:
+            project = self.store.load(path)
+        if project.graph.project_id != project_id:
+            if isinstance(self.store, ProjectFiles): self.store.close_workspace(path)
+            raise ValueError("project mismatch")
         if project_id in self.sessions: raise ValueError("project already has an active session")
         session = Session(project, author, intent)
         session.rebuild(); self.sessions[project_id] = session
@@ -656,6 +664,9 @@ class Application:
             return {"status": "reviewNotReady", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": None, "message": "The exact proposal review evidence has not been fully presented. Call change.preview and follow every reviewPage.nextCursor before change.write."}
         try:
             project = self.store.write(session.base.path, session.base.graph.project_id, session.base.state_fingerprint, session.proposed_fingerprint, session.operations)
+        except PublicationError as exc:
+            self.sessions.pop(session.base.graph.project_id, None)
+            return {"status": "unpublished", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": "html-publication-failure", "message": str(exc), "workingDbPath": str(exc.workspace.db), "warnings": self._cleanup_warnings(session.session_id)}
         except RuntimeError as exc:
             if str(exc) == "stale-base-fingerprint":
                 return {"status": "stale", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": "stale-base-fingerprint", "message": "The project changed before the atomic write; review a fresh proposal."}
@@ -667,7 +678,11 @@ class Application:
             return {"status": "failed", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": "storage-failure", "message": str(exc)}
         self.sessions.pop(session.base.graph.project_id, None)
         warnings = self._cleanup_warnings(session.session_id)
-        return {"status": "written", "projectId": project.graph.project_id, "sessionId": session.session_id, "project": _stored(project), "storageErrorCode": None, "message": "The reviewed proposal was written atomically.", "warnings": warnings}
+        result = {"status": "written", "projectId": project.graph.project_id, "sessionId": session.session_id, "project": _stored(project), "storageErrorCode": None, "message": "The reviewed proposal was saved.", "warnings": warnings}
+        if isinstance(self.store, ProjectFiles):
+            result["warnings"].extend(self.store.last_warnings)
+            if self.store.retained_db: result["workingDbPath"] = self.store.retained_db
+        return result
 
     def _cleanup_warnings(self, session_id):
         try:
@@ -678,8 +693,16 @@ class Application:
 
     def discard(self, reference: dict) -> dict:
         session = self.session(reference); self.sessions.pop(session.base.graph.project_id, None)
+        if isinstance(self.store, ProjectFiles): self.store.close_workspace(session.base.path)
         warnings = self._cleanup_warnings(session.session_id)
         return {"projectId": session.base.graph.project_id, "sessionId": session.session_id, "discardedUtc": session.base.updated_utc, "warnings": warnings}
+
+    def close(self):
+        try:
+            self.cleanup_review_exports()
+        finally:
+            if isinstance(self.store, ProjectFiles): self.store.close()
+            self.sessions.clear()
 
 
 def _operations_between(base: Graph, target: Graph) -> tuple[Operation, ...]:

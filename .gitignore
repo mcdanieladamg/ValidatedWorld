@@ -22,9 +22,11 @@ htmlcov/
 ~$*
 *~
 
-# ValidatedWorld transient files. Canonical .vw.db files are project source.
+# ValidatedWorld transient files. Canonical HTML documents are tracked source.
 *.vw.db-journal
 *.vw.db-wal
 *.vw.db-shm
-*.vw.db.initializing-*.tmp
+*.vw.db.*.initializing.tmp
 *.vw.db.backup-*.tmp
+.*.vw-lock
+.*.vw-stage-*

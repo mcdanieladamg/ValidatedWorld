@@ -16,12 +16,13 @@ from validated_world.merge import merge_projects
 from validated_world.models import Attribute, Edge, Graph, GraphValue, Node, Operation, ReviewDirection
 from validated_world.queries import Queries
 from validated_world.storage import ProjectStore
+from validated_world.document_store import ProjectFiles
 from validated_world.templates import descriptor, instantiate, resolve
 
 
 class PythonProductTests(unittest.TestCase):
     def test_tracked_fixture_fingerprint_is_stable(self):
-        project = ProjectStore().load(Path(__file__).parents[1] / "samples" / "TechnicalProject" / "semantic-review-foundation.vw.db")
+        project = ProjectFiles().load(Path(__file__).parents[1] / "samples" / "TechnicalProject" / "semantic-review-foundation.html")
         self.assertEqual(project.state_fingerprint, "c16391dda09b1f3e3a8272e732b92051f213db0f6cd47a4a8c6182f140724ef1")
 
     def test_initialize_round_trips_current_schema(self):
@@ -49,7 +50,7 @@ class PythonProductTests(unittest.TestCase):
             self.assertEqual(ProjectStore().load(str(path)).graph.nodes[[item.id for item in ProjectStore().load(str(path)).graph.nodes].index("battery-assumption")].text, "The battery lasts two duty cycles")
 
     def test_query_cursor_is_snapshot_bound(self):
-        project = ProjectStore().load(Path(__file__).parents[1] / "ValidatedWorld.Blueprint.vw.db")
+        project = ProjectFiles().load(Path(__file__).parents[1] / "docs-vw.html")
         page = Queries(project).nodes(2)
         self.assertIsNotNone(page["nextCursor"])
         with self.assertRaises(ValueError):

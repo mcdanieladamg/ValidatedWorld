@@ -10,7 +10,7 @@ from typing import Any
 
 from .canonical import state_fingerprint
 from .protocol import json_loads_strict, operation_dto, operation_from_dto
-from .storage import ProjectStore
+from .document_store import ProjectFiles as ProjectStore
 from .validation import project_graph, validate_graph
 
 

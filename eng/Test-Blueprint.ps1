@@ -6,7 +6,7 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if (-not $Path) { $Path = Join-Path $PSScriptRoot '../ValidatedWorld.Blueprint.vw.db' }
+if (-not $Path) { $Path = Join-Path $PSScriptRoot '../docs-vw.html' }
 . (Join-Path $PSScriptRoot 'RoadmapChecks.ps1')
 $vwRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $vwPython = if ([string]::IsNullOrWhiteSpace($PythonExecutable)) { (Get-Command python -ErrorAction Stop).Source } else { (Resolve-Path -LiteralPath $PythonExecutable).Path }
