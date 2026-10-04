@@ -18,7 +18,10 @@ from validated_world.storage import ProjectStore
 class PacketReviewTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
-        self.path = Path(self.temp.name) / "project.vw.db"
+        # macOS temporary paths can include /var -> /private/var. Exports
+        # deliberately reject links, so use the fixture's physical directory.
+        self.root = Path(self.temp.name).resolve(strict=True)
+        self.path = self.root / "project.vw.db"
         ProjectStore().initialize(self.path, sample_graph())
         self.app = Application()
         self.session = self.app.begin(str(self.path), "technical-project", "tester", "Review complete changed purpose")
@@ -133,7 +136,7 @@ class PacketReviewTests(unittest.TestCase):
 
     def test_export_safe_paths_escaping_overwrite_failure_and_cleanup(self):
         pid = next(p for p in self.session.packet_review.ownership if p != "synthesis")
-        target = Path(self.temp.name) / "evidence"
+        target = self.root / "evidence"
         report = self.app.review_export(self.session.reference(), self.fp, pid, str(target), 2)
         manifest = json.loads(Path(report["manifestPath"]).read_text(encoding="utf-8"))
         self.assertGreater(len(manifest["pages"]), 1)
@@ -149,9 +152,30 @@ class PacketReviewTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.app.review_export(self.session.reference(), self.fp, "../../unsafe", str(target), 2)
         self.assertFalse(target.exists())
 
+    def test_export_rejects_parent_traversal_and_linked_ancestors(self):
+        pid = next(p for p in self.session.packet_review.ownership if p != "synthesis")
+        target = self.root / "evidence"
+        seen = copy.deepcopy(self.session.packet_review.seen)
+        with self.assertRaisesRegex(ValueError, "parent traversal"):
+            self.app.review_export(self.session.reference(), self.fp, pid,
+                                   str(self.root / ".." / self.root.name / "evidence"), 2)
+        # Model an OS alias independently of platform link-creation privileges.
+        # Resolving the fixture must not weaken the production export guard.
+        for method in ("is_symlink", "is_junction"):
+            with self.subTest(method=method):
+                original = getattr(Path, method)
+                def linked_ancestor(path):
+                    return path == self.root or original(path)
+                with patch.object(Path, method, linked_ancestor):
+                    with self.assertRaisesRegex(ValueError, "link or junction"):
+                        self.app.review_export(self.session.reference(), self.fp, pid, str(target), 2)
+                self.assertFalse(target.exists())
+                self.assertEqual(self.session.packet_review.seen, seen)
+                self.assertEqual(self.app.review_exports, {})
+
     def test_stale_base_preserves_database_and_export_discard_cleanup(self):
         pid = next(p for p in self.session.packet_review.ownership if p != "synthesis")
-        target = Path(self.temp.name) / "export"
+        target = self.root / "export"
         self.app.review_export(self.session.reference(), self.fp, pid, str(target), 3)
         other = Application(); session = other.begin(str(self.path), "technical-project", "other", "external")
         session = other.apply(session.reference(), (Operation(OperationKind.REPLACE, EntityKind.NODE, "battery-assumption", node=Node("battery-assumption", "Changed", "assumption")),))
@@ -173,7 +197,7 @@ class PacketReviewTests(unittest.TestCase):
 
     def test_export_mid_write_failure_restores_presentation_and_removes_partial_files(self):
         pid = next(p for p in self.session.packet_review.ownership if p != "synthesis")
-        target = Path(self.temp.name) / "partial"
+        target = self.root / "partial"
         seen = copy.deepcopy(self.session.packet_review.seen)
         original = Path.open
         def fail_second_page(path, *args, **kwargs):
@@ -198,7 +222,7 @@ class PacketReviewTests(unittest.TestCase):
         plan = self.app.review_plan(self.session.reference())
         pid = next(pid for pid, ordinals in self.session.packet_review.ownership.items()
                    if any(self.session.packet_review.evidence[o].get("affectedNode", {}).get("nodeId") == nid for o in ordinals))
-        target = Path(self.temp.name) / "safe"
+        target = self.root / "safe"
         before = self.path.read_bytes()
         report = self.app.review_export(self.session.reference(), plan["planFingerprint"], pid, str(target), 2)
         manifest = json.loads(Path(report["manifestPath"]).read_text(encoding="utf-8"))
