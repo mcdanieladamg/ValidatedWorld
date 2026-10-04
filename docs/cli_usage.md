@@ -1,6 +1,15 @@
-# ValidatedWorld CLI reference
+# ValidatedWorld manual command reference
 
-ValidatedWorld is a local Python 3.12+ command-line application. From a source
+This standalone reference covers optional direct/manual command use: you, a
+local project database, and Python. You author the edits, inspect their
+consequences, and save the reviewed proposal yourself. The application does not
+call model APIs, accept model API keys, or launch agents or subagents.
+
+The normal product workflow is to ask an agent using the ValidatedWorld skill to
+manage the database. That host supplies any subagents separately. These manual
+instructions require no agent host or agent review results.
+
+ValidatedWorld runs locally with Python 3.12+. From a source
 checkout, make the package importable and run it with:
 
 ```powershell
@@ -79,6 +88,12 @@ unreadable anchors. It never changes the external file or the graph.
 
 Run one process for a complete change session:
 
+Authoring, consequence review, your review acknowledgments and saving all happen
+sequentially in this same terminal and process. No second window or reviewer is
+required. The current interface accepts NDJSON requests; it does not display an
+interactive yes/no approval prompt. You acknowledge the evidence with
+`change.review` and save with `change.write` after reading the complete preview.
+
 ```powershell
 py -3.12 -m validated_world ndjson
 ```
@@ -95,23 +110,27 @@ one-shot surface. Change commands are stateful:
 
 1. `change.begin` opens a verified snapshot and returns an exact reference.
 2. `change.apply` replaces the operation batch; `change.patch` updates it.
-3. Inspect `change.show`, `change.affected`, and `change.validate` as needed.
+3. Inspect `change.show` and `change.validate` as needed. Page `change.affected`
+   completely and read every changed node, downstream consequence, changed edge,
+   and required upstream scope context. Repair stale claims in the same batch
+   with `change.patch`, then inspect the refreshed evidence.
    `change.focus` can add explicit scope-parent selections without mutating the
    session. `change.expand` reruns complete affected analysis and invalidates review.
    Paging controls presentation; affected analysis has no resource-allocation caps.
-4. `change.review` records dispositions and presented scope context.
+4. `change.review` records your dispositions for every affected node and the
+   scope-context IDs you have read. Use `updated` for directly edited nodes,
+   `reviewedNoChange` when an affected claim remains correct, or `notApplicable`
+   with a rationale. Unreviewed consequences keep the proposal pending.
 5. Call `change.preview`, following every `nextCursor`
    for that exact revision and page size.
-6. In the skill workflow, a fresh host subagent reviews the exact proposal.
-   Submit its allow or block result through `change.agent-review`, then call
-   `change.agent-write` for an allow. The direct `change.write` command is the
-   explicit human manual review route.
+6. Call `change.write` to save the completely reviewed and previewed proposal
+   atomically. This manual route requires no agent decision and launches no agent.
 7. Use `change.discard` to abandon the in-memory proposal.
 
 Keep the returned reference from each response and pass it to the next mutating
 request. Any proposal or review change makes an earlier reference stale.
 Incomplete review, incomplete preview evidence, a stale database fingerprint,
-failed graph rules, or an agent-review block leaves the database
+or failed graph rules leave the database
 unchanged. EOF or process loss discards unfinished sessions.
 
 Snapshots from `change.begin`, `change.show`, `change.apply`, `change.patch`,
@@ -121,8 +140,9 @@ counts and readiness without operation bodies or the proposed graph. Request
 inspection. `change.affected` accepts `limit` and `cursor` and returns bounded
 `items` pages with `page.nextCursor`, `page.totalCount`, and `page.isComplete`.
 Its cursor is bound to the exact session revision and page size. `change.preview`
-is the exact evidence gate for manual and single-reviewer writes. Broad reviews
-can use lossless packets with a separate synthesis gate instead.
+is the exact evidence gate for manual writes. Read every page yourself, including
+downstream claims and upstream context; the application presents evidence and
+checks recorded completeness, but cannot prove that you read it or judged it correctly.
 
 For onboarding and routine discovery, verify the database, read its status,
 confirm the purpose, then search task terms and inspect only the relevant nodes,
@@ -131,55 +151,44 @@ additional results matter. Knowledge is added incrementally; a complete graph
 import is not required. Do not use `project.open` for routine discovery because
 it returns the whole graph.
 
-## Agent review decision
+The shared `host.help` catalog also lists host-integration commands for accepting
+externally supplied review decisions and preparing evidence packets. Those commands
+only handle local evidence and submitted data; they cannot invoke a reviewer.
+They are outside this manual workflow and are documented in the
+[skill workflow](../skills/validated-world/SKILL.md) and its
+[packet reference](../skills/validated-world/references/packet-review.md).
 
-`change.agent-review` takes `reference` and `decision`. The decision object
-contains `decision` (`allow` or `block`), a nonempty `summary`, and `concerns`.
-Allow requires an empty concerns array. Block requires at least one concern
-with nonempty `code`, `message`, and one or more `citations` of the form
-`{"entityId":"stable-id"}`. Cited IDs must occur in the exact proposal.
-The returned `agentReview.binding` records the proposal reference.
-`change.agent-write` rejects a missing, blocked, or stale decision and then
-performs the ordinary atomic write checks. The engine cannot authenticate the
-subagent that supplied the decision; the host agent must maintain independence.
-No product API key is needed. The host controls model selection and charges.
+## One-update dependency skip
 
-## Packet review commands
+For a rare graph cleanup with fully understood consequences, set `"skipDependencies": true` on
+`change.apply` or `change.patch`. The whole operation batch may add, replace, or
+remove multiple nodes and edges. The preview contains only those edits with
+their exact before/after values. No upstream scope context, dependent-node
+traversal, dispositions, unrelated rule evidence, or independent reviewer is
+required. Page `change.preview` completely, then call `change.write` to save
+the batch atomically.
 
-After completing `change.review`, `change.review-plan` returns a paged manifest
-with one owner per exact review ordinal, a `planFingerprint`, algorithm, coverage
-count and `synthesisPacketId`. `change.review-packet` takes `reference`,
-`planFingerprint`, `packetId` and optional `limit`/`cursor`; it returns bound exact
-owned evidence plus labeled shared context. Cursors bind content and page size.
+Skipping dependencies is highly discouraged for routine updates: connected
+claims can become stale without being reviewed. Use it only when there are no
+downstream consequences, or all consequential edits are specific, already known
+and included in the batch. Uncertain impacts require normal review. The size of
+a review alone does not justify skipping. Structural validity, active graph rules and
+stale-write protection still apply. The mode is bound to the exact proposal and
+resets on every later apply, patch, expand, or new session unless explicitly
+selected again. The snapshot and preview report `skipDependencies`.
 
-`change.review-export` takes the same binding fields, an explicit nonexistent
-`destinationPath`, and optional page `limit`. Its compact result points to a
-manifest containing safe generated page paths and SHA-256 hashes. Export files
-are temporary immutable evidence, not restorable drafts or project authority.
-`change.review-cleanup` removes engine-owned exports. Successful writes/discards
-and graceful EOF clean them; the host cleans known directories after a crash.
+The immediate direct command accepts the same strict operation-batch JSON
+(`{"operations":[...]}`) used inside an NDJSON `operations` payload:
 
-`change.review-result` takes `reference`, `binding` and `result`. Binding contains
-`reference`, `planFingerprint`, `packetId`, `packetFingerprint`; result contains
-`decision`, `summary`, `citations`, `concerns`, `questions`. All assigned pages must
-be presented. Allow has citations but no unresolved concerns/questions; block
-requires cited concerns; needs-context requires questions and cannot approve.
-Terminal results are immutable. Every branch must allow before synthesis is
-available. A separate fresh synthesis reviewer receives global rule/validation
-and root evidence, cross-branch edges/endpoints and branch summaries. Only its
-current allow together with all branch allows permits `change.agent-write`.
+```text
+change write <database> <operation-batch.json> --skip-dependencies
+```
 
-`change.review-context` replaces registered supplements with exact old/new
-session evidence for its `entityIds` list and returns a new reference. It
-invalidates the entire plan/results. Explicit `refinements` on `change.review-plan`
-partition a branch's assigned ordinals losslessly; missing, duplicate or foreign
-ordinals fail. Refinement restarts all review. Proposal/disposition/context and
-external DB revisions also invalidate approvals. There are no cost, work, byte,
-item or token allocations; page sizes and deliberate read-query depth remain.
-
-See the skill's [packet workflow](../skills/validated-world/references/packet-review.md)
-for complete host instructions. The engine cannot authenticate reviewer identity,
-independence or reading. No API client or credential configuration is added.
+Review that file before invoking the command. It prints paged before/after edits
+and saves the whole batch immediately, then prints the write result. For a
+separate preview and save, use the NDJSON workflow. Omitting the flag cannot
+perform this exceptional direct write. No justification ledger or persistent
+bypass setting is created.
 
 ## Exit codes
 

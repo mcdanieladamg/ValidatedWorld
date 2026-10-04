@@ -27,7 +27,7 @@ the expected affected/context result. They cover:
   unrelated-control behavior.
 
 These fixtures measure affected precision and review burden. They do not assert
-that the human-readable content is semantically correct.
+that the readable content is semantically correct.
 
 ## Exploratory smoke-test foundations
 

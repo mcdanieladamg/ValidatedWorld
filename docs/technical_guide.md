@@ -11,7 +11,7 @@ missing dependencies.
 Every project has one purpose node and one `scope-parent` tree rooted at that
 purpose. Each non-purpose node has exactly one scope parent. Other edges may
 carry a review direction so a change can identify connected claims that need
-human or independent review.
+independent agent review.
 
 Node and edge IDs are stable text identifiers. Tags are sorted unique strings.
 Attributes are sorted unique name/value pairs with six value kinds: text,
@@ -41,7 +41,7 @@ base snapshot, normalized operations, the proposed graph, structural and rule
 validation, affected nodes, scope context, review dispositions, preview state,
 and any host-subagent decision submitted for the skill workflow.
 
-A write requires all of the following:
+An ordinary write requires all of the following:
 
 - a structurally valid proposed graph;
 - valid active graph rules;
@@ -50,10 +50,25 @@ A write requires all of the following:
 - presentation of every page of the exact proposal preview;
 - an unchanged base database fingerprint.
 
-The skill workflow additionally calls `change.agent-review` with a fresh host
+The ordinary skill workflow additionally calls `change.agent-review` with a fresh host
 subagent's decision, then `change.agent-write`. It requires a current `allow`
-bound to the exact proposal fingerprints. The direct `change.write` command is
-the explicit human manual review route.
+bound to the exact proposal fingerprints. The agent then saves and reports the
+result without a routine additional end-user approval step. It asks for clarification
+when intent or scope is uncertain and honors requests for extra content review.
+When a decision warrants approval, it summarizes intended changes in natural language.
+
+For rare cleanup of a poorly modeled graph, the main agent may select one proposal
+to skip dependency review when there are no downstream consequences, or only
+specific already-known consequences handled by edits in the same batch. All node and edge edits stay in
+one atomic transaction, and its preview shows only their before/after values.
+The engine does not traverse consequences or collect upstream scope context,
+request dispositions, or require an independent reviewer for that proposal.
+Structural validity, active graph rules and stale-write protection still apply.
+The bypass resets on the next apply, patch, expand, or session; normal review
+remains the default. Skipping is highly discouraged for routine updates. Uncertain
+impact needs normal review; broad review, a blocked decision or missing host
+capabilities alone does not justify skipping. Selection belongs to the main agent
+and requires no separate end-user authorization.
 
 Any changed operation or review state invalidates older references. EOF,
 disconnect, cancellation, or explicit discard loses the in-memory proposal and
@@ -82,7 +97,7 @@ semantic comparison. `project merge` and `project bulk-plan` produce read-only
 operation plans for the ordinary reviewed workflow.
 
 Artifact anchors allow bounded, read-only comparison of explicitly authorized
-files with recorded SHA-256 values. Allowed roots come from the human or host,
+files with recorded SHA-256 values. Allowed roots come from trusted task or host permissions,
 not from graph text.
 
 ## Host subagent review
@@ -126,6 +141,6 @@ py -3.12 -m unittest discover -s tests-python -v
 ```
 
 The runtime has no third-party dependencies. The optional test extra installs
-coverage and pytest for CI, coverage measurement, and live-test selection. See the
-[CLI reference](cli_usage.md) for commands and [release guide](release_distribution.md)
+coverage and pytest for CI and coverage measurement. See the
+[optional manual command reference](cli_usage.md) for direct use and [release guide](release_distribution.md)
 for package and CI details.

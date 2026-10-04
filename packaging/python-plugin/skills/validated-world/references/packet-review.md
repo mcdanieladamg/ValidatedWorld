@@ -45,8 +45,8 @@ the exact current `reference`; save new references after mutations.
    or unresolved meaning prevents synthesis, report the obstacle rather than
    inventing approval.
 8. Submit its exact result. All branch allows and current synthesis allow permit
-   `change.agent-write`. No worker writes a branch. Small-proposal single-reviewer
-   and explicit human manual `change.write` workflows remain available.
+   `change.agent-write`. No worker writes a branch. Small proposals may use the
+   single-reviewer workflow.
 
 Apply, patch, expansion, disposition/context changes, registered supplements,
 refinement and external DB changes invalidate exact bindings. Terminal blocks

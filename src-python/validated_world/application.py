@@ -8,15 +8,14 @@ import json
 from pathlib import Path
 import sqlite3
 import uuid
-from typing import Any, Iterable
+from typing import Any
 
 from .canonical import operations_fingerprint, state_fingerprint
 from .models import Edge, EntityKind, Graph, Node, Operation, OperationKind, ordinal_key
 from .protocol import edge_dto, graph_dto, node_dto, operation_dto
-from .queries import Queries
 from .rules import RuleResult, evaluate_rules
 from .storage import ProjectStore, StoredProject
-from .validation import Diagnostic, GraphIndex, ValidationResult, project_graph, validate_graph
+from .validation import GraphIndex, ValidationResult, project_graph, validate_graph
 
 
 def _hash_json(value: Any) -> str:
@@ -43,6 +42,7 @@ class Session:
     intent: str
     session_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     operations: tuple[Operation, ...] = ()
+    skip_dependencies: bool = False
     proposed: Graph | None = None
     current_validation: ValidationResult | None = None
     proposed_validation: ValidationResult | None = None
@@ -84,9 +84,14 @@ class Session:
             for item in self.affected_nodes
         }
         self.presented_context = (old_presented & set(current_context)) - set(invalidated_context)
+        if self.skip_dependencies:
+            self.dispositions.clear()
         self.refresh = {"invalidatedDispositionNodeIds": invalidated_dispositions, "invalidatedContextNodeIds": invalidated_context}
 
     def _analyze(self) -> None:
+        if self.skip_dependencies:
+            self._analyze_direct()
+            return
         current = GraphIndex(self.base.graph)
         proposed = GraphIndex(self.proposed)
         direct = {item.entity_id for item in self.operations if item.entity_kind is EntityKind.NODE}
@@ -206,6 +211,35 @@ class Session:
             grouped.append({"reason": reason, "count": len(details), "sample": details[:5], "detailsFingerprint": fingerprint, "message": details[0]["message"]})
         self.omissions = grouped
 
+    def _analyze_direct(self) -> None:
+        """Describe only authored edits, without traversing related entities."""
+        old_nodes = {node.id: node for node in self.base.graph.nodes}
+        new_nodes = {node.id: node for node in self.proposed.nodes}
+        old_edges = {edge.id: edge for edge in self.base.graph.edges}
+        new_edges = {edge.id: edge for edge in self.proposed.edges}
+        self.affected_nodes = []
+        self.edge_changes = []
+        for operation in self.operations:
+            entity_id = operation.entity_id
+            if operation.entity_kind is EntityKind.NODE:
+                old, new = old_nodes.get(entity_id), new_nodes.get(entity_id)
+                self.affected_nodes.append({
+                    "nodeId": entity_id, "isDirectChange": True, "distance": 0,
+                    "explanation": {"nodes": [entity_id], "edges": []},
+                    "currentNode": node_dto(old) if old else None,
+                    "proposedNode": node_dto(new) if new else None,
+                })
+            else:
+                old, new = old_edges.get(entity_id), new_edges.get(entity_id)
+                self.edge_changes.append({
+                    "operation": operation_dto(operation),
+                    "currentEdge": edge_dto(old) if old else None,
+                    "proposedEdge": edge_dto(new) if new else None,
+                })
+        self.scope_context = []
+        self.omissions = []
+        self.omission_details = {}
+
     @property
     def base_fingerprint(self) -> str: return self.base.state_fingerprint
 
@@ -216,7 +250,7 @@ class Session:
     def operation_fingerprint(self) -> str: return operations_fingerprint(self.base.state_fingerprint, self.operations)
 
     @property
-    def affected_fingerprint(self) -> str: return _hash_json({"current": state_fingerprint(self.base.graph), "proposed": self.proposed_fingerprint, "operations": [operation_dto(item) for item in self.operations], "affected": self.affected_nodes, "context": self.scope_context})
+    def affected_fingerprint(self) -> str: return _hash_json({"current": state_fingerprint(self.base.graph), "proposed": self.proposed_fingerprint, "operations": [operation_dto(item) for item in self.operations], "affected": self.affected_nodes, "context": self.scope_context, "skipDependencies": self.skip_dependencies})
 
     @property
     def review_fingerprint(self) -> str: return _hash_json({"dispositions": [self.dispositions[key] for key in sorted(self.dispositions, key=ordinal_key)], "context": sorted(self.presented_context, key=ordinal_key), "supplemental": self.supplemental})
@@ -225,7 +259,7 @@ class Session:
         return {"projectId": self.base.graph.project_id, "sessionId": self.session_id, "baseFingerprint": self.base_fingerprint, "operationFingerprint": self.operation_fingerprint, "proposedFingerprint": self.proposed_fingerprint, "affectedFingerprint": self.affected_fingerprint, "reviewFingerprint": self.review_fingerprint}
 
     def readiness(self) -> dict:
-        pending = [item["nodeId"] for item in self.affected_nodes if self.dispositions.get(item["nodeId"], {}).get("kind") == "pending"]
+        pending = [] if self.skip_dependencies else [item["nodeId"] for item in self.affected_nodes if self.dispositions.get(item["nodeId"], {}).get("kind") == "pending"]
         missing = [item["nodeId"] for item in self.scope_context if item["nodeId"] not in self.presented_context]
         blockers = []
         if not self.proposed_validation.is_valid: blockers.append("The proposed graph is not structurally valid.")
@@ -245,6 +279,7 @@ class Session:
     def affected_summary(self) -> dict:
         direct_node_ids = {item.entity_id for item in self.operations if item.entity_kind is EntityKind.NODE}
         return {
+            "skipDependencies": self.skip_dependencies,
             "status": "inconclusive" if self.omissions else "complete",
             "currentValidationStatus": self.current_validation.status,
             "currentValidationDiagnosticCount": len(self.current_validation.diagnostics),
@@ -289,10 +324,18 @@ class Session:
         disposition_counts: dict[str, int] = {}
         for item in self.dispositions.values():
             disposition_counts[item["kind"]] = disposition_counts.get(item["kind"], 0) + 1
-        return {"path": self.base.path, "author": self.author, "intent": self.intent, "createdUtc": self.base.created_utc, "updatedUtc": self.base.updated_utc, "reference": self.reference(), "operationCount": len(self.operations), "proposedNodeCount": len(self.proposed.nodes), "proposedEdgeCount": len(self.proposed.edges), "operations": {"operations": [operation_dto(item) for item in self.operations]} if include_operations else None, "proposedGraph": graph_dto(self.proposed) if include_proposed_graph else None, "affected": self.affected_summary(), "dispositionCounts": disposition_counts, "presentedContextCount": len(self.presented_context), "readiness": self.readiness(), "refresh": self.refresh, "agentReview": self.agent_decision}
+        return {"skipDependencies": self.skip_dependencies, "path": self.base.path, "author": self.author, "intent": self.intent, "createdUtc": self.base.created_utc, "updatedUtc": self.base.updated_utc, "reference": self.reference(), "operationCount": len(self.operations), "proposedNodeCount": len(self.proposed.nodes), "proposedEdgeCount": len(self.proposed.edges), "operations": {"operations": [operation_dto(item) for item in self.operations]} if include_operations else None, "proposedGraph": graph_dto(self.proposed) if include_proposed_graph else None, "affected": self.affected_summary(), "dispositionCounts": disposition_counts, "presentedContextCount": len(self.presented_context), "readiness": self.readiness(), "refresh": self.refresh, "agentReview": self.agent_decision}
 
     def review_items(self) -> list[dict]:
         items: list[dict] = []
+        if self.skip_dependencies:
+            nodes = {item["nodeId"]: item for item in self.affected_nodes}
+            edges = {item["operation"]["entityId"]: item for item in self.edge_changes}
+            for operation in self.operations:
+                evidence = nodes[operation.entity_id] if operation.entity_kind is EntityKind.NODE else edges[operation.entity_id]
+                fields = ("currentNode", "proposedNode") if operation.entity_kind is EntityKind.NODE else ("currentEdge", "proposedEdge")
+                items.append({"ordinal": len(items), "kind": "operation", "operation": operation_dto(operation), **{name: evidence[name] for name in fields}})
+            return items
         for operation in self.operations:
             items.append({"ordinal": len(items), "kind": "operation", "operation": operation_dto(operation)})
         for affected in self.affected_nodes:
@@ -344,7 +387,7 @@ class Session:
         self.preview_seen.update(item["ordinal"] for item in page_items)
         next_offset = offset + len(page_items)
         next_cursor = __import__("base64").b64encode(f"{signature}:{limit}:{next_offset}".encode()).decode() if next_offset < len(items) else None
-        return {"revision": self.reference()["operationFingerprint"], "projectId": self.base.graph.project_id, "title": self.base.graph.title, "intent": self.intent, "operationCount": len(self.operations), "proposedNodeCount": len(self.proposed.nodes), "proposedEdgeCount": len(self.proposed.edges), "affectedNodeCount": len(self.affected_nodes), "edgeChangeCount": len(self.edge_changes), "scopeContextCount": len(self.scope_context), "omissionCount": sum(item["count"] for item in self.omissions), "dispositionCount": len(self.dispositions), "reviewPage": {"offset": offset, "limit": limit, "totalCount": len(items), "items": page_items, "nextCursor": next_cursor, "isComplete": next_cursor is None, "allEvidencePresented": len(self.preview_seen) == len(items)}, "readiness": self.readiness(), "currentValidation": {"status": self.current_validation.status, "diagnosticCount": len(self.current_validation.diagnostics)}, "proposedValidation": {"status": self.proposed_validation.status, "diagnosticCount": len(self.proposed_validation.diagnostics)}, "proposedRules": {"status": self.proposed_rules.status, "diagnosticCount": len(self.proposed_rules.diagnostics)}}
+        return {"skipDependencies": self.skip_dependencies, "revision": self.reference()["operationFingerprint"], "projectId": self.base.graph.project_id, "title": self.base.graph.title, "intent": self.intent, "operationCount": len(self.operations), "proposedNodeCount": len(self.proposed.nodes), "proposedEdgeCount": len(self.proposed.edges), "affectedNodeCount": len(self.affected_nodes), "edgeChangeCount": len(self.edge_changes), "scopeContextCount": len(self.scope_context), "omissionCount": sum(item["count"] for item in self.omissions), "dispositionCount": len(self.dispositions), "reviewPage": {"offset": offset, "limit": limit, "totalCount": len(items), "items": page_items, "nextCursor": next_cursor, "isComplete": next_cursor is None, "allEvidencePresented": len(self.preview_seen) == len(items)}, "readiness": self.readiness(), "currentValidation": {"status": self.current_validation.status, "diagnosticCount": len(self.current_validation.diagnostics)}, "proposedValidation": {"status": self.proposed_validation.status, "diagnosticCount": len(self.proposed_validation.diagnostics)}, "proposedRules": {"status": self.proposed_rules.status, "diagnosticCount": len(self.proposed_rules.diagnostics)}}
 
     def read_omission_details(self, fingerprint: str, limit: int = 100, cursor: str | None = None) -> dict:
         if fingerprint not in self.omission_details:
@@ -375,6 +418,8 @@ class Application:
     def review_plan(self, reference, limit=100, cursor=None, refinements=None):
         from .review_packets import PacketReview
         session = self.session(reference)
+        if session.skip_dependencies:
+            raise ValueError("Dependency review is skipped for this proposal; present change.preview, then write.")
         if not session.readiness()["isReady"] or not session.review_items():
             raise ValueError("resolve all dispositions, context and validation before planning review")
         if session.packet_review is None:
@@ -405,6 +450,8 @@ class Application:
     def review_context(self, reference, entity_ids):
         from .review_packets import fingerprint
         session = self.session(reference)
+        if session.skip_dependencies:
+            raise ValueError("Dependency review is skipped for this proposal; no supplemental context is required.")
         before, after = GraphIndex(session.base.graph), GraphIndex(session.proposed)
         evidence = []
         for eid in sorted(set(entity_ids), key=ordinal_key):
@@ -477,13 +524,21 @@ class Application:
             raise ValueError("session not found")
         return session
 
-    def apply(self, reference: dict, operations: tuple[Operation, ...], patch: bool = False) -> Session:
+    def apply(self, reference: dict, operations: tuple[Operation, ...], patch: bool = False, *, skip_dependencies: bool = False) -> Session:
         session = self.session(reference)
+        if not isinstance(skip_dependencies, bool):
+            raise ValueError("skipDependencies must be Boolean")
         if patch:
             patched, _ = project_graph(session.proposed, operations)
             operations = _operations_between(session.base.graph, patched)
         # Validate operation preconditions before mutating the live session.
         project_graph(session.base.graph, operations)
+        if skip_dependencies and not operations:
+            raise ValueError("skipDependencies requires a nonempty update")
+        if session.skip_dependencies != skip_dependencies:
+            session.dispositions.clear()
+            session.presented_context.clear()
+        session.skip_dependencies = skip_dependencies
         session.operations = operations
         session.preview_signature = None; session.preview_limit = None; session.preview_seen.clear()
         session.agent_decision = None; session.packet_review = None; session.supplemental.clear()
@@ -511,6 +566,8 @@ class Application:
 
     def review(self, reference: dict, dispositions: list[dict], context: list[str]) -> Session:
         session = self.session(reference)
+        if session.skip_dependencies:
+            raise ValueError("Dependency review is skipped for this proposal; present change.preview, then write.")
         previous_review_fingerprint = session.review_fingerprint
         affected = {item["nodeId"]: item for item in session.affected_nodes}
         for item in dispositions:
@@ -563,6 +620,8 @@ class Application:
 
     def agent_write(self, reference: dict) -> dict:
         session = self.session(reference)
+        if session.skip_dependencies:
+            return self.write(reference)
         if session.packet_review is not None:
             review = session.packet_review
             if not review.complete():
