@@ -5,6 +5,8 @@ from base64 import b64encode
 from hashlib import sha256
 from pathlib import Path
 
+from .path_safety import is_junction
+
 VIEWER_VERSION = 4
 CSS = """body { max-width: 80ch; margin: 1rem auto; padding: 0 1rem; line-height: 1.5; }
 a, h1, h2, h3 { overflow-wrap: anywhere; }
@@ -144,7 +146,7 @@ def safe_path(path: str | Path) -> Path:
     """Reject links before resolution, including Windows junction ancestors."""
     p = Path(path).expanduser().absolute()
     for ancestor in (p, *p.parents):
-        if ancestor.is_symlink() or ancestor.is_junction():
+        if ancestor.is_symlink() or is_junction(ancestor):
             raise ValueError(f"linked project path is unsupported: {ancestor}")
     return p.resolve()
 

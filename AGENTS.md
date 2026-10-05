@@ -2,14 +2,14 @@
 
 ## Start from the project
 
-Read README.md, then use an available Python 3.12+ executable and the public
+Read README.md, then use an available Python 3.11+ executable and the public
 checkout CLI to verify and inspect the canonical `docs-vw.html`
 file. README introduces the product; the graph holds detailed contracts,
 accepted decisions, gaps and the ordered roadmap. Keep both current as part of
 the requested work.
 
 ```powershell
-$vwPython = '.\.venv\Scripts\python.exe' # or another available Python 3.12+
+$vwPython = '.\.venv\Scripts\python.exe' # or another available Python 3.11+
 & $vwPython --version
 $env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
 & $vwPython -m validated_world project verify docs-vw.html
@@ -94,7 +94,7 @@ as documented regenerable outputs.
 
 ## Implementation invariants
 
-- Use standard-library Python 3.12+. Core is independent of files, SQLite,
+- Use standard-library Python 3.11+. Core is independent of files, SQLite,
   JSON, UI and providers. The SQLite engine keeps the fixed four-table schema,
   parameterized writes, foreign keys, verified mappings and no extensions.
 - The default authority is a tracked HTML file: one passive typed JSON graph

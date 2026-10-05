@@ -7,6 +7,7 @@ import json
 import shutil
 
 from .planning import ALGORITHM, partition, refine
+from .path_safety import is_junction
 from .protocol import node_dto, edge_dto
 from .queries import _page
 from .validation import GraphIndex
@@ -216,7 +217,7 @@ def export_packet(review, packet_id, destination, limit):
         raise ValueError("review export path cannot contain parent traversal")
     target = Path(destination).absolute()
     for path in (target, *target.parents):
-        if path.is_symlink() or path.is_junction():
+        if path.is_symlink() or is_junction(path):
             raise ValueError("review export path must not traverse a link or junction")
     if not target.parent.is_dir():
         raise ValueError("review export requires an existing parent directory")

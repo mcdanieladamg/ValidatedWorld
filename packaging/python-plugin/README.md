@@ -4,7 +4,7 @@ Use the ValidatedWorld Agent Skill to maintain connected project documentation
 and review the consequences of changes. The bundled Python engine saves the
 graph as browsable HTML; open the project's HTML file to read it.
 
-These source packages require Python 3.12+ and a host that can provide fresh
+These source packages require Python 3.11+ and a host that can provide fresh
 read-only subagents for reviewed updates. Codex Desktop is the exercised host.
 The engine has no third-party runtime dependencies or product API key setting.
 

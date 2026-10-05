@@ -18,10 +18,20 @@ content, or when the project explicitly uses multiple projects or databases.
 Reuse the intended project's existing file, including custom names. Commands
 accept an explicit path: check its project ID, title and purpose, and ask for
 the target only when it cannot be determined.
-Use an available Python 3.12+ executable.
+Use Python 3.11+ from an existing runtime. Prefer an interpreter path supplied by
+the host's runtime/dependency tools. Otherwise check ordinary interpreter
+commands (`python`, `python3`, or Windows `py -0p`) and existing project
+environments. If one command is too old, check the other available candidates
+before reporting a missing runtime. Verify the selected executable with
+`--version`, then use its explicit path consistently. Do not install Python or
+scan unrelated directories as a workaround.
 Invoke this skill's `scripts/validated_world.py`; it locates the bundled engine
 independently of the working directory. For a checkout, set `PYTHONPATH` to
 `src-python` and invoke `python -m validated_world`.
+Check the bundled application version with `python <skill>/scripts/validated_world.py
+--version`. These archives run from source without pip installation;
+`importlib.metadata.version("validated-world")` may raise `PackageNotFoundError`
+in the host interpreter. That is expected and does not block using the launcher.
 
 Verify the project, read its status and purpose, and check its identity. For a
 new project establish ID, title and purpose, then use

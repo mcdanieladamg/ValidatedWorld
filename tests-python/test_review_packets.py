@@ -161,12 +161,14 @@ class PacketReviewTests(unittest.TestCase):
                                    str(self.root / ".." / self.root.name / "evidence"), 2)
         # Model an OS alias independently of platform link-creation privileges.
         # Resolving the fixture must not weaken the production export guard.
-        for method in ("is_symlink", "is_junction"):
+        for method in ("symlink", "junction"):
             with self.subTest(method=method):
-                original = getattr(Path, method)
+                from validated_world.path_safety import is_junction
+                original = Path.is_symlink if method == "symlink" else is_junction
                 def linked_ancestor(path):
                     return path == self.root or original(path)
-                with patch.object(Path, method, linked_ancestor):
+                guard = patch.object(Path, "is_symlink", linked_ancestor) if method == "symlink" else patch("validated_world.review_packets.is_junction", linked_ancestor)
+                with guard:
                     with self.assertRaisesRegex(ValueError, "link or junction"):
                         self.app.review_export(self.session.reference(), self.fp, pid, str(target), 2)
                 self.assertFalse(target.exists())

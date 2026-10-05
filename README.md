@@ -16,12 +16,14 @@ the same graph by opening that HTML file in a browser with JavaScript enabled.
 Dependency links make review possible; missing links can hide consequences.
 Review helps maintain consistency but does not prove that claims are true.
 
-The local packages require Python 3.12+ and a host with fresh read-only subagents
+The local packages require Python 3.11+ and a host with fresh read-only subagents
 for reviewed updates. Codex Desktop is the exercised host. The current workflow
 is English-only; Unicode graph text is preserved. Public distribution is pending.
 Release packages include ValidatedWorld's Python source inside the skill folder;
 the host supplies the Python interpreter, so no Python installation or virtual
 environment is shipped.
+The skill launcher reports its version with `--version`; pip-installed package
+metadata is not required to use the bundled source.
 
 After installation, start a new agent chat in your project and ask:
 "Create a ValidatedWorld design document for this project." Then try:

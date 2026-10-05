@@ -3,7 +3,7 @@
 This guide is for agents and humans developing ValidatedWorld. The installed
 skill's users do not need to test generated documentation.
 
-Use an already available Python 3.12+ executable. Check `--version`; if `python`
+Use an already available Python 3.11+ executable. Check `--version`; if `python`
 on PATH is older, pass the compliant executable explicitly. Do not install a
 runtime as a test workaround. From the checkout root:
 
@@ -28,9 +28,10 @@ that exact directory to the package test. Archives are regenerable outputs.
 The package test extracts each archive temporarily and exercises the included
 launcher, document creation, import/export, verification and deterministic bytes.
 It also copies only the complete skill folder away from the extracted package
-and runs its launcher with Python's `-I` isolation, excluding `PYTHONPATH` and
-user-site packages. Creation and round-trip checks use this isolated installation
-and project files outside the skill folder.
+and runs its launcher with Python's `-I -S` isolation, excluding `PYTHONPATH`,
+user-site packages and site initialization. New-project initialization, sample
+creation and round-trip checks use this source-only installation and project
+files outside the skill folder, without pip-installed package metadata.
 The temp-alias regression launches the same package smoke in a fresh shell with
 an OS temp directory supplied through a directory link (a Windows junction or
 Unix symlink). Both extracted and isolated trial paths use the physical directory;
@@ -48,7 +49,7 @@ offline suite is `python -m unittest discover -s tests-python -v`; record that
 coverage was not measured. For an intentionally provisioned developer environment:
 
 ```powershell
-py -3.12 -m venv .venv
+py -3.11 -m venv .venv
 .venv\Scripts\python.exe -m pip install -e ".[test]"
 ```
 
@@ -75,7 +76,8 @@ in the developer environment, outside the product's runtime dependencies and
 release archives.
 
 CI runs verification, unit/coverage, blueprint and extracted-package checks on
-enabled Windows, Linux and macOS jobs. `VW_CI_SKIP_WINDOWS`, `VW_CI_SKIP_LINUX`
+Python 3.11 and 3.12 for each enabled Windows, Linux and macOS job.
+`VW_CI_SKIP_WINDOWS`, `VW_CI_SKIP_LINUX`
 and `VW_CI_SKIP_MACOS` control optional repository exclusions: absent/empty/false
 runs a platform, true skips it, and other values fail configuration. Report
 excluded platforms separately from passed checks; local Windows results do not

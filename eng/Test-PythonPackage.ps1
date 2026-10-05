@@ -21,7 +21,7 @@ try {
     # Avoid quote-bearing Python expressions here. Windows PowerShell 5.1's
     # native argument handling can remove the quotes inside an f-string.
     $version = & $python -c 'import sys; print(sys.version_info.major, sys.version_info.minor, sep=chr(46))'
-    if ($LASTEXITCODE -ne 0 -or [version]$version -lt [version]'3.12') { throw "Python 3.12 or newer is required; found $version" }
+    if ($LASTEXITCODE -ne 0 -or [version]$version -lt [version]'3.11') { throw "Python 3.11 or newer is required; found $version" }
     foreach ($archive in Get-ChildItem -LiteralPath $packages -Filter '*.zip' -File) {
         $destination = Join-Path $temporary $archive.BaseName
         Expand-Archive -LiteralPath $archive.FullName -DestinationPath $destination
@@ -69,7 +69,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Extracted skill launcher failed smoke launch: $($archive.Name)" }
         if ($null -ne $expectedVersion -and $launcherVersion -notmatch [regex]::Escape($expectedVersion)) { throw "Extracted skill launcher version differs from archive: $($archive.Name) reports $launcherVersion" }
         # Model a folder-only installer, away from the archive, checkout and
-        # PYTHONPATH. -I also excludes user-site packages and Python env settings.
+        # PYTHONPATH. -I excludes user-site packages and Python env settings;
+        # -S excludes site initialization and pip-installed distribution metadata.
         # Derive trials from the resolved extraction root. The original OS temp
         # path can still contain a system alias such as macOS /var.
         $isolatedParent = Join-Path (Split-Path -Parent $destination) ('isolated-' + $archive.BaseName)
@@ -78,26 +79,33 @@ try {
         Copy-Item -LiteralPath $skillDirectory -Destination $isolatedSkill -Recurse
         $isolatedLauncher = Join-Path $isolatedSkill 'scripts/validated_world.py'
         if (-not (Test-Path -LiteralPath (Join-Path $isolatedSkill 'LICENSE') -PathType Leaf)) { throw 'Isolated skill license is missing.' }
-        $isolatedVersion = & $python -I $isolatedLauncher --version
+        $isolatedVersion = & $python -I -S $isolatedLauncher --version
         if ($LASTEXITCODE -ne 0 -or $isolatedVersion -ne $launcherVersion) { throw "Folder-only skill installation failed: $($archive.Name)" }
+        $newProject = Join-Path $isolatedParent 'docs-vw.html'
+        $null = & $python -I -S $isolatedLauncher project init $newProject garden 'Garden plan' purpose 'Plan a garden with limited water.'
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $newProject -PathType Leaf)) { throw "Source-only new-project initialization failed: $($archive.Name)" }
+        $newVerification = & $python -I -S $isolatedLauncher project verify $newProject | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0 -or -not $newVerification.isValid) { throw "Source-only new-project verification failed: $($archive.Name)" }
+        $newPurpose = & $python -I -S $isolatedLauncher read node $newProject purpose | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0 -or $newPurpose.text -ne 'Plan a garden with limited water.') { throw "Source-only new-project purpose differs: $($archive.Name)" }
         $trialDocs = Join-Path $isolatedParent 'smoke-project.html'
         $trialDb = Join-Path $isolatedParent 'smoke-working.vw.db'
-        $null = & $python -I $isolatedLauncher sample create technical-project $trialDocs
+        $null = & $python -I -S $isolatedLauncher sample create technical-project $trialDocs
         if ($LASTEXITCODE -ne 0) { throw "Packaged document creation failed: $($archive.Name)" }
         $trialLock = Join-Path $isolatedParent '.smoke-project.html.vw-lock'
         if (Test-Path -LiteralPath $trialLock) { throw "Packaged creation left a lock file: $($archive.Name)" }
-        $verification = & $python -I $isolatedLauncher project verify $trialDocs | ConvertFrom-Json
+        $verification = & $python -I -S $isolatedLauncher project verify $trialDocs | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0 -or -not $verification.isValid) { throw "Packaged document verification failed: $($archive.Name)" }
         if (-not (Test-Path -LiteralPath $trialDocs -PathType Leaf)) { throw 'Documentation is not a single HTML file.' }
         $beforeHash = (Get-FileHash -LiteralPath $trialDocs -Algorithm SHA256).Hash
-        $null = & $python -I $isolatedLauncher project import-html $trialDocs $trialDb
+        $null = & $python -I -S $isolatedLauncher project import-html $trialDocs $trialDb
         if ($LASTEXITCODE -ne 0) { throw "Packaged HTML import failed: $($archive.Name)" }
-        $null = & $python -I $isolatedLauncher project export-html $trialDb $trialDocs
+        $null = & $python -I -S $isolatedLauncher project export-html $trialDb $trialDocs
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $trialDb)) { throw "Packaged HTML replacement or caller DB retention failed: $($archive.Name)" }
         if (Test-Path -LiteralPath $trialLock) { throw "Packaged export left a lock file: $($archive.Name)" }
         $afterHash = (Get-FileHash -LiteralPath $trialDocs -Algorithm SHA256).Hash
         if ($beforeHash -ne $afterHash) { throw "Packaged no-op round trip changed bytes: $($archive.Name)" }
-        $finalVerification = & $python -I $isolatedLauncher project verify $trialDocs | ConvertFrom-Json
+        $finalVerification = & $python -I -S $isolatedLauncher project verify $trialDocs | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0 -or -not $finalVerification.isValid -or $verification.stateFingerprint -ne $finalVerification.stateFingerprint) { throw "Packaged round trip changed graph meaning: $($archive.Name)" }
     }
     Write-Output "Python package smoke passed: $packages"
