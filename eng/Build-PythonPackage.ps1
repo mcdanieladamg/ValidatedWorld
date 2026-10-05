@@ -32,7 +32,6 @@ function Copy-PythonEngine([string] $destination) {
     foreach ($guide in @('privacy', 'terms', 'support')) {
         Copy-Item -LiteralPath (Join-Path $root "docs/$guide.md") -Destination $policyDirectory -Force
     }
-    Get-ChildItem -LiteralPath (Join-Path $destination 'src-python') -Directory -Filter '__pycache__' -Recurse -Force | Remove-Item -Recurse -Force
     $projectFile = Join-Path $destination 'pyproject.toml'
     $projectText = [IO.File]::ReadAllText($projectFile)
     $projectText = [regex]::Replace($projectText, '(?m)^version = "[^"]+"$', "version = `"$pythonVersion`"")
@@ -71,6 +70,26 @@ foreach ($manifestRelative in @('plugin.json', '.codex-plugin/plugin.json')) {
     [IO.File]::WriteAllText($manifestPath, $manifestText, [Text.UTF8Encoding]::new($false))
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     if ($manifest.version -ne $Version) { throw "Plugin manifest version does not match requested version: $($manifest.version)" }
+}
+
+# Helpers and plugin resources can acquire caches too, not just src-python.
+# Remove only inspected generated caches inside this new staging allocation.
+$stagePrefix = [IO.Path]::GetFullPath($stage).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+foreach ($cache in @(Get-ChildItem -LiteralPath $stage -Directory -Filter '__pycache__' -Recurse -Force)) {
+    if (-not (Test-Path -LiteralPath $cache.FullName)) { continue }
+    $cachePath = [IO.Path]::GetFullPath($cache.FullName)
+    if (-not $cachePath.StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase) -or
+        $cache.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+        throw "Unsafe staged cache path: $cachePath"
+    }
+    $entries = @(Get-ChildItem -LiteralPath $cachePath -Recurse -Force)
+    foreach ($entry in $entries) {
+        if ($entry.PSIsContainer -or $entry.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint) -or
+            $entry.Extension -notin @('.pyc', '.pyo')) {
+            throw "Unexpected staged cache contents: $($entry.FullName)"
+        }
+    }
+    Remove-Item -LiteralPath $cachePath -Recurse -Force
 }
 
 $forbidden = @('*.mcp.json', '*.dll', '*.exe', '*.vw.db', '*.key', '.env*')

@@ -145,6 +145,11 @@ unreadable anchors. It never changes the external file or the graph.
 
 Run one process for a complete change session:
 
+The host flushes each result line immediately. When using terminal tools,
+follow [persistent input/output](../skills/validated-world/references/persistent-io.md)
+to read responses while keeping the process alive. The optional bundled log
+launcher writes raw UTF-8 responses directly to a new temporary file.
+
 Authoring, consequence review, your review acknowledgments and saving all happen
 sequentially in this same terminal and process. No second window or reviewer is
 required. The current interface accepts NDJSON requests; it does not display an
@@ -158,10 +163,18 @@ py -3.11 -m validated_world ndjson
 Each input line is a JSON request and each output line is its JSON result:
 
 ```json
-{"version":1,"command":"project.verify","payload":{"path":"C:\\work\\project"}}
+{"version":1,"command":"project.verify","payload":{"path":"C:\\work\\project\\docs-vw.html"}}
 ```
 
-Use `host.help` to discover the command catalog and `host.exit` to close the
+All three envelope fields are required, even when a command has no arguments:
+
+```json
+{"version":1,"command":"host.help","payload":{}}
+```
+
+A rejected `host.help` request does not terminate the process. Correct its
+format and retry in the same process. `host.help` returns the command catalog,
+not payload schemas. Use `host.exit` with `payload: {}` to close the
 process cleanly. Project, read, and template commands mirror the
 one-shot surface. Change commands are stateful:
 
@@ -214,6 +227,7 @@ externally supplied review decisions and preparing evidence packets. Those comma
 only handle local evidence and submitted data; they cannot invoke a reviewer.
 They are outside this manual workflow and are documented in the
 [skill workflow](../skills/validated-world/SKILL.md) and its
+[payload examples](../skills/validated-world/references/command-workflow.md) and
 [packet reference](../skills/validated-world/references/packet-review.md).
 
 ## One-update dependency skip

@@ -17,6 +17,7 @@ from .canonical import attributes_json, state_fingerprint, tags_json
 from .models import Attribute, Edge, Graph, GraphValue, GraphValueKind, Node, Operation, OperationKind, ReviewDirection
 from .validation import project_graph, validate_graph
 from .rules import evaluate_rules
+from .file_publication import publish_new_file
 
 APPLICATION_ID = 0x56574C44
 SCHEMA_VERSION = 1
@@ -219,8 +220,8 @@ class ProjectStore:
     @staticmethod
     def _publish_no_overwrite(temporary: str, destination: str) -> None:
         """Atomically publish a same-directory file without replacing a winner."""
-        os.link(temporary, destination)
-        Path(temporary).unlink()
+        publish_new_file(temporary, destination)
+        Path(temporary).unlink(missing_ok=True)
 
     def initialize(self, path: str, graph: Graph, *, created_utc: str | None = None, updated_utc: str | None = None) -> StoredProject:
         full = str(Path(path).expanduser().resolve())

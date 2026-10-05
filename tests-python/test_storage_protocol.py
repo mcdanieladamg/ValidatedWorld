@@ -1,4 +1,5 @@
 import sqlite3
+import os
 import sys
 import tempfile
 import unittest
@@ -154,6 +155,42 @@ class StorageTests(unittest.TestCase):
         with self.assertRaises(ValueError): ProjectStore().initialize(invalid_path, invalid)
         self.assertFalse(invalid_path.exists())
         self.assertFalse(any("initializing.tmp" in item.name for item in self.root.iterdir()))
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows publication avoids hard-link creation')
+    def test_windows_initialization_and_backup_work_when_hard_links_are_denied(self):
+        from unittest.mock import patch
+        with patch('validated_world.file_publication.os.link',
+                   side_effect=PermissionError('[WinError 5] hard links denied')) as link:
+            source = self.initialize('source.vw.db')
+            destination = self.root / 'backup.vw.db'
+            copied = ProjectStore().backup(source, destination)
+            self.assertEqual(copied.graph, sample_graph())
+            self.assertTrue(ProjectStore().verify(source)['isValid'])
+            self.assertTrue(ProjectStore().verify(destination)['isValid'])
+            link.assert_not_called()
+        self.assertEqual(set(self.root.iterdir()), {source, destination})
+
+    def test_destination_created_during_initialization_or_backup_is_preserved(self):
+        from unittest.mock import patch
+        from validated_world.storage import publish_new_file
+        source = self.initialize('source.vw.db')
+
+        def competing_publication(stage, destination):
+            Path(destination).write_bytes(b'competing writer')
+            publish_new_file(stage, destination)
+
+        for command in ('initialize', 'backup'):
+            with self.subTest(command=command):
+                destination = self.root / f'{command}-winner.vw.db'
+                with patch('validated_world.storage.publish_new_file', competing_publication):
+                    with self.assertRaises(FileExistsError):
+                        if command == 'initialize':
+                            ProjectStore().initialize(destination, sample_graph())
+                        else:
+                            ProjectStore().backup(source, destination)
+                self.assertEqual(destination.read_bytes(), b'competing writer')
+                self.assertFalse(list(self.root.glob('*.tmp')))
+        self.assertTrue(ProjectStore().verify(source)['isValid'])
 
     def test_large_values_round_trip_without_product_size_ceilings(self):
         text = "x" * (2 * 1024 * 1024)

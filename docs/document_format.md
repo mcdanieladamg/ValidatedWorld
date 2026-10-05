@@ -41,6 +41,19 @@ are non-overwriting. Failed publication after the reviewed SQLite commit retains
 the temporary DB for `project retry-export`; successful publication precedes its
 managed cleanup. Explicit caller-owned DBs are never automatically deleted.
 
+New-file publication uses a same-directory no-overwrite rename on Windows,
+without creating hard links, for HTML creation/backups and SQLite initialization/
+backups. POSIX uses hard-link publication because its ordinary rename can replace
+an existing file. Both refuse a destination created by another writer after
+preflight; existing-document updates continue to use atomic replacement.
+
+HTML initialization, reads, SQL export and managed changes allocate unique SQLite
+workspaces beside the selected document, independent of the process's OS-temp
+configuration or working directory. The selected parent must be writable even
+for reads. Allocation failure reports that parent and does not fall back elsewhere.
+Ordinary completion, discard and graceful shutdown remove owned workspaces;
+explicit retention and committed unpublished results preserve their reported DBs.
+
 ## JSON fields
 
 All listed members are required; unknown and duplicate members fail parsing.
