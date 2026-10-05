@@ -19,6 +19,15 @@ Review helps maintain consistency but does not prove that claims are true.
 The local packages require Python 3.12+ and a host with fresh read-only subagents
 for reviewed updates. Codex Desktop is the exercised host. The current workflow
 is English-only; Unicode graph text is preserved. Public distribution is pending.
+Release packages include ValidatedWorld's Python source inside the skill folder;
+the host supplies the Python interpreter, so no Python installation or virtual
+environment is shipped.
+
+After installation, start a new agent chat in your project and ask:
+"Create a ValidatedWorld design document for this project." Then try:
+"Find the decisions and dependencies relevant to my proposed change" or
+"Update this design decision and review its consequences before saving."
+Keep the resulting project document outside the skill installation folder.
 
 - [Installation and packages](docs/release_distribution.md)
 - [Agent skill instructions](skills/validated-world/SKILL.md)
@@ -26,5 +35,7 @@ is English-only; Unicode graph text is preserved. Public distribution is pending
 - [Documentation format](docs/document_format.md)
 - [This project's browsable graph](docs-vw.html)
 - [Developer verification](docs/developer_testing.md)
+- [Privacy](docs/privacy.md), [software terms](docs/terms.md) and [support](docs/support.md)
+- [Release preparation and publishing](docs/publishing.md)
 
 [License](LICENSE)

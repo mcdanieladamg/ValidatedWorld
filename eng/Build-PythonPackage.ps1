@@ -27,6 +27,11 @@ function Copy-PythonEngine([string] $destination) {
     Copy-Item -LiteralPath (Join-Path $root 'pyproject.toml') -Destination $destination -Force
     Copy-Item -LiteralPath (Join-Path $root 'packaging/python-plugin/README.md') -Destination $destination -Force
     Copy-Item -LiteralPath (Join-Path $root 'docs/document_format.md') -Destination $destination -Force
+    $policyDirectory = Join-Path $destination 'docs'
+    New-Item -ItemType Directory -Path $policyDirectory -Force | Out-Null
+    foreach ($guide in @('privacy', 'terms', 'support')) {
+        Copy-Item -LiteralPath (Join-Path $root "docs/$guide.md") -Destination $policyDirectory -Force
+    }
     Get-ChildItem -LiteralPath (Join-Path $destination 'src-python') -Directory -Filter '__pycache__' -Recurse -Force | Remove-Item -Recurse -Force
     $projectFile = Join-Path $destination 'pyproject.toml'
     $projectText = [IO.File]::ReadAllText($projectFile)
@@ -40,14 +45,25 @@ function Copy-PythonEngine([string] $destination) {
 
 $skill = Join-Path $stage 'validated-world-skill'
 New-Item -ItemType Directory -Force -Path $skill | Out-Null
-Copy-Item -LiteralPath (Join-Path $root 'skills/validated-world') -Destination $skill -Recurse -Force
+Get-ChildItem -LiteralPath (Join-Path $root 'skills/validated-world') -Force |
+    Copy-Item -Destination $skill -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $skill -Force
 Copy-PythonEngine $skill
 
 $plugin = Join-Path $stage 'validated-world-python-plugin'
 Copy-Item -LiteralPath (Join-Path $root 'packaging/python-plugin') -Destination $plugin -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $plugin 'LICENSE') -Force
-Copy-PythonEngine $plugin
+# Each skill is an independently installable unit. Copy the complete generated
+# skill, including application source, rather than relying on plugin siblings.
+$pluginSkill = Join-Path $plugin 'skills/validated-world'
+Get-ChildItem -LiteralPath $skill -Force |
+    Copy-Item -Destination $pluginSkill -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $root 'docs/document_format.md') -Destination $plugin -Force
+$pluginPolicyDirectory = Join-Path $plugin 'docs'
+New-Item -ItemType Directory -Path $pluginPolicyDirectory -Force | Out-Null
+foreach ($guide in @('privacy', 'terms', 'support')) {
+    Copy-Item -LiteralPath (Join-Path $root "docs/$guide.md") -Destination $pluginPolicyDirectory -Force
+}
 foreach ($manifestRelative in @('plugin.json', '.codex-plugin/plugin.json')) {
     $manifestPath = Join-Path $plugin $manifestRelative
     $manifestText = [IO.File]::ReadAllText($manifestPath)

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>ValidatedWorld: connected documentation with reviewed changes</title>
+  <rect width="256" height="256" rx="56" fill="#176B68"/>
+  <path d="M68 36h81l39 39v127a18 18 0 0 1-18 18H68a18 18 0 0 1-18-18V54a18 18 0 0 1 18-18Z" fill="#F5FBFA"/>
+  <path d="M149 36v27a12 12 0 0 0 12 12h27" fill="#B5DED8"/>
+  <path d="M85 99v59m0-59 53 29m-53 30 53-30" fill="none" stroke="#176B68" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="85" cy="99" r="11" fill="#176B68"/>
+  <circle cx="85" cy="158" r="11" fill="#176B68"/>
+  <circle cx="138" cy="128" r="11" fill="#176B68"/>
+  <circle cx="184" cy="185" r="39" fill="#176B68" stroke="#F5FBFA" stroke-width="8"/>
+  <path d="m166 184 13 13 24-27" fill="none" stroke="#F5FBFA" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

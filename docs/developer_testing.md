@@ -26,6 +26,14 @@ release output before removing it, or select a fresh `-OutputDirectory` and pass
 that exact directory to the package test. Archives are regenerable outputs.
 The package test extracts each archive temporarily and exercises the included
 launcher, document creation, import/export, verification and deterministic bytes.
+It also copies only the complete skill folder away from the extracted package
+and runs its launcher with Python's `-I` isolation, excluding `PYTHONPATH` and
+user-site packages. Creation and round-trip checks use this isolated installation
+and project files outside the skill folder.
+The plugin check also enforces public listing text limits, portable/fallback
+metadata parity, included onboarding and policy files, and safe square SVG
+branding. It is local package validation, not a public-directory approval check.
+See [publishing](publishing.md) for the remaining clean-client and human steps.
 Offline commands make no product model API calls. Follow the repository's
 bounded repair/retry rules; do not rerun unchanged failures hoping for success.
 The coverage run executes the full unit suite and enforces the configured

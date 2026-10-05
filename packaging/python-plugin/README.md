@@ -11,4 +11,6 @@ The engine has no third-party runtime dependencies or product API key setting.
 Project documentation belongs outside the package or installation directory.
 See the bundled `document_format.md` and the
 [repository](https://github.com/mcdanieladamg/ValidatedWorld) for installation,
-agent instructions and optional command details.
+agent instructions and optional command details. Bundled [privacy](docs/privacy.md),
+[software terms](docs/terms.md) and [support](docs/support.md) explain data handling,
+licensing and reporting.
