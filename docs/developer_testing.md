@@ -19,6 +19,7 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
 .\eng\Test-Blueprint.ps1 -PythonExecutable $vwPython
 .\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
 .\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable $vwPython
+.\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable $vwPython
 ```
 
 The build deliberately refuses an existing output directory. Inspect an old
@@ -30,6 +31,11 @@ It also copies only the complete skill folder away from the extracted package
 and runs its launcher with Python's `-I` isolation, excluding `PYTHONPATH` and
 user-site packages. Creation and round-trip checks use this isolated installation
 and project files outside the skill folder.
+The temp-alias regression launches the same package smoke in a fresh shell with
+an OS temp directory supplied through a directory link (a Windows junction or
+Unix symlink). Both extracted and isolated trial paths use the physical directory;
+the product continues to reject explicitly linked project paths. CI runs this
+regression on each enabled platform.
 The plugin check also enforces public listing text limits, portable/fallback
 metadata parity, included onboarding and policy files, and safe square SVG
 branding. It is local package validation, not a public-directory approval check.

@@ -70,7 +70,9 @@ try {
         if ($null -ne $expectedVersion -and $launcherVersion -notmatch [regex]::Escape($expectedVersion)) { throw "Extracted skill launcher version differs from archive: $($archive.Name) reports $launcherVersion" }
         # Model a folder-only installer, away from the archive, checkout and
         # PYTHONPATH. -I also excludes user-site packages and Python env settings.
-        $isolatedParent = Join-Path $temporary ('isolated-' + $archive.BaseName)
+        # Derive trials from the resolved extraction root. The original OS temp
+        # path can still contain a system alias such as macOS /var.
+        $isolatedParent = Join-Path (Split-Path -Parent $destination) ('isolated-' + $archive.BaseName)
         New-Item -ItemType Directory -Path $isolatedParent | Out-Null
         $isolatedSkill = Join-Path $isolatedParent 'validated-world'
         Copy-Item -LiteralPath $skillDirectory -Destination $isolatedSkill -Recurse
