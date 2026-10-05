@@ -271,6 +271,51 @@ class HtmlProjectTests(unittest.TestCase):
         self.assertFalse(list(self.root.glob('.*.vw-lock')))
         self.assertEqual(parse(backup).graph, self.project.graph)
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows publication avoids hard-link creation')
+    def test_windows_html_workflow_with_hard_link_permission_denied(self):
+        from unittest.mock import patch
+        before = set(self.root.iterdir())
+        destination = self.root / 'garden.html'
+        backup = self.root / 'backup.html'
+        with patch('validated_world.file_publication.os.link',
+                   side_effect=PermissionError('[WinError 5] hard links denied')) as link:
+            self.store.initialize(destination, self.project.graph)
+            self.assertEqual(self.store.load(destination).graph, self.project.graph)
+            self.store.backup(destination, backup)
+            self.assertTrue(self.store.verify(backup)['isValid'])
+            self.assertIn('CREATE TABLE', self.store.export_sql(destination))
+            app, session = self.proposal(ordinary=True)
+            self.assertEqual(app.write(session.reference())['status'], 'written')
+            self.assertTrue(self.store.verify(self.folder)['isValid'])
+            link.assert_not_called()
+        self.assertEqual(set(self.root.iterdir()), before | {destination, backup})
+
+    def test_new_html_publication_preserves_destination_created_after_preflight(self):
+        destination = self.root / 'competing.html'
+
+        def competing_writer(stage):
+            if stage == 'prepared':
+                destination.write_bytes(b'human file created during publication')
+
+        with self.assertRaises(FileExistsError):
+            Publisher(competing_writer).publish(parse(self.folder), destination, require_absent=True)
+        self.assertEqual(destination.read_bytes(), b'human file created during publication')
+        self.assertFalse(list(self.root.glob('.*.vw-stage-*')))
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
+
+    def test_denied_new_html_rename_removes_stage_and_preserves_neighbors(self):
+        from unittest.mock import patch
+        before = self.files()
+        destination = self.root / 'denied-create.html'
+        with patch('validated_world.document_store.publish_new_file',
+                   side_effect=PermissionError('publication denied')):
+            with self.assertRaisesRegex(PermissionError, 'publication denied'):
+                Publisher().publish(parse(self.folder), destination, require_absent=True)
+        self.assertFalse(destination.exists())
+        self.assertFalse(list(self.root.glob('.*.vw-stage-*')))
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
+        self.assertEqual(self.files(), before)
+
     def test_owned_temp_directory_alias_is_resolved_before_publication(self):
         from contextlib import contextmanager
         from unittest.mock import patch
@@ -284,7 +329,8 @@ class HtmlProjectTests(unittest.TestCase):
 
         @contextmanager
         def aliased_temp(**kwargs):
-            with original(dir=self.root, **kwargs) as directory:
+            self.assertEqual(kwargs['dir'], self.root)
+            with original(**kwargs) as directory:
                 yield str(alias / Path(directory).name)
 
         destination = self.root / 'aliased-temp.html'
@@ -300,6 +346,48 @@ class HtmlProjectTests(unittest.TestCase):
                 self.store.load(alias / destination.name)
             alias.unlink()
         self.assertFalse(list(self.root.glob('.*.vw-lock')))
+
+    def test_html_workflow_never_allocates_in_denied_os_temp(self):
+        from unittest.mock import patch
+        original = tempfile.mkdtemp
+        allocations = []
+
+        def allocate(suffix=None, prefix=None, dir=None):
+            if dir is None:
+                raise PermissionError('[WinError 5] OS Temp is denied')
+            self.assertEqual(Path(dir), self.root)
+            allocations.append(prefix)
+            return original(suffix=suffix, prefix=prefix, dir=dir)
+
+        before = set(self.root.iterdir())
+        with patch('validated_world.document_store.tempfile.mkdtemp', allocate):
+            destination = self.root / 'new.html'
+            self.store.initialize(destination, self.project.graph)
+            self.assertEqual(self.store.load(destination).graph, self.project.graph)
+            self.assertTrue(self.store.verify(destination)['isValid'])
+            self.assertIn('CREATE TABLE', self.store.export_sql(destination))
+            self.store.backup(destination, self.root / 'backup.html')
+            app, session = self.proposal(ordinary=True)
+            workspace = self.store.workspaces[str(self.folder)]
+            self.assertEqual(workspace.directory.parent, self.root)
+            self.assertEqual(app.write(session.reference())['status'], 'written')
+            app.begin(str(self.folder), self.project.graph.project_id, 'tester', 'Discard trial')
+            app.close()
+        self.assertTrue({'vw-init-', 'vw-read-', 'vw-sql-', 'vw-change-'} <= set(allocations))
+        self.assertEqual(set(self.root.iterdir()), before | {destination, self.root / 'backup.html'})
+
+    def test_denied_project_workspace_reports_selected_parent_without_fallback(self):
+        from unittest.mock import patch
+        before = self.files()
+        destination = self.root / 'denied.html'
+        with patch('validated_world.document_store.tempfile.mkdtemp',
+                   side_effect=PermissionError('selected folder denied')) as allocate:
+            with self.assertRaisesRegex(OSError, 'cannot allocate vw-init-.*selected folder denied') as raised:
+                self.store.initialize(destination, self.project.graph)
+        self.assertIn(str(self.root), str(raised.exception))
+        self.assertEqual(allocate.call_count, 1)
+        self.assertFalse(destination.exists())
+        self.assertEqual(self.files(), before)
 
     def test_session_close_removes_lock_and_working_db_without_changing_document(self):
         before = self.folder.read_bytes()

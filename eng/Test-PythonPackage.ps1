@@ -61,7 +61,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Extracted Python engine failed smoke launch: $($archive.Name)" }
         if ($null -ne $expectedVersion -and $reportedVersion -notmatch [regex]::Escape($expectedVersion)) { throw "Extracted Python engine version differs from archive: $($archive.Name) reports $reportedVersion" }
         $launcher = Get-Item -LiteralPath (Join-Path $skillDirectory 'scripts/validated_world.py')
-        foreach ($reference in @('packet-review.md', 'question-worker.md', 'graph-authoring.md')) {
+        foreach ($reference in @('packet-review.md', 'question-worker.md', 'graph-authoring.md', 'command-workflow.md', 'persistent-io.md')) {
             $referencePath = Join-Path (Split-Path -Parent (Split-Path -Parent $launcher.FullName)) "references/$reference"
             if (-not (Test-Path -LiteralPath $referencePath -PathType Leaf)) { throw "Missing skill reference: $reference" }
         }
@@ -88,6 +88,32 @@ try {
         if ($LASTEXITCODE -ne 0 -or -not $newVerification.isValid) { throw "Source-only new-project verification failed: $($archive.Name)" }
         $newPurpose = & $python -I -S $isolatedLauncher read node $newProject purpose | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0 -or $newPurpose.text -ne 'Plan a garden with limited water.') { throw "Source-only new-project purpose differs: $($archive.Name)" }
+        # A malformed read-only help request must not end the persistent host.
+        # Recover in the same process, then create and verify a real HTML file.
+        $protocolProject = Join-Path $isolatedParent 'protocol-garden.html'
+        $protocolRequests = @(
+            @{ version = 1; command = 'host.help' },
+            @{ version = 1; command = 'host.help'; payload = @{} },
+            @{ version = 1; command = 'project.init'; payload = @{ path = $protocolProject; projectId = 'protocol-garden'; title = 'Protocol garden'; purposeNodeId = 'purpose'; purposeText = 'Plan a garden after correcting a help request.' } },
+            @{ version = 1; command = 'project.verify'; payload = @{ path = $protocolProject } },
+            @{ version = 1; command = 'host.exit'; payload = @{} }
+        )
+        $protocolLines = @($protocolRequests | ForEach-Object { $_ | ConvertTo-Json -Depth 5 -Compress })
+        $protocolOutput = @($protocolLines | & $python -I -S $isolatedLauncher ndjson)
+        if ($LASTEXITCODE -ne 0 -or $protocolOutput.Count -ne 5) { throw "Packaged NDJSON recovery did not finish: $($archive.Name)" }
+        $protocolResults = @($protocolOutput | ForEach-Object { $_ | ConvertFrom-Json })
+        if ($protocolResults[0].status -ne 'error' -or $protocolResults[0].payload.message -notmatch 'payload') { throw "Missing payload was not rejected: $($archive.Name)" }
+        foreach ($result in $protocolResults[1..4]) {
+            if ($result.status -ne 'ok') { throw "Packaged NDJSON recovery failed: $($archive.Name)" }
+        }
+        if (-not (Test-Path -LiteralPath $protocolProject -PathType Leaf) -or -not $protocolResults[3].payload.isValid) { throw "Packaged NDJSON garden was not published and verified: $($archive.Name)" }
+        if (Test-Path -LiteralPath ($protocolProject + '.vw-lock')) { throw "Packaged NDJSON exit left a lock file: $($archive.Name)" }
+        & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill
+        if ($LASTEXITCODE -ne 0) { throw "Bundled author/review/save examples failed: $($archive.Name)" }
+        $logWorkflowOptions = @('--log-output')
+        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { $logWorkflowOptions += '--deny-hard-links' }
+        & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill @logWorkflowOptions
+        if ($LASTEXITCODE -ne 0) { throw "Live response-log workflow failed: $($archive.Name)" }
         $trialDocs = Join-Path $isolatedParent 'smoke-project.html'
         $trialDb = Join-Path $isolatedParent 'smoke-working.vw.db'
         $null = & $python -I -S $isolatedLauncher sample create technical-project $trialDocs

@@ -27,11 +27,46 @@ release output before removing it, or select a fresh `-OutputDirectory` and pass
 that exact directory to the package test. Archives are regenerable outputs.
 The package test extracts each archive temporarily and exercises the included
 launcher, document creation, import/export, verification and deterministic bytes.
+Generated Python caches are excluded from all staged content, including helper
+scripts and plugin resources; the extracted-package check rejects leaked caches.
 It also copies only the complete skill folder away from the extracted package
 and runs its launcher with Python's `-I -S` isolation, excluding `PYTHONPATH`,
 user-site packages and site initialization. New-project initialization, sample
 creation and round-trip checks use this source-only installation and project
 files outside the skill folder, without pip-installed package metadata.
+The isolated NDJSON smoke rejects a `host.help` request missing `payload`,
+corrects it in the same process, then creates and verifies an HTML garden project.
+It also executes the bundled command-reference templates through the isolated
+launcher: create, retrieve, add a scoped claim, patch, page evidence, acknowledge
+review, preview and publish. A write without host approval must block. Its later
+allow is synthetic offline test data; this does not establish fresh-host review
+acceptance, which requires the separate host smoke below.
+The same walkthrough runs through the bundled response-log launcher, reading
+each flushed UTF-8 response before process exit. Unit checks protect existing
+logs and cover Unicode/structured diagnostics, default project-folder allocation
+despite differing process temp environments, and explicit shared-root overrides.
+The packaged walkthrough starts in its disposable project folder with no log
+arguments and follows the announced path. Startup must produce a readable live help
+response before project mutation; an exited command supplies no session handle.
+Terminal smoke keeps stdin live,
+reads complete response lines from the log between requests, then confirms
+graceful exit; shell redirection/capture is not used as the response transport.
+Close external log readers before shutdown. Default helper shutdown removes its
+owned response directory; confirm exit code zero instead of rereading a deleted
+final response. Tests cover error followed by graceful EOF, requested diagnostic
+retention, abnormal exit and preservation of unexpected neighboring files.
+HTML workflow tests deny every OS-temp SQLite allocation while exercising
+initialization, reads, SQL export, backup, reviewed publication and discard.
+Each allocation must use the selected document's parent. A denied selected
+parent must fail with its path, without a fallback or an HTML publication.
+Windows regressions also deny hard-link creation across database initialization,
+database backup, HTML creation/backup, reads, SQL export and reviewed updates.
+Competing destinations created after preflight must retain their bytes, and
+denied publication must clean staging files while preserving neighboring data.
+The isolated Windows log walkthrough installs a test-only Python audit hook in
+the child host that rejects every hard-link call through the complete author/
+review/save sequence. This does not modify machine permissions or imply clean
+remote-host acceptance.
 The temp-alias regression launches the same package smoke in a fresh shell with
 an OS temp directory supplied through a directory link (a Windows junction or
 Unix symlink). Both extracted and isolated trial paths use the physical directory;

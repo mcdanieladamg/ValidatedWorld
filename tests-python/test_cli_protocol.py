@@ -50,6 +50,14 @@ class CliProtocolTests(unittest.TestCase):
 
     def test_unknown_and_duplicate_members_are_rejected_but_process_continues(self):
         process = self.process()
+        process.stdin.write('{"version":1,"command":"host.help"}\n')
+        process.stdin.flush()
+        missing_payload = json.loads(process.stdout.readline())
+        self.assertEqual(missing_payload["status"], "error")
+        self.assertIn("payload", missing_payload["payload"]["message"])
+        corrected_help = self.send(process, "host.help", {})
+        self.assertEqual(corrected_help["status"], "ok")
+        self.assertIn("project.init", corrected_help["payload"]["commands"])
         unknown = self.send(process, "project.status", {"path": str(self.path), "extra": True})
         self.assertEqual(unknown["status"], "error")
         root_unknown = self.send(process, "project.status", {"path": str(self.path)}, extra=True)

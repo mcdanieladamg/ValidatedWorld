@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from contextlib import contextmanager
 from hashlib import sha256
 import json
 import os
@@ -12,6 +13,7 @@ import uuid
 
 from . import document_format as html
 from .storage import ProjectStore, StoredProject
+from .file_publication import publish_new_file
 
 # Central policy defaults. Explicit .vw.db paths select the instructed DB workflow.
 DEFAULT_HTML_AUTHORITY = True
@@ -35,6 +37,28 @@ def _remove_owned(root):
         resolved = html.safe_path(child)
         if not resolved.is_relative_to(root): raise ValueError('cleanup path escaped its owned directory')
     shutil.rmtree(root)
+
+
+def _workspace_parent(path):
+    # Use only the caller's selected authority, never graph text or OS Temp.
+    root = html.safe_path(path)
+    try:
+        root.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise OSError(f'cannot prepare SQLite workspace beside {root}: {exc}') from exc
+    return root.parent
+
+
+@contextmanager
+def _temporary_database(path, prefix):
+    parent = _workspace_parent(path)
+    try:
+        temporary = tempfile.TemporaryDirectory(prefix=prefix, dir=parent)
+    except OSError as exc:
+        raise OSError(f'cannot allocate {prefix}SQLite workspace in {parent}: {exc}') from exc
+    with temporary as directory:
+        # Canonicalize owned allocations before rejecting explicit linked paths.
+        yield Path(directory).resolve() / 'working.vw.db'
 
 
 class DocumentLock:
@@ -107,8 +131,8 @@ class Publisher:
             # Staging and destination share a filesystem. The old complete file
             # remains in place until this single atomic replacement succeeds.
             if require_absent:
-                os.link(stage, root); installed = True
-                stage.unlink()
+                publish_new_file(stage, root); installed = True
+                stage.unlink(missing_ok=True)
             else:
                 os.replace(stage, root); installed = True
             self._fault('published')
@@ -168,18 +192,16 @@ class ProjectFiles(ProjectStore):
         p = html.parse(path)
         if p.path in self.workspaces: return p
         # Exercise the verified SQLite mapping even for reads; leave the source alone.
-        with tempfile.TemporaryDirectory(prefix='vw-read-') as directory:
-            imported = self.engine.initialize(str(Path(directory).resolve() / 'working.vw.db'), p.graph, created_utc=p.created_utc, updated_utc=p.updated_utc)
+        with _temporary_database(p.path, 'vw-read-') as db:
+            imported = self.engine.initialize(str(db), p.graph, created_utc=p.created_utc, updated_utc=p.updated_utc)
             return replace(imported, path=p.path)
 
     def initialize(self, path, graph, **metadata):
         if is_database(path): return self.engine.initialize(path, graph, **metadata)
-        with tempfile.TemporaryDirectory(prefix='vw-init-') as directory:
-            # The OS temp directory can traverse a system alias (macOS /var).
-            # Canonicalize our own allocation before checking project paths.
-            db = Path(directory).resolve() / 'working.vw.db'
+        root = self.publisher.destination(path)
+        with _temporary_database(root, 'vw-init-') as db:
             project = self.engine.initialize(str(db), graph, **metadata)
-            result, self.last_warnings = self.publisher.publish(project, path, source=db, require_absent=True)
+            result, self.last_warnings = self.publisher.publish(project, root, source=db, require_absent=True)
             return result
 
     def status(self, path):
@@ -196,8 +218,7 @@ class ProjectFiles(ProjectStore):
     def export_sql(self, path):
         if is_database(path): return self.engine.export_sql(path)
         p = self.load(path)
-        with tempfile.TemporaryDirectory(prefix='vw-sql-') as directory:
-            db = Path(directory).resolve() / 'working.vw.db'
+        with _temporary_database(p.path, 'vw-sql-') as db:
             self.engine.initialize(str(db), p.graph, created_utc=p.created_utc, updated_utc=p.updated_utc)
             return self.engine.export_sql(str(db))
 
@@ -208,7 +229,12 @@ class ProjectFiles(ProjectStore):
         lock = DocumentLock(root).acquire(); directory = None
         try:
             baseline = byte_identity(root)
-            directory = Path(tempfile.mkdtemp(prefix='vw-change-')).resolve(); db = directory / 'working.vw.db'
+            parent = _workspace_parent(root)
+            try:
+                directory = Path(tempfile.mkdtemp(prefix='vw-change-', dir=parent)).resolve()
+            except OSError as exc:
+                raise OSError(f'cannot allocate change SQLite workspace in {parent}: {exc}') from exc
+            db = directory / 'working.vw.db'
             project = self.import_html(root, db)
             if byte_identity(root) != baseline: raise RuntimeError('stale-document-bytes')
             self.workspaces[str(root)] = Workspace(directory, db, root, baseline, lock, keep)

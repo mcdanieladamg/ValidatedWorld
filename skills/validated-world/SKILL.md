@@ -37,6 +37,10 @@ in the host interpreter. That is expected and does not block using the launcher.
 Verify the project, read its status and purpose, and check its identity. For a
 new project establish ID, title and purpose, then use
 `project init <html> <id> <title> purpose <purpose-text>`.
+This one-shot command does not require an NDJSON session or `host.help` first.
+Read [command payloads](references/command-workflow.md) before using the protocol
+for creation, retrieval or author/review/save. It contains complete request
+templates; `read --help` does not provide payload schemas.
 Search existing IDs, terms and synonyms before adding claims. Retrieve relevant
 nodes, dependencies and upstream scope context with bounded reads; follow
 `nextCursor` when more evidence matters. Avoid routine `project.open`, which
@@ -51,7 +55,35 @@ so future agents can retrieve it without the current conversation.
 
 ## Review and save
 
-Keep one launcher `ndjson` process alive. `host.help` supplies command shapes.
+Read [persistent input/output](references/persistent-io.md) when launching the
+session. For terminal tools, run `scripts/ndjson_log.py` with the execution
+tool's working directory set to the identified, authorized project folder.
+It creates its own temporary subdirectory there by default, keeps stdin live
+and flushes responses directly to a UTF-8 log. Check live `host.help` responses
+at the announced path before project changes. No special startup flag is needed.
+Read complete new log lines between requests; do not close the process to make
+captured output appear, or parse terminal echoes as responses.
+Read needed results before shutdown; normal helper exit cleans its owned log
+directory. See the reference for requested diagnostic retention and cleanup errors.
+Keep one launcher `ndjson` process alive. Send one JSON object per input line;
+every request requires `version`, `command` and an object `payload`, including
+commands with no arguments:
+
+```json
+{"version":1,"command":"host.help","payload":{}}
+```
+
+`host.help` returns the command catalog, not payload schemas. Command arguments
+belong inside `payload`; unknown fields are rejected. For example:
+
+```json
+{"version":1,"command":"project.verify","payload":{"path":"/absolute/project/docs-vw.html"}}
+```
+
+Use the actual project path (escape Windows backslashes in JSON). A rejected
+`host.help` request leaves the process usable: correct the reported format error
+and retry in that process, unless the human explicitly requested stopping on
+errors. It is not a missing host capability or a failed project write.
 Begin with `change.begin` against the file, author with `change.apply` or
 `change.patch`, and retain the exact reference returned after each mutation.
 Page `change.affected` completely and read every operation, consequence and
@@ -104,7 +136,12 @@ end-user authorization is required.
 
 Commands manage import, guarded temporary SQLite changes, complete document
 replacement and success cleanup. Keep `change.begin` pointed at the file;
-do not ask users to choose storage. One passive JSON block contains the complete graph. Compatible record edits import as present; incompatible data fails
+do not ask users to choose storage.
+Temporary SQLite workspaces are created beside that selected file, so its
+parent must be writable even for reads. Allocation errors report that folder;
+do not relocate authority or broaden permissions as a workaround.
+One passive JSON block contains the complete graph. Compatible record edits
+import as present; incompatible data fails
 parsing. Export regenerates presentation and replaces the selected file.
 
 An `unpublished` result means SQLite committed but the document did not publish.
