@@ -19,6 +19,7 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
 .\eng\Test-Blueprint.ps1 -PythonExecutable $vwPython
 .\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
 .\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable $vwPython
+.\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable $vwPython
 ```
 
 The build deliberately refuses an existing output directory. Inspect an old
@@ -26,6 +27,19 @@ release output before removing it, or select a fresh `-OutputDirectory` and pass
 that exact directory to the package test. Archives are regenerable outputs.
 The package test extracts each archive temporarily and exercises the included
 launcher, document creation, import/export, verification and deterministic bytes.
+It also copies only the complete skill folder away from the extracted package
+and runs its launcher with Python's `-I` isolation, excluding `PYTHONPATH` and
+user-site packages. Creation and round-trip checks use this isolated installation
+and project files outside the skill folder.
+The temp-alias regression launches the same package smoke in a fresh shell with
+an OS temp directory supplied through a directory link (a Windows junction or
+Unix symlink). Both extracted and isolated trial paths use the physical directory;
+the product continues to reject explicitly linked project paths. CI runs this
+regression on each enabled platform.
+The plugin check also enforces public listing text limits, portable/fallback
+metadata parity, included onboarding and policy files, and safe square SVG
+branding. It is local package validation, not a public-directory approval check.
+See [publishing](publishing.md) for the remaining clean-client and human steps.
 Offline commands make no product model API calls. Follow the repository's
 bounded repair/retry rules; do not rerun unchanged failures hoping for success.
 The coverage run executes the full unit suite and enforces the configured

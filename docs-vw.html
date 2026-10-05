@@ -27,7 +27,7 @@ section { margin-block: 2rem; }
   "title": "ValidatedWorld Architecture and Product Evaluation",
   "purpose": "purpose",
   "created": "2026-09-14T16:34:55.4514187+00:00",
-  "updated": "2026-10-04T22:54:32.3244410+00:00",
+  "updated": "2026-10-05T00:28:55.5142980+00:00",
   "nodes": [
     {
       "id": "ai-author-limits",
@@ -564,7 +564,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "gap-public-plugin-discovery",
-      "text": "Public discovery for the Python standalone skill and skills-only plugin remains pending. T29 must verify current catalog eligibility for bundled scripts and dependencies, archive size, installation instructions, publisher identity, policy links, and supported-client behavior rather than assume the package format guarantees acceptance. The two packages use the same local Python engine. Human release publication and catalog submission are distinct steps; personal installation reserves no public identity and promises no discoverability or ranking.",
+      "text": "Public discovery for the Python standalone skill and skills-only plugin remains pending. T29 delivered local release materials: portable extensions.com.openai listing metadata with matching Codex fallback, authored light/dark SVG logo/composer icons, accurate capability labels and three starter prompts, an included onboarding skill, bundled privacy/terms/support documents, concise onboarding and human publishing instructions. The build creates self-contained source packages and local metadata checks enforce listing text limits, resource containment, passive square SVG branding, metadata parity and policy inclusion. Development candidate 0.3.0-dev.1 passed those checks and isolated installation smoke. Policy URLs point to tracked repository documents but become public only after human publication. Remaining acceptance includes clean-client author/reviewer/worker workflows, advertised client/OS coverage, verified publisher identity, live policy links, current catalog eligibility/security scans, final version/compatibility policy, and human release publication and submission. Local package checks cannot establish public approval, discoverability or ranking.",
       "kind": "product-gap",
       "tags": [
         "area:plugin",
@@ -1470,7 +1470,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "project-status",
-      "text": "ValidatedWorld has a delivered local Python skill workflow with fresh-context host review, packet/question-worker retrieval and explicit dependency-skip cleanup. T37 completed canonical single-HTML-file storage, passive typed JSON records, purpose-root inline JavaScript navigation, guarded temporary SQLite lifecycle, recoverable publication and converted tracked foundations. Product and developer documentation describe the delivered workflow concisely; offline branch-covered unit tests, developer/blueprint checks, extracted packages and disposable browser/fresh-host smoke exercise it. T29 is current for final public discovery, clean-host eligibility and installation acceptance, listing/submission materials and the first supported compatibility baseline. Codex Desktop is the exercised host; other hosts and public catalog acceptance remain unverified. Local feature completion does not imply public release readiness.",
+      "text": "ValidatedWorld has a delivered local Python skill workflow with fresh-context host review, packet/question-worker retrieval and explicit dependency-skip cleanup. T37 completed canonical single-HTML-file storage, passive typed JSON records, purpose-root inline JavaScript navigation, guarded temporary SQLite lifecycle, recoverable publication and converted tracked foundations. T29 has delivered self-contained skill archives and plugin-contained skill folders generated from one tracked Python implementation; isolated folder-only installation smoke runs the bundled application source on the host interpreter without checkout or PYTHONPATH dependence. T29 has also prepared portable and Codex fallback listing metadata, light/dark SVG branding, starter prompts, onboarding, bundled privacy/terms/support documents and human publishing instructions. Development candidate 0.3.0-dev.1 passed metadata/branding checks, isolated package smoke, document-link/checksum checks and local Windows verification; public policy URLs still require publication. Product and developer documentation describe the delivered workflow concisely; offline branch-covered unit tests, developer/blueprint checks, extracted packages and disposable browser/fresh-host smoke exercise it. T29 remains current for final public discovery, clean-host eligibility and installation acceptance, verified publisher identity, live policy links, catalog submission and the first supported compatibility baseline. Codex Desktop is the exercised host; other hosts and public catalog acceptance remain unverified. Local feature completion does not imply public release readiness.",
       "kind": "project-status",
       "tags": [
         "current-phase:t29",
@@ -1536,7 +1536,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "python-port-packaging",
-      "text": "Implemented source-based skill and skills-only plugin delivery from one Python engine. Packages include the skill instructions, launcher, engine, license, usage documentation, and version metadata while excluding caches, credentials, databases, native executables, and obsolete transports. Python 3.12 or newer remains an explicit host requirement; package creation does not install or alter a machine runtime. Build output is non-overwriting, produces compressed archives and SHA-256 hashes, and extracted-package smoke verifies both module and skill launchers. Current installation and public-catalog eligibility are addressed by T29.",
+      "text": "Implemented source-based skill and skills-only plugin delivery from one tracked Python implementation. The build generates a self-contained skill with SKILL.md at its archive root and application source under src-python inside the skill folder; the plugin contains that same complete skill under skills/validated-world, with no engine required at the plugin root. Each installable skill includes instructions, launcher, application source, license, usage documentation and version metadata while excluding caches, credentials, databases, native executables and obsolete transports. The host supplies an available Python 3.12 or newer interpreter; package creation does not install or alter a machine runtime or ship a developer virtual environment. Build output is non-overwriting and produces compressed archives and SHA-256 hashes. Extracted-package smoke verifies module and skill launchers, then copies only the skill folder away from the package and checks creation, verification and lossless import/export using Python -I without PYTHONPATH or user-site packages. Installed-client behavior and public-catalog eligibility remain T29 acceptance.",
       "kind": "implementation-plan",
       "tags": [
         "area:python-port",

@@ -9,6 +9,34 @@
   "homepage": "https://github.com/mcdanieladamg/ValidatedWorld",
   "repository": "https://github.com/mcdanieladamg/ValidatedWorld",
   "license": "MIT",
-  "keywords": ["semantic-change-control", "knowledge-graph", "local-first", "python"],
-  "skills": "./skills/"
+  "keywords": ["agent-skill", "project-documentation", "knowledge-graph", "local-first", "python"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ValidatedWorld",
+    "shortDescription": "Keep project docs consistent",
+    "longDescription": "Maintain connected project documentation through your AI agent. Create a browsable docs-vw.html file, retrieve relevant facts and decisions in bounded batches, and review the consequences of proposed changes before saving. Project files stay outside the skill installation. The bundled application uses standard-library Python with no separate model API key or runtime dependencies. Requires Python 3.12 or newer, project-file access, a persistent process, and fresh read-only subagents for reviewed updates. Codex Desktop is the exercised host; other clients require separate acceptance. Workflows are English-only; Unicode project text is preserved. Missing dependency links can hide consequences, and review does not prove that claims are true. Agent processing, model selection, usage charges and data handling follow your host's policies. Public directory acceptance and the first supported compatibility baseline remain pending.",
+    "developerName": "Adam McDaniel",
+    "category": "Productivity",
+    "capabilities": ["Maintain project documentation", "Retrieve decisions and dependencies", "Review proposed changes", "Browse a portable HTML project"],
+    "websiteURL": "https://github.com/mcdanieladamg/ValidatedWorld",
+    "supportURL": "https://github.com/mcdanieladamg/ValidatedWorld/blob/main/docs/support.md",
+    "privacyPolicyURL": "https://github.com/mcdanieladamg/ValidatedWorld/blob/main/docs/privacy.md",
+    "termsOfServiceURL": "https://github.com/mcdanieladamg/ValidatedWorld/blob/main/docs/terms.md",
+    "defaultPrompt": [
+      "Create a ValidatedWorld design document for this project.",
+      "Find the decisions and dependencies relevant to my proposed change.",
+      "Update this design decision and review its consequences before saving."
+    ],
+    "brandColor": "#176B68",
+    "brandColorDark": "#7BD5CB",
+    "composerIcon": "./assets/icon.svg",
+    "composerIconDark": "./assets/icon-dark.svg",
+    "logo": "./assets/icon.svg",
+    "logoDark": "./assets/icon-dark.svg"
+  },
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/validated-world/SKILL.md"
+    }
+  }
 }
