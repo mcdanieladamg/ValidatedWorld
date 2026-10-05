@@ -12,6 +12,7 @@ from typing import Any
 
 from .canonical import operations_fingerprint, state_fingerprint
 from .models import Edge, EntityKind, Graph, Node, Operation, OperationKind, ordinal_key
+from .path_safety import is_junction
 from .protocol import edge_dto, graph_dto, node_dto, operation_dto
 from .rules import RuleResult, evaluate_rules
 from .storage import ProjectStore, StoredProject
@@ -489,7 +490,7 @@ class Application:
             path = Path(name)
             if path.exists():
                 stat = path.stat()
-                if path.is_symlink() or path.is_junction() or (stat.st_dev, stat.st_ino) != (device, inode):
+                if path.is_symlink() or is_junction(path) or (stat.st_dev, stat.st_ino) != (device, inode):
                     raise ValueError(f"review export directory changed; cleanup requires host inspection: {name}")
                 if any(p.is_dir() or p.is_symlink() or not (p.name == "manifest.json" or __import__("re").fullmatch(r"page-\d{6}\.json", p.name)) for p in path.iterdir()):
                     raise ValueError(f"review export contains unknown files; cleanup requires host inspection: {name}")

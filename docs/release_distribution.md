@@ -1,7 +1,7 @@
 # Installation and packages
 
 ValidatedWorld ships the same local Python engine in a standalone Agent Skill
-archive and a skills-only plugin archive. Both require Python 3.12+ and an agent
+archive and a skills-only plugin archive. Both require Python 3.11+ and an agent
 host that can supply a fresh read-only subagent for reviewed updates. Codex
 Desktop is the exercised host; other hosts require their own acceptance.
 
@@ -41,6 +41,14 @@ The package uses an available Python runtime, including an explicitly managed
 Python is the interpreter; the bundled `src-python/validated_world` files are
 ValidatedWorld's application code. A host-provided interpreter can run them
 without installing a global Python package or copying a developer's `.venv`.
+Prefer runtime paths supplied by the agent host; otherwise check existing
+interpreter commands and project environments. An older `python` on PATH does
+not mean no suitable interpreter is available. Verify and use the selected
+executable consistently; installation does not require changing PATH.
+Check the application version through `python <skill>/scripts/validated_world.py
+--version`. The bundled source does not require pip-installed distribution
+metadata; `importlib.metadata.version("validated-world")` can raise
+`PackageNotFoundError` even when the skill works correctly.
 
 ## Use and update
 

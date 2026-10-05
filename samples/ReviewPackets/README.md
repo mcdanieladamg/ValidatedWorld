@@ -1,6 +1,6 @@
 # Review packet smoke foundation
 
-Create a disposable game-world documentation file with Python 3.12+:
+Create a disposable game-world documentation file with Python 3.11+:
 
 ```text
 python samples/ReviewPackets/create_fixture.py <new-absolute-html-path>

@@ -9,12 +9,12 @@ The normal product workflow is to ask an agent using the ValidatedWorld skill to
 manage the project. That host supplies any subagents separately. These manual
 instructions require no agent host or agent review results.
 
-ValidatedWorld runs locally with Python 3.12+. From a source
+ValidatedWorld runs locally with Python 3.11+. From a source
 checkout, make the package importable and run it with:
 
 ```powershell
 $env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
-py -3.12 -m validated_world --help
+py -3.11 -m validated_world --help
 ```
 
 An installed package also provides the `validated-world` command. Quote paths
@@ -22,7 +22,7 @@ and text containing spaces. New projects, backups and imported DB destinations a
 Export replaces the selected HTML file; neighboring files are untouched.
 
 The source skill invokes its bundled engine through `scripts/validated_world.py`
-with Python 3.12+; it does not need a global package installation. The runtime
+with Python 3.11+; it does not need a global package installation. The runtime
 uses only the standard library. Development setup and tests are documented in
 [developer verification](developer_testing.md).
 
@@ -152,7 +152,7 @@ interactive yes/no approval prompt. You acknowledge the evidence with
 `change.review` and save with `change.write` after reading the complete preview.
 
 ```powershell
-py -3.12 -m validated_world ndjson
+py -3.11 -m validated_world ndjson
 ```
 
 Each input line is a JSON request and each output line is its JSON result:

@@ -21,7 +21,7 @@ authored SVG under `packaging/python-plugin/assets`, covered by the project MIT
 license. Icons have no external resources, scripts or font dependencies.
 
 Build a fresh development candidate and verify it, using an available Python
-3.12+ interpreter. Pick an unused version/output directory; builds do not
+3.11+ interpreter. Pick an unused version/output directory; builds do not
 overwrite existing output.
 
 ```powershell
@@ -38,8 +38,10 @@ explicit version such as `0.3.0`, then test those same bytes.
 ## Clean-client acceptance
 
 Install a candidate without relying on this checkout or an older installed
-skill. Start a new chat and identify the exact package version and Python
-interpreter. Keep the test project outside installation directories.
+skill. Start a new chat and identify the bundled application version using
+`python <skill>/scripts/validated_world.py --version`, and the Python interpreter
+using `python --version`. Pip-installed package metadata is not required for
+these source archives. Keep the test project outside installation directories.
 
 Exercise a technical project and a non-code project: create and browse HTML,
 retrieve bounded context, propose a change, obtain a fresh reviewer allow or

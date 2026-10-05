@@ -27,7 +27,7 @@ section { margin-block: 2rem; }
   "title": "ValidatedWorld Architecture and Product Evaluation",
   "purpose": "purpose",
   "created": "2026-09-14T16:34:55.4514187+00:00",
-  "updated": "2026-10-05T00:28:55.5142980+00:00",
+  "updated": "2026-10-05T01:59:03.3490900+00:00",
   "nodes": [
     {
       "id": "ai-author-limits",
@@ -971,7 +971,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "phase-t27",
-      "text": "Local distribution consists of source-based standalone Agent Skill and skills-only plugin archives with shared Python engine, explicit launcher, synchronized manifests/metadata and SHA-256 checksums. Database and machine settings live outside replacement packages. Extracted module and launcher checks use an installed Python 3.12+ runtime without a source checkout; catalog publication and clean host installation acceptance are separate.",
+      "text": "Local distribution consists of source-based standalone Agent Skill and skills-only plugin archives with shared Python engine, explicit launcher, synchronized manifests/metadata and SHA-256 checksums. Database and machine settings live outside replacement packages. Extracted module and launcher checks use an installed Python 3.11+ runtime without a source checkout; catalog publication and clean host installation acceptance are separate.",
       "kind": "development-phase",
       "tags": [
         "phase:t27",
@@ -1104,7 +1104,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "plugin-developer-loop",
-      "text": "Use an available verified Python 3.12+ interpreter and checkout PYTHONPATH for self-hosting. Run branch-covered unittest, developer-tooling/blueprint checks and tracked-documentation verification before release preparation. Build-PythonPackage creates non-overwriting source skill/plugin archives and hashes; Test-PythonPackage extracts them into OS temporary directories and exercises module/launcher versions, document creation, verified import, default replacement and deterministic round trips. Each archive includes its declared package README and record-format guide. artifacts holds regenerable outputs only. docs/developer_testing.md documents public, host-review and browser smoke methods for developers; installed skill users have no output-testing duties. Project data, host configuration, credentials and installed copies remain outside package replacement. README stays a compact product introduction; detailed usage, installation, data contracts and developer verification live in linked guides, while the roadmap remains in the canonical graph.",
+      "text": "Use an available verified Python 3.11+ interpreter and checkout PYTHONPATH for self-hosting. Run branch-covered unittest, developer-tooling/blueprint checks and tracked-documentation verification before release preparation. Build-PythonPackage creates non-overwriting source skill/plugin archives and hashes; Test-PythonPackage extracts them into OS temporary directories and exercises module/launcher versions, document creation, verified import, default replacement and deterministic round trips. Each archive includes its declared package README and record-format guide. artifacts holds regenerable outputs only. docs/developer_testing.md documents public, host-review and browser smoke methods for developers; installed skill users have no output-testing duties. Project data, host configuration, credentials and installed copies remain outside package replacement. README stays a compact product introduction; detailed usage, installation, data contracts and developer verification live in linked guides, while the roadmap remains in the canonical graph.",
       "kind": "requirement",
       "tags": [
         "area:plugin",
@@ -1168,7 +1168,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "plugin-package-contract",
-      "text": "The local integration ships as a standalone Agent Skill and skills-only portable plugin with root Agent Plugins plugin.json and a Codex compatibility overlay. Both include the same Python engine, workflow, focused references, launcher, license, usage docs and synchronized version metadata. They include no database, credentials, environment file, native executable or model API transport. Python 3.12+ is required. Public discovery and other client support require separate acceptance.",
+      "text": "The local integration ships as a standalone Agent Skill and skills-only portable plugin with root Agent Plugins plugin.json and a Codex compatibility overlay. Both include the same Python engine, workflow, focused references, launcher, license, usage docs and synchronized version metadata. They include no database, credentials, environment file, native executable or model API transport. Python 3.11+ is required. Public discovery and other client support require separate acceptance.",
       "kind": "requirement",
       "tags": [
         "area:plugin",
@@ -1201,7 +1201,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "plugin-release-installation",
-      "text": "The package builder produces compressed standalone-skill and skills-only-plugin source archives with SHA-256 checksums. Outputs never overwrite an existing version directory. The builder rejects credentials, databases, caches, native executables, and obsolete transport files; the package test verifies hashes are present, extracts each archive outside the checkout, checks required content, and launches both the packaged module and skill wrapper with Python 3.12 or newer. Packages preserve user databases and environment settings because neither is stored inside them. Publication and host-specific installation remain human-controlled.",
+      "text": "The package builder produces compressed standalone-skill and skills-only-plugin source archives with SHA-256 checksums. Outputs never overwrite an existing version directory. The builder rejects credentials, databases, caches, native executables, and obsolete transport files; the package test verifies hashes are present, extracts each archive outside the checkout, checks required content, and launches both the packaged module and skill wrapper with Python 3.11 or newer. Packages preserve user databases and environment settings because neither is stored inside them. Publication and host-specific installation remain human-controlled.",
       "kind": "requirement",
       "tags": [
         "area:plugin",
@@ -1492,7 +1492,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "python-port-ci",
-      "text": "GitHub Actions runs enabled Windows, Linux, and macOS Python 3.12 offline unit, blueprint, coverage, build, and extracted-package checks. Skip semantics and aggregate status are explicit. No paid provider job or model credential mapping is included.",
+      "text": "GitHub Actions runs Python 3.11 once per enabled Windows, Linux, and macOS offline unit, coverage, project verification, build, and extracted-package job. There is no Python-version matrix. Configuration and aggregation helpers also use Python 3.11. Skip semantics and aggregate status remain explicit. No paid provider job or model credential mapping is included. Local Windows passes do not establish hosted cross-platform results.",
       "kind": "implementation-plan",
       "tags": [
         "area:python-port",
@@ -1514,7 +1514,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "python-port-inventory",
-      "text": "The Python 3.12+ package provides canonical graph types and encoding, validation, projection, affected analysis, rules, SQLite persistence, queries, diff, merge, bulk planning, templates, stateful sessions, strict public commands, host-subagent decision binding, source packages, and offline checks with a standard-library runtime.",
+      "text": "The Python 3.11+ package provides canonical graph types and encoding, validation, projection, affected analysis, rules, SQLite persistence, queries, diff, merge, bulk planning, templates, stateful sessions, strict public commands, host-subagent decision binding, source packages, and offline checks with a standard-library runtime.",
       "kind": "implementation-plan",
       "tags": [
         "area:python-port",
@@ -1536,7 +1536,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "python-port-packaging",
-      "text": "Implemented source-based skill and skills-only plugin delivery from one tracked Python implementation. The build generates a self-contained skill with SKILL.md at its archive root and application source under src-python inside the skill folder; the plugin contains that same complete skill under skills/validated-world, with no engine required at the plugin root. Each installable skill includes instructions, launcher, application source, license, usage documentation and version metadata while excluding caches, credentials, databases, native executables and obsolete transports. The host supplies an available Python 3.12 or newer interpreter; package creation does not install or alter a machine runtime or ship a developer virtual environment. Build output is non-overwriting and produces compressed archives and SHA-256 hashes. Extracted-package smoke verifies module and skill launchers, then copies only the skill folder away from the package and checks creation, verification and lossless import/export using Python -I without PYTHONPATH or user-site packages. Installed-client behavior and public-catalog eligibility remain T29 acceptance.",
+      "text": "Implemented source-based skill and skills-only plugin delivery from one tracked Python implementation. The build generates a self-contained skill with SKILL.md at its archive root and application source under src-python inside the skill folder; the plugin contains that same complete skill under skills/validated-world, with no engine required at the plugin root. Each installable skill includes instructions, launcher, application source, license, usage documentation and version metadata while excluding caches, credentials, databases, native executables and obsolete transports. The host supplies an available Python 3.11 or newer interpreter; the portable skill prefers host-reported runtime paths, then ordinary interpreter commands and existing project environments, checks available alternatives when one command is too old, and consistently uses the selected executable. Bundled source reports its version through the launcher without requiring pip-installed distribution metadata; package creation does not install or alter a machine runtime or ship a developer virtual environment. Build output is non-overwriting and produces compressed archives and SHA-256 hashes. Extracted-package smoke verifies module and skill launchers, then copies only the skill folder away from the package and checks creation, verification and lossless import/export using Python -I -S without PYTHONPATH, user-site packages or site initialization. Shared lstat reparse-tag checks retain Windows junction rejection in project paths, review exports and cleanup without Python 3.12-specific helpers. Local Windows full unit suites and both archive smoke/alias checks pass on Python 3.11.3 and 3.12.14. Installed-client behavior and public-catalog eligibility remain T29 acceptance.",
       "kind": "implementation-plan",
       "tags": [
         "area:python-port",
@@ -1612,7 +1612,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "quality-development-contract",
-      "text": "Each behavior change includes meaningful focused automated tests and informal public-surface smoke using disposable realistic data, plausible mistakes, recovery diagnostics and useful alternate paths. Use an available verified Python 3.12+ interpreter, run branch-covered unittest and enforce configured coverage, verify all tracked documentation foundations, and build/test extracted archives for release changes. Keep fresh host-subagent acceptance separate from offline tests; no product model API client is used. Tooling/convention changes also run Test-DeveloperTools.ps1 and Test-Blueprint.ps1. Document repeatable developer methods in AGENTS.md and docs/developer_testing.md, not installed skill user instructions or generated pages. Documentation-only work uses link/format/consistency checks. Never weaken acceptance criteria. Sanitized tracked HTML foundations and scenario DTO fixtures support exploratory smoke; remove redundant trials after capturing actionable contracts/regressions. Enabled Windows/Linux/macOS CI jobs cover unit, coverage, project verification, blueprint and extracted-package checks; cross-platform CI results are not inferred from local Windows execution.",
+      "text": "Each behavior change includes meaningful focused automated tests and informal public-surface smoke using disposable realistic data, plausible mistakes, recovery diagnostics and useful alternate paths. Use an available verified Python 3.11+ interpreter, run branch-covered unittest and enforce configured coverage, verify all tracked documentation foundations, and build/test extracted archives for release changes. Keep fresh host-subagent acceptance separate from offline tests; no product model API client is used. Tooling/convention changes also run Test-DeveloperTools.ps1 and Test-Blueprint.ps1. Document repeatable developer methods in AGENTS.md and docs/developer_testing.md, not installed skill user instructions or generated pages. Documentation-only work uses link/format/consistency checks. Never weaken acceptance criteria. Sanitized tracked HTML foundations and scenario DTO fixtures support exploratory smoke; remove redundant trials after capturing actionable contracts/regressions. Enabled Windows/Linux/macOS CI jobs cover Python 3.11 unit, coverage, project verification, blueprint and extracted-package checks once per enabled platform; cross-platform CI results are not inferred from local Windows execution.",
       "kind": "test-contract",
       "tags": [
         "status:accepted",
@@ -2731,7 +2731,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t37-html-surfaces",
-      "text": "Use one document-oriented boundary across direct CLI, strict NDJSON, source skill and both packages. import-html/export-html use sourcePath and destinationPath; default project, read, artifact, sample/template, backup/diff/merge/bulk-plan and change.begin/write paths identify .html files. Read-only operations never rewrite HTML; backups and initial creation do not overwrite. Existing explicitly instructed .vw.db authority remains available. Strict keepWorkingDb and direct --keep-working-db retain managed DBs only when instructed, without changing authority. Central named constants hold authority/cleanup defaults. Preserve logical project paths for artifact checking, exact review bindings and bounded public output. Remove obsolete recover-html directory recovery. The skill prefers docs-vw.html under the project root and chooses another filename only on explicit request, occupation by unrelated content, or explicitly multiple projects/databases; reuse authorized existing custom names. Check project ID, title and purpose and ask for the target only when ambiguous. File naming is a convention, not an inferred project ID. Document conversion and unpublished retry in the manual guide, not routine storage-choice questions. No public usage instruction includes development-phase IDs; Python 3.12+ remains standard-library-only.",
+      "text": "Use one document-oriented boundary across direct CLI, strict NDJSON, source skill and both packages. import-html/export-html use sourcePath and destinationPath; default project, read, artifact, sample/template, backup/diff/merge/bulk-plan and change.begin/write paths identify .html files. Read-only operations never rewrite HTML; backups and initial creation do not overwrite. Existing explicitly instructed .vw.db authority remains available. Strict keepWorkingDb and direct --keep-working-db retain managed DBs only when instructed, without changing authority. Central named constants hold authority/cleanup defaults. Preserve logical project paths for artifact checking, exact review bindings and bounded public output. Remove obsolete recover-html directory recovery. The skill prefers docs-vw.html under the project root and chooses another filename only on explicit request, occupation by unrelated content, or explicitly multiple projects/databases; reuse authorized existing custom names. Check project ID, title and purpose and ask for the target only when ambiguous. File naming is a convention, not an inferred project ID. Document conversion and unpublished retry in the manual guide, not routine storage-choice questions. No public usage instruction includes development-phase IDs; Python 3.11+ remains standard-library-only.",
       "kind": "requirement",
       "tags": [
         "area:html-storage",
