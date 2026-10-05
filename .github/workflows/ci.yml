@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       - id: policy
         env:
           VW_CI_SKIP_WINDOWS: ${{ secrets.VW_CI_SKIP_WINDOWS }}
@@ -31,19 +31,15 @@ jobs:
         run: python eng/python_ci_config.py --github-output "$GITHUB_OUTPUT"
 
   windows:
-    name: Python Windows ${{ matrix.python-version }} tests
+    name: Python Windows 3.11 tests
     needs: configure
     if: needs.configure.outputs.run_windows == 'true'
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install ".[test]"
@@ -57,19 +53,15 @@ jobs:
           .\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable (Get-Command python).Source
 
   linux:
-    name: Python Linux ${{ matrix.python-version }} tests
+    name: Python Linux 3.11 tests
     needs: configure
     if: needs.configure.outputs.run_linux == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install ".[test]"
@@ -83,19 +75,15 @@ jobs:
           ./eng/Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable (Get-Command python).Source
 
   macos:
-    name: Python macOS ${{ matrix.python-version }} tests
+    name: Python macOS 3.11 tests
     needs: configure
     if: needs.configure.outputs.run_macos == 'true'
     runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install ".[test]"
@@ -117,7 +105,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       - name: Check enabled platform jobs
         env:
           CONFIGURE_RESULT: ${{ needs.configure.result }}

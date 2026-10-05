@@ -27,7 +27,7 @@ section { margin-block: 2rem; }
   "title": "ValidatedWorld Architecture and Product Evaluation",
   "purpose": "purpose",
   "created": "2026-09-14T16:34:55.4514187+00:00",
-  "updated": "2026-10-05T01:28:45.1110380+00:00",
+  "updated": "2026-10-05T01:59:03.3490900+00:00",
   "nodes": [
     {
       "id": "ai-author-limits",
@@ -1492,7 +1492,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "python-port-ci",
-      "text": "GitHub Actions defines a Python 3.11 and 3.12 matrix for each enabled Windows, Linux, and macOS offline unit, coverage, project verification, build, and extracted-package job. Skip semantics and aggregate status remain explicit across each platform's matrix results. No paid provider job or model credential mapping is included. Local Windows passes do not establish hosted cross-platform results.",
+      "text": "GitHub Actions runs Python 3.11 once per enabled Windows, Linux, and macOS offline unit, coverage, project verification, build, and extracted-package job. There is no Python-version matrix. Configuration and aggregation helpers also use Python 3.11. Skip semantics and aggregate status remain explicit. No paid provider job or model credential mapping is included. Local Windows passes do not establish hosted cross-platform results.",
       "kind": "implementation-plan",
       "tags": [
         "area:python-port",
@@ -1612,7 +1612,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "quality-development-contract",
-      "text": "Each behavior change includes meaningful focused automated tests and informal public-surface smoke using disposable realistic data, plausible mistakes, recovery diagnostics and useful alternate paths. Use an available verified Python 3.11+ interpreter, run branch-covered unittest and enforce configured coverage, verify all tracked documentation foundations, and build/test extracted archives for release changes. Keep fresh host-subagent acceptance separate from offline tests; no product model API client is used. Tooling/convention changes also run Test-DeveloperTools.ps1 and Test-Blueprint.ps1. Document repeatable developer methods in AGENTS.md and docs/developer_testing.md, not installed skill user instructions or generated pages. Documentation-only work uses link/format/consistency checks. Never weaken acceptance criteria. Sanitized tracked HTML foundations and scenario DTO fixtures support exploratory smoke; remove redundant trials after capturing actionable contracts/regressions. Enabled Windows/Linux/macOS CI matrices cover Python 3.11 and 3.12 unit, coverage, project verification, blueprint and extracted-package checks; cross-platform CI results are not inferred from local Windows execution.",
+      "text": "Each behavior change includes meaningful focused automated tests and informal public-surface smoke using disposable realistic data, plausible mistakes, recovery diagnostics and useful alternate paths. Use an available verified Python 3.11+ interpreter, run branch-covered unittest and enforce configured coverage, verify all tracked documentation foundations, and build/test extracted archives for release changes. Keep fresh host-subagent acceptance separate from offline tests; no product model API client is used. Tooling/convention changes also run Test-DeveloperTools.ps1 and Test-Blueprint.ps1. Document repeatable developer methods in AGENTS.md and docs/developer_testing.md, not installed skill user instructions or generated pages. Documentation-only work uses link/format/consistency checks. Never weaken acceptance criteria. Sanitized tracked HTML foundations and scenario DTO fixtures support exploratory smoke; remove redundant trials after capturing actionable contracts/regressions. Enabled Windows/Linux/macOS CI jobs cover Python 3.11 unit, coverage, project verification, blueprint and extracted-package checks once per enabled platform; cross-platform CI results are not inferred from local Windows execution.",
       "kind": "test-contract",
       "tags": [
         "status:accepted",

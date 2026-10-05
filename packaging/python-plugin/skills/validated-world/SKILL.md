@@ -12,6 +12,7 @@ The workflow is English-only; Unicode graph text is preserved.
 
 ## Read and author
 
+Keep project documents outside this skill's installation directory.
 For a new project, prefer `docs-vw.html` under its project root. Choose a custom
 filename only when explicitly requested, when that name is occupied by unrelated
 content, or when the project explicitly uses multiple projects or databases.

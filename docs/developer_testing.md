@@ -76,7 +76,7 @@ in the developer environment, outside the product's runtime dependencies and
 release archives.
 
 CI runs verification, unit/coverage, blueprint and extracted-package checks on
-Python 3.11 and 3.12 for each enabled Windows, Linux and macOS job.
+Python 3.11 once per enabled Windows, Linux and macOS job.
 `VW_CI_SKIP_WINDOWS`, `VW_CI_SKIP_LINUX`
 and `VW_CI_SKIP_MACOS` control optional repository exclusions: absent/empty/false
 runs a platform, true skips it, and other values fail configuration. Report
