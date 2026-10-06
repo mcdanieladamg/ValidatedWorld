@@ -9,7 +9,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-if ([string]::IsNullOrWhiteSpace($PackagesDirectory)) { $PackagesDirectory = Join-Path $root 'artifacts/python-release/1.0.1' }
+if ([string]::IsNullOrWhiteSpace($PackagesDirectory)) { $PackagesDirectory = Join-Path $root 'artifacts/python-release/1.0.2' }
 $packages = [IO.Path]::GetFullPath($PackagesDirectory)
 $hashes = Join-Path $packages 'SHA256SUMS.txt'
 if (-not (Test-Path -LiteralPath $hashes -PathType Leaf)) { throw "Missing package hashes: $hashes" }

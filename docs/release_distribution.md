@@ -1,15 +1,13 @@
 # Installation and packages
 
-ValidatedWorld ships the same local Python engine in a standalone Agent Skill
-archive and a skills-only plugin archive. Both require Python 3.11+ and an agent
-host with project-file access, persistent processes and fresh read-only
-subagents for reviewed updates. Account access, model availability and usage
-limits are controlled by the host.
+ValidatedWorld helps your agent keep a project's design and documentation
+consistent as it grows beyond a single context window. Install it as a
+standalone Agent Skill or a plugin containing the same complete skill.
+Then ask your agent to create documentation, find relevant decisions and
+dependencies, or review and save a change.
 
-The engine has no third-party runtime dependencies and no model API key setting.
-The host supplies agents, model selection and usage billing. Review evidence is
-handled under that host's data policies. The workflow is English-only; stored
-Unicode text round-trips without translation.
+English is recommended for stored workflow guidance to help retrieval and review.
+Project text can use other languages; Unicode is preserved without translation.
 
 ## Install
 

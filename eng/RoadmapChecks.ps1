@@ -5,8 +5,23 @@ function Get-VwRoadmapErrors {
     $vwPhases = @($Nodes | Where-Object { $_.tags -ccontains 'roadmap:phase' })
     $vwCurrent = @($Nodes | Where-Object { $_.tags -ccontains 'status:current' })
     $vwStatus = @($Nodes | Where-Object { $_.tags -ccontains 'project:status' })
-    if ($vwCurrent.Count -ne 1) { "Expected exactly one status:current node; found $($vwCurrent.Count)." }
     if ($vwStatus.Count -ne 1) { "Expected exactly one project:status node; found $($vwStatus.Count)." }
+    if ($vwStatus.Count -eq 1) {
+        $vwLifecycle = @($vwStatus[0].tags | Where-Object { $_ -cmatch '^status:' })
+        if ($vwLifecycle.Count -ne 1 -or $vwLifecycle[0] -cnotmatch '^status:(planning|active|finished)$') {
+            'project:status needs exactly one planning/active/finished lifecycle state.'
+        }
+        else {
+            $vwExpectedCurrent = if ($vwLifecycle[0] -ceq 'status:active') { 1 } else { 0 }
+            if ($vwCurrent.Count -ne $vwExpectedCurrent) {
+                "Expected $vwExpectedCurrent status:current node(s) for $($vwLifecycle[0]); found $($vwCurrent.Count)."
+            }
+            if ($vwLifecycle[0] -ceq 'status:finished' -and
+                @($vwPhases | Where-Object { $_.tags -cnotcontains 'status:complete' }).Count -gt 0) {
+                'A finished roadmap must have every phase complete.'
+            }
+        }
+    }
     foreach ($vwNode in $Nodes) {
         $vwEstimates = @($vwNode.tags | Where-Object { $_ -cmatch '^estimate:' })
         if ($vwNode.tags -ccontains 'status:current') {
@@ -29,6 +44,14 @@ function Get-VwRoadmapErrors {
         else { $vwPhaseIds[$vwTags[0]] = $vwPhase.id }
     }
     $vwCurrentEdges = @($Edges | Where-Object { $_.relationship -ceq 'current-phase' })
+    if ($vwCurrent.Count -eq 0) {
+        if ($vwCurrentEdges.Count -gt 0) { 'A roadmap without a current phase must have no current-phase edge.' }
+        foreach ($vwStatusNode in $vwStatus) {
+            if (@($vwStatusNode.tags | Where-Object { $_ -cmatch '^current-phase:' }).Count -gt 0) {
+                'A roadmap without a current phase must have no current-phase tag.'
+            }
+        }
+    }
     if ($vwCurrent.Count -eq 1 -and $vwStatus.Count -eq 1) {
         $vwPhaseTags = @($vwCurrent[0].tags | Where-Object { $_ -cmatch '^phase:' })
         $vwPointers = @($vwStatus[0].tags | Where-Object { $_ -cmatch '^current-phase:' })

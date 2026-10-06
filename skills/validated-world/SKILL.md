@@ -1,6 +1,6 @@
 ---
 name: validated-world
-description: Manage connected project documentation, retrieve focused task context, and save reviewed updates in a readable local HTML file.
+description: Maintain consistent project design and documentation beyond an agent's context window. Use when creating or updating project knowledge, retrieving relevant decisions and dependencies, or reviewing the consequences of a proposed change.
 ---
 
 # ValidatedWorld
@@ -8,7 +8,9 @@ description: Manage connected project documentation, retrieve focused task conte
 Maintain a coherent graph of project facts, decisions, evidence and dependencies.
 Explicit links select consequences for review; missing links can hide stale
 claims. A successful write records a reviewed update, not proof of truth.
-The workflow is English-only; Unicode graph text is preserved.
+Recommend English for stored workflow guidance to help retrieval and review.
+English is a recommendation, not a requirement; preserve the user's language
+and Unicode project text.
 
 ## Read and author
 
