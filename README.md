@@ -2,23 +2,28 @@
 
 [![CI](https://github.com/mcdanieladamg/ValidatedWorld/actions/workflows/ci.yml/badge.svg)](https://github.com/mcdanieladamg/ValidatedWorld/actions/workflows/ci.yml)
 
-ValidatedWorld is a graph of project knowledge: facts, decisions, evidence and
-the relationships between them. It serves as project documentation and gives
-an AI agent the context and consequences it needs to keep a project consistent.
-When a decision changes, the agent follows its connections to review other
-affected parts of the project.
+ValidatedWorld helps AI agents maintain a graph of project knowledge and reason
+consistently across projects larger than their context window. It tracks decisions
+and dependencies, retrieves targeted context, and can fan out reviews to batches
+of fresh, zero-context sub-agents so proposed changes receive focused, independent
+scrutiny before they propagate through the project. The objective is graph-wide
+conceptual consistency: not an absolute guarantee, but a systematic attempt to
+detect and resolve inconsistencies throughout the connected knowledge base,
+managed by your AI agent.
 
-Use it through an **AI agent skill**. Ask the agent to understand the project or
+The graph is stored in your project as a human-friendly HTML file that you can open in a browser
+to read and explore.
+
+ValidatedWorld is available as the **ValidatedWorld** plugin and as a standalone
+**AI agent skill**. Ask the agent to understand the project or
 make a change; it retrieves relevant context, reviews the affected knowledge and
-saves the update in `docs-vw.html` or a custom project file. You can also browse
-the same graph by opening that HTML file in a browser with JavaScript enabled.
+saves the update in that HTML file.
 
 Dependency links make review possible; missing links can hide consequences.
 Review helps maintain consistency but does not prove that claims are true.
 
 See [installation and packages](docs/release_distribution.md) for downloads and
-setup. Use the skill with an agent that supplies Python 3.11+, project-file
-access, persistent processes and fresh read-only subagents for reviewed updates.
+setup.
 
 After installation, start a new agent chat in your project and ask:
 "Create a ValidatedWorld design document for this project." Then try:

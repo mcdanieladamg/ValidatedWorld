@@ -1,4 +1,4 @@
 interface:
   display_name: "ValidatedWorld"
-  short_description: "Use local semantic change control"
-  default_prompt: "Use $validated-world in English to inspect and safely update this project's connected documentation."
+  short_description: "Keep project design consistent"
+  default_prompt: "Use $validated-world to maintain this project's design and documentation, reviewing the consequences of changes before saving."

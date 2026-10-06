@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "validated-world-python",
-  "version": "1.0.1",
-  "description": "Portable local semantic change control for connected project knowledge.",
+  "version": "1.0.2",
+  "description": "Keep project design and documentation consistent beyond an agent context window.",
   "author": {"name": "Adam McDaniel", "url": "https://github.com/mcdanieladamg/ValidatedWorld"},
   "homepage": "https://github.com/mcdanieladamg/ValidatedWorld",
   "repository": "https://github.com/mcdanieladamg/ValidatedWorld",
@@ -12,8 +12,8 @@
     "com.openai": {
       "interface": {
         "displayName": "ValidatedWorld",
-        "shortDescription": "Keep project docs consistent",
-        "longDescription": "Maintain connected project documentation through your AI agent. Create a browsable docs-vw.html file, retrieve relevant facts and decisions in bounded batches, and review the consequences of proposed changes before saving. Project files stay outside the skill installation. The bundled application uses standard-library Python with no separate model API key or runtime dependencies. Requires Python 3.11 or newer, project-file access, a persistent process, and fresh read-only subagents for reviewed updates. Workflows are English-only; Unicode project text is preserved. Missing dependency links can hide consequences, and review does not prove that claims are true. Agent processing, model selection, usage charges and data handling follow your host's policies.",
+        "shortDescription": "Keep project design consistent",
+        "longDescription": "ValidatedWorld helps AI agents maintain a graph of project knowledge and reason consistently across projects larger than their context window. It tracks decisions and dependencies, retrieves targeted context, and can fan out reviews to batches of fresh, zero-context sub-agents so proposed changes receive focused, independent scrutiny before they propagate through the project. The objective is graph-wide conceptual consistency: not an absolute guarantee, but a systematic attempt to detect and resolve inconsistencies throughout the connected knowledge base, managed by your AI agent. The graph is stored in your project as a human-friendly HTML file that you can open in a browser to read and explore.",
         "developerName": "Adam McDaniel",
         "category": "Productivity",
         "capabilities": ["Maintain project documentation", "Retrieve decisions and dependencies", "Review proposed changes", "Browse a portable HTML project"],

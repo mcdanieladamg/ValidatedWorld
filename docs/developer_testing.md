@@ -3,6 +3,11 @@
 This guide is for agents and humans developing ValidatedWorld. The installed
 skill's users do not need to test generated documentation.
 
+Roadmap checks cover planning, active and finished projects. A finished roadmap
+has every phase complete, no current phase, and no current-phase tags or edges.
+The developer-tooling regressions cover valid completed roadmaps and rejection
+of unfinished phases or leftover pointers.
+
 Use an already available Python 3.11+ executable. Check `--version`; if `python`
 on PATH is older, pass the compliant executable explicitly. Do not install a
 runtime as a test workaround. From the checkout root:
@@ -17,9 +22,9 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
 & $vwPython -m coverage report --skip-covered
 .\eng\Test-DeveloperTools.ps1
 .\eng\Test-Blueprint.ps1 -PythonExecutable $vwPython
-.\eng\Build-PythonPackage.ps1 -Version 1.0.1
-.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.1 -PythonExecutable $vwPython
-.\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/1.0.1 -PythonExecutable $vwPython
+.\eng\Build-PythonPackage.ps1 -Version 1.0.2
+.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.2 -PythonExecutable $vwPython
+.\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/1.0.2 -PythonExecutable $vwPython
 ```
 
 The build deliberately refuses an existing output directory. Inspect an old
