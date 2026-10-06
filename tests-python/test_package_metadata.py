@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import tomllib
 import unittest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
@@ -10,6 +11,15 @@ from eng.verify_plugin_package import verify
 
 
 class PackageMetadataTests(unittest.TestCase):
+    def test_release_source_versions_agree(self):
+        from validated_world import __version__
+        source = Path(__file__).parents[1]
+        metadata = tomllib.loads((source / "pyproject.toml").read_text(encoding="utf-8"))
+        self.assertEqual(metadata["project"]["version"], __version__)
+        for relative in ("plugin.json", ".codex-plugin/plugin.json"):
+            manifest = json.loads((source / "packaging/python-plugin" / relative).read_text(encoding="utf-8"))
+            self.assertEqual(manifest["version"], __version__)
+
     def setUp(self):
         self.trial = tempfile.TemporaryDirectory(prefix="vw-listing-test-")
         self.addCleanup(self.trial.cleanup)

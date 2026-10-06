@@ -32,8 +32,20 @@ JSON and do not become a second authority. The viewer uses DOM construction and
 text nodes rather than interpreting graph values as markup. The document's
 content policy permits only the exact inline viewer by SHA-256, blocks external
 resources and allows the small inline stylesheet. Browser policies may still
-block JavaScript; browsing requires its execution. This pre-release supports one current
-representation without a folder reader or format upgrade path.
+block JavaScript; browsing requires its execution.
+
+## Compatibility
+
+Version 1.0.0 establishes `validated-world-document-2` as the supported project
+document format. Later 1.x releases must continue to read and update valid 1.x
+documents while preserving graph meaning, IDs and typed values. Viewer changes
+may regenerate presentation without changing this data contract. An incompatible
+document or explicit DB-authority schema change requires a new major application
+version and documented conversion instructions; it must not silently reinterpret
+existing projects. The document format marker and viewer version are independent
+of the application version. Version 1.0.0 includes no legacy reader or automatic
+format upgrade, and does not promise compatibility with earlier development
+formats.
 
 Export stages and verifies one sibling file before atomically replacing the
 selected `.html` destination. Neighbors are untouched. New projects and backups
