@@ -2,11 +2,9 @@
 
 ValidatedWorld ships the same local Python engine in a standalone Agent Skill
 archive and a skills-only plugin archive. Both require Python 3.11+ and an agent
-host that can supply a fresh read-only subagent for reviewed updates. Codex
-desktop on Windows is the supported host for 1.0.0. Installation and use were
-reported successful on separate computers with ChatGPT Plus and Free accounts.
-Other hosts and operating systems require their own acceptance. Account access,
-model availability and usage limits are controlled by the host.
+host with project-file access, persistent processes and fresh read-only
+subagents for reviewed updates. Account access, model availability and usage
+limits are controlled by the host.
 
 The engine has no third-party runtime dependencies and no model API key setting.
 The host supplies agents, model selection and usage billing. Review evidence is

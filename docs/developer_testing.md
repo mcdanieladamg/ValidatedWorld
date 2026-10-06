@@ -17,9 +17,9 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
 & $vwPython -m coverage report --skip-covered
 .\eng\Test-DeveloperTools.ps1
 .\eng\Test-Blueprint.ps1 -PythonExecutable $vwPython
-.\eng\Build-PythonPackage.ps1 -Version 1.0.0
-.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.0 -PythonExecutable $vwPython
-.\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/1.0.0 -PythonExecutable $vwPython
+.\eng\Build-PythonPackage.ps1 -Version 1.0.1
+.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.1 -PythonExecutable $vwPython
+.\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/1.0.1 -PythonExecutable $vwPython
 ```
 
 The build deliberately refuses an existing output directory. Inspect an old
