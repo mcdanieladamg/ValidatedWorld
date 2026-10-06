@@ -1,8 +1,9 @@
-# Host acceptance for 1.0.0
+# Release verification
 
-The initial support target is Codex desktop on Windows with Python 3.11+,
-project-file access, persistent processes and fresh read-only subagents for
-reviewed updates. The same bundled standard-library engine ships in the
+The skill requires Python 3.11+, project-file access, persistent processes and
+fresh read-only subagents for reviewed updates. Compatibility is described by
+these capabilities rather than an operating-system or host allowlist.
+The same bundled standard-library engine ships in the
 standalone skill and skills-only plugin.
 
 | Evidence | Host | Result |
@@ -34,7 +35,12 @@ contracts, document publication/recovery and cleanup. Synthetic approvals in
 offline tests do not replace a real fresh host reviewer. Optional worker and
 recovery scenarios were not individually reported on both external computers.
 
-This baseline does not establish macOS, Linux, Microsoft Copilot, other hosts,
-every model or permanent Free-plan availability. Platform CI results and public
-directory approval are separate evidence. Keep support claims scoped to the
-tested host and record new host acceptance before broadening them.
+Agent hosts control model availability and account features. Use GitHub Issues
+to report compatibility problems with a small sanitized example. Platform CI
+results and public-directory approval are separate evidence.
+
+Version 1.0.1 changes compatibility wording and version metadata. Both rebuilt
+archives passed the isolated Python 3.11 package workflows, live response-log
+author/review/save sequence, Windows hard-link restriction and temporary-path
+alias checks. All five package-metadata tests passed. Archive hashes, staged
+source and packaged engine bytes were checked against the current checkout.

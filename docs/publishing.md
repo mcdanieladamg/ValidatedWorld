@@ -3,10 +3,9 @@
 This guide covers release builds, GitHub publication and public-directory
 submission. GitHub availability and OpenAI directory approval are independent;
 directory approval is not a prerequisite for publishing a GitHub release.
-Version 1.0.0 establishes the initial Windows Codex support target and the
-document compatibility contract in
+Version 1.0.0 establishes the document compatibility contract in
 [document format](document_format.md#compatibility). Use the
-[release notes](releases/1.0.0.md) as the GitHub release description;
+[release notes](releases/1.0.1.md) as the GitHub release description;
 [host acceptance](host_acceptance.md) records the scope and limits of the
 external-machine reports.
 
@@ -30,12 +29,12 @@ Pick an unused version/output directory; builds do not
 overwrite existing output.
 
 ```powershell
-.\eng\Build-PythonPackage.ps1 -Version 1.0.0
-.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.0 -PythonExecutable .\.venv\Scripts\python.exe
+.\eng\Build-PythonPackage.ps1 -Version 1.0.1
+.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.1 -PythonExecutable .\.venv\Scripts\python.exe
 ```
 
 The ZIPs and `SHA256SUMS.txt` are regenerable outputs under
-`artifacts/python-release/1.0.0`. The archives can be built and tested before the
+`artifacts/python-release/1.0.1`. The archives can be built and tested before the
 human commits the release preparation. Before publication, merge exactly those
 reviewed sources and target that commit with the release tag. If packaged sources
 change after testing, build into a fresh output directory and test the new bytes.
@@ -59,9 +58,8 @@ findings rather than real project data. A host without persistent process access
 or fresh read-only reviewers cannot provide ordinary reviewed writes.
 
 Record actual client/OS/version results and distinguish maintainer reports from
-independent measurements. Codex desktop on Windows is the initial supported host;
-other clients and operating systems need their own acceptance. Offline
-Windows checks do not establish Linux, macOS or every ChatGPT surface. Inspect
+independent measurements. Describe host capability requirements in public
+documentation and use concrete compatibility reports to guide fixes. Inspect
 enabled CI results separately. Do not mark public release work complete before
 the remaining publication and directory conditions are met.
 
@@ -71,7 +69,7 @@ the remaining publication and directory conditions are met.
    policy URLs target the `main` branch's privacy, terms and support documents;
    confirm those exact pages are publicly accessible after publication.
 2. Draft a GitHub release targeting the tested commit and a matching tag, such
-   as `v1.0.0`. Attach the generated plugin ZIP, standalone skill ZIP and checksum
+   as `v1.0.1`. Attach the generated plugin ZIP, standalone skill ZIP and checksum
    file. Use concise release notes describing requirements and tested clients.
    The automatic repository source ZIP is not the built installable skill.
 3. Download and check the attached files before publishing the release. Keep the

@@ -16,8 +16,9 @@ the same graph by opening that HTML file in a browser with JavaScript enabled.
 Dependency links make review possible; missing links can hide consequences.
 Review helps maintain consistency but does not prove that claims are true.
 
-See [installation and supported hosts](docs/release_distribution.md) for available
-packages and setup. Version 1.0.0 supports Codex desktop on Windows.
+See [installation and packages](docs/release_distribution.md) for downloads and
+setup. Use the skill with an agent that supplies Python 3.11+, project-file
+access, persistent processes and fresh read-only subagents for reviewed updates.
 
 After installation, start a new agent chat in your project and ask:
 "Create a ValidatedWorld design document for this project." Then try:
