@@ -3,7 +3,10 @@
 ValidatedWorld ships the same local Python engine in a standalone Agent Skill
 archive and a skills-only plugin archive. Both require Python 3.11+ and an agent
 host that can supply a fresh read-only subagent for reviewed updates. Codex
-Desktop is the exercised host; other hosts require their own acceptance.
+desktop on Windows is the supported host for 1.0.0. Installation and use were
+reported successful on separate computers with ChatGPT Plus and Free accounts.
+Other hosts and operating systems require their own acceptance. Account access,
+model availability and usage limits are controlled by the host.
 
 The engine has no third-party runtime dependencies and no model API key setting.
 The host supplies agents, model selection and usage billing. Review evidence is
@@ -12,9 +15,10 @@ Unicode text round-trips without translation.
 
 ## Install
 
-Install the standalone skill through your host's skill mechanism. For the Codex
-plugin, use its marketplace installation mechanism. Public catalog distribution
-is pending; the repository currently builds local candidate archives.
+Download the standalone skill ZIP or plugin ZIP from the project's
+[GitHub releases](https://github.com/mcdanieladamg/ValidatedWorld/releases).
+Install the standalone skill through your host's skill mechanism. If installing
+from a Codex marketplace listing, use that listing's installation mechanism.
 
 The standalone ZIP contains `SKILL.md` at its root. Extract it into a folder named
 `validated-world` in the host's skill location (for current Codex local skills,
@@ -51,6 +55,10 @@ metadata; `importlib.metadata.version("validated-world")` can raise
 `PackageNotFoundError` even when the skill works correctly.
 
 ## Use and update
+
+Later 1.x releases preserve compatibility with valid 1.x project documents.
+Incompatible document changes require a new major version and documented
+conversion instructions. See [document compatibility](document_format.md#compatibility).
 
 Ask the agent to maintain a project's connected knowledge, retrieve task context
 or update decisions and their consequences. The

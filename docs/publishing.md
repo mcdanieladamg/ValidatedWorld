@@ -1,9 +1,14 @@
 # Publishing a release
 
-The source and generated archives are local preparation. GitHub release
-publication, verified publisher identity and public-directory approval are
-separate human steps. Public distribution and the first supported compatibility
-baseline remain pending.
+This guide covers release builds, GitHub publication and public-directory
+submission. GitHub availability and OpenAI directory approval are independent;
+directory approval is not a prerequisite for publishing a GitHub release.
+Version 1.0.0 establishes the initial Windows Codex support target and the
+document compatibility contract in
+[document format](document_format.md#compatibility). Use the
+[release notes](releases/1.0.0.md) as the GitHub release description;
+[host acceptance](host_acceptance.md) records the scope and limits of the
+external-machine reports.
 
 ## Local preparation
 
@@ -20,20 +25,21 @@ settings take precedence rather than merging with the fallback. Branding is
 authored SVG under `packaging/python-plugin/assets`, covered by the project MIT
 license. Icons have no external resources, scripts or font dependencies.
 
-Build a fresh development candidate and verify it, using an available Python
-3.11+ interpreter. Pick an unused version/output directory; builds do not
+Build and verify the release, using an available Python 3.11+ interpreter.
+Pick an unused version/output directory; builds do not
 overwrite existing output.
 
 ```powershell
-.\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev.1
-.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev.1 -PythonExecutable .\.venv\Scripts\python.exe
+.\eng\Build-PythonPackage.ps1 -Version 1.0.0
+.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.0 -PythonExecutable .\.venv\Scripts\python.exe
 ```
 
-The ZIPs and `SHA256SUMS.txt` are regenerable outputs. Candidate versions are not
-supported public releases. Before a final build, choose the release version and
-compatibility promise, review the source changes, and have the human commit the
-reviewed sources. Build the final archives from that exact commit with an
-explicit version such as `0.3.0`, then test those same bytes.
+The ZIPs and `SHA256SUMS.txt` are regenerable outputs under
+`artifacts/python-release/1.0.0`. The archives can be built and tested before the
+human commits the release preparation. Before publication, merge exactly those
+reviewed sources and target that commit with the release tag. If packaged sources
+change after testing, build into a fresh output directory and test the new bytes.
+Do not attach an archive whose sources differ from the tagged release.
 
 ## Clean-client acceptance
 
@@ -52,11 +58,12 @@ Use the methods in developer verification and preserve sanitized reusable
 findings rather than real project data. A host without persistent process access
 or fresh read-only reviewers cannot provide ordinary reviewed writes.
 
-Record actual client/OS/version results. Codex Desktop is the exercised host;
-other clients and clean-machine installation need their own acceptance. Offline
+Record actual client/OS/version results and distinguish maintainer reports from
+independent measurements. Codex desktop on Windows is the initial supported host;
+other clients and operating systems need their own acceptance. Offline
 Windows checks do not establish Linux, macOS or every ChatGPT surface. Inspect
-enabled CI results separately. Do not establish a supported public compatibility
-baseline or mark public release work complete before acceptance is resolved.
+enabled CI results separately. Do not mark public release work complete before
+the remaining publication and directory conditions are met.
 
 ## Human publication
 
@@ -64,7 +71,7 @@ baseline or mark public release work complete before acceptance is resolved.
    policy URLs target the `main` branch's privacy, terms and support documents;
    confirm those exact pages are publicly accessible after publication.
 2. Draft a GitHub release targeting the tested commit and a matching tag, such
-   as `v0.3.0`. Attach the generated plugin ZIP, standalone skill ZIP and checksum
+   as `v1.0.0`. Attach the generated plugin ZIP, standalone skill ZIP and checksum
    file. Use concise release notes describing requirements and tested clients.
    The automatic repository source ZIP is not the built installable skill.
 3. Download and check the attached files before publishing the release. Keep the

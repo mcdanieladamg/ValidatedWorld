@@ -9,7 +9,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-if ([string]::IsNullOrWhiteSpace($PackagesDirectory)) { $PackagesDirectory = Join-Path $root 'artifacts/python-release/0.3.0-dev' }
+if ([string]::IsNullOrWhiteSpace($PackagesDirectory)) { $PackagesDirectory = Join-Path $root 'artifacts/python-release/1.0.0' }
 $packages = [IO.Path]::GetFullPath($PackagesDirectory)
 $hashes = Join-Path $packages 'SHA256SUMS.txt'
 if (-not (Test-Path -LiteralPath $hashes -PathType Leaf)) { throw "Missing package hashes: $hashes" }
@@ -57,9 +57,16 @@ try {
             $developmentNumber = if ([string]::IsNullOrWhiteSpace($Matches[2])) { '0' } else { $Matches[2] }
             $expectedVersion = "$($Matches[1]).dev$developmentNumber"
         }
+        elseif ($archive.Name -match '-([0-9]+\.[0-9]+\.[0-9]+)\.zip$') {
+            $expectedVersion = $Matches[1]
+        }
+        if ($null -ne $expectedVersion) {
+            if ($metadata -notmatch ('(?m)^version = "' + [regex]::Escape($expectedVersion) + '"\r?$')) { throw "Python metadata version differs from archive: $($archive.Name)" }
+            if ($archive.Name -like '*plugin*' -and $portable.version -ne ($archive.BaseName -replace '^validated-world-python-plugin-', '')) { throw "Plugin manifest version differs from archive: $($archive.Name)" }
+        }
         $reportedVersion = & $python -m validated_world --version
         if ($LASTEXITCODE -ne 0) { throw "Extracted Python engine failed smoke launch: $($archive.Name)" }
-        if ($null -ne $expectedVersion -and $reportedVersion -notmatch [regex]::Escape($expectedVersion)) { throw "Extracted Python engine version differs from archive: $($archive.Name) reports $reportedVersion" }
+        if ($null -ne $expectedVersion -and $reportedVersion -ne "ValidatedWorld.Cli $expectedVersion") { throw "Extracted Python engine version differs from archive: $($archive.Name) reports $reportedVersion" }
         $launcher = Get-Item -LiteralPath (Join-Path $skillDirectory 'scripts/validated_world.py')
         foreach ($reference in @('packet-review.md', 'question-worker.md', 'graph-authoring.md', 'command-workflow.md', 'persistent-io.md')) {
             $referencePath = Join-Path (Split-Path -Parent (Split-Path -Parent $launcher.FullName)) "references/$reference"
@@ -67,7 +74,7 @@ try {
         }
         $launcherVersion = & $python $launcher.FullName --version
         if ($LASTEXITCODE -ne 0) { throw "Extracted skill launcher failed smoke launch: $($archive.Name)" }
-        if ($null -ne $expectedVersion -and $launcherVersion -notmatch [regex]::Escape($expectedVersion)) { throw "Extracted skill launcher version differs from archive: $($archive.Name) reports $launcherVersion" }
+        if ($null -ne $expectedVersion -and $launcherVersion -ne "ValidatedWorld.Cli $expectedVersion") { throw "Extracted skill launcher version differs from archive: $($archive.Name) reports $launcherVersion" }
         # Model a folder-only installer, away from the archive, checkout and
         # PYTHONPATH. -I excludes user-site packages and Python env settings;
         # -S excludes site initialization and pip-installed distribution metadata.

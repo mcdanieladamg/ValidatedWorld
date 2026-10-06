@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-    [string] $Version = '0.3.0-dev.7',
+    [string] $Version = '1.0.0',
     [string] $CodexExecutable
 )
 

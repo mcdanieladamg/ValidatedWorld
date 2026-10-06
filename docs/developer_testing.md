@@ -17,9 +17,9 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
 & $vwPython -m coverage report --skip-covered
 .\eng\Test-DeveloperTools.ps1
 .\eng\Test-Blueprint.ps1 -PythonExecutable $vwPython
-.\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
-.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable $vwPython
-.\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable $vwPython
+.\eng\Build-PythonPackage.ps1 -Version 1.0.0
+.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.0 -PythonExecutable $vwPython
+.\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/1.0.0 -PythonExecutable $vwPython
 ```
 
 The build deliberately refuses an existing output directory. Inspect an old
@@ -75,6 +75,12 @@ regression on each enabled platform.
 The plugin check also enforces public listing text limits, portable/fallback
 metadata parity, included onboarding and policy files, and safe square SVG
 branding. It is local package validation, not a public-directory approval check.
+Stable and development archive versions must match Python metadata, both plugin
+manifests and the exact engine/launcher version output. To probe the stable
+version guard, copy a release ZIP to a unique temporary directory, alter its
+bundled version metadata, recompute that trial archive's checksum, and confirm
+the package check rejects it before any project mutation. Keep the real release
+archives unchanged.
 See [publishing](publishing.md) for the remaining clean-client and human steps.
 Offline commands make no product model API calls. Follow the repository's
 bounded repair/retry rules; do not rerun unchanged failures hoping for success.

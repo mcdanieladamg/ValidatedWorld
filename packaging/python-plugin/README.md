@@ -5,7 +5,8 @@ and review the consequences of changes. The bundled Python engine saves the
 graph as browsable HTML; open the project's HTML file to read it.
 
 These source packages require Python 3.11+ and a host that can provide fresh
-read-only subagents for reviewed updates. Codex Desktop is the exercised host.
+read-only subagents for reviewed updates. The supported host for 1.0.0 is
+Codex desktop on Windows, exercised with ChatGPT Plus and Free accounts.
 The engine has no third-party runtime dependencies or product API key setting.
 
 Project documentation belongs outside the package or installation directory.

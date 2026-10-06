@@ -17,7 +17,7 @@ Dependency links make review possible; missing links can hide consequences.
 Review helps maintain consistency but does not prove that claims are true.
 
 See [installation and supported hosts](docs/release_distribution.md) for available
-packages and setup. Public catalog distribution is pending.
+packages and setup. Version 1.0.0 supports Codex desktop on Windows.
 
 After installation, start a new agent chat in your project and ask:
 "Create a ValidatedWorld design document for this project." Then try:

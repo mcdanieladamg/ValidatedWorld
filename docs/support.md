@@ -11,6 +11,10 @@ data. Include only the relevant sanitized error message. A minimal example is
 more useful than a complete chat transcript or project graph.
 
 The publisher offers community support without a guaranteed response time.
+Version 1.0.0 supports the agent-driven skill workflow in Codex desktop on
+Windows. Plus and Free account installations have user-reported successful use;
+the host controls feature availability and usage limits. Other agent hosts and
+operating systems are not yet accepted support targets.
 Your agent host handles account, billing, permission and platform problems;
 ValidatedWorld has no publisher account or separate model API key.
 
