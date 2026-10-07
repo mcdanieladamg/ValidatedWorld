@@ -14,8 +14,8 @@ class SkillWorkflowHarnessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve() / "vw-workflow-examples-failure"
             root.mkdir()
-            log_directory = root / "vw-ndjson-fixture"
-            log_directory.mkdir()
+            log_directory = root / "tmp" / "validated-world" / "vw-ndjson-fixture"
+            log_directory.mkdir(parents=True)
             log = log_directory / "responses.jsonl"
             log.write_bytes(b"")
             workspace = root / "vw-session-fixture"

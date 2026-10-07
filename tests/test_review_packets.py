@@ -152,6 +152,25 @@ class PacketReviewTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.app.review_export(self.session.reference(), self.fp, "../../unsafe", str(target), 2)
         self.assertFalse(target.exists())
 
+    def test_default_export_uses_shared_project_parent_and_cleans_only_owned_evidence(self):
+        pid = next(p for p in self.session.packet_review.ownership if p != 'synthesis')
+        payload = {'reference': self.session.reference(), 'planFingerprint': self.fp, 'packetId': pid}
+        _validate_payload('change.review-export', payload)
+        report = self.app.review_export(self.session.reference(), self.fp, pid, limit=2)
+        target = Path(report['manifestPath']).parent
+        shared = self.root / 'tmp' / 'validated-world'
+        self.assertEqual(target.parent, shared)
+        self.assertTrue(target.name.startswith('vw-review-'))
+        neighbor = shared / 'human.txt'
+        neighbor.write_bytes(b'preserve')
+        manifest = json.loads(Path(report['manifestPath']).read_text(encoding='utf-8'))
+        self.assertGreater(len(manifest['pages']), 1)
+        for page in manifest['pages']:
+            self.assertEqual(__import__('hashlib').sha256(Path(page['path']).read_bytes()).hexdigest(), page['sha256'])
+        self.app.close()
+        self.assertFalse(target.exists())
+        self.assertEqual(list(shared.iterdir()), [neighbor])
+
     def test_export_rejects_parent_traversal_and_linked_ancestors(self):
         pid = next(p for p in self.session.packet_review.ownership if p != "synthesis")
         target = self.root / "evidence"

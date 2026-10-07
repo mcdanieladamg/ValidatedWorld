@@ -60,7 +60,7 @@ so future agents can retrieve it without the current conversation.
 Read [persistent input/output](references/persistent-io.md) when launching the
 session. For terminal tools, run `scripts/ndjson_log.py` with the execution
 tool's working directory set to the identified, authorized project folder.
-It creates its own temporary subdirectory there by default, keeps stdin live
+It creates its own subdirectory under `tmp/validated-world/` there by default, keeps stdin live
 and flushes responses directly to a UTF-8 log. Check live `host.help` responses
 at the announced path before project changes. No special startup flag is needed.
 Read complete new log lines between requests; do not close the process to make

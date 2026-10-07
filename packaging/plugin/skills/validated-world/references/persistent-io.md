@@ -14,7 +14,8 @@ It adds no network service, model client, durable draft or review bypass.
 
 Start a live interactive terminal session with the selected interpreter and
 set the execution tool's working directory to the identified, authorized
-project folder. The helper creates a unique `vw-ndjson-*` directory there by
+project folder. The helper creates a unique `vw-ndjson-*` directory under
+`tmp/validated-world/` there by
 default, in the same process that opens its log. No log-path argument or
 separate directory-creation command is needed:
 
@@ -72,6 +73,8 @@ send `host.exit` with `payload: {}`, and confirm process exit code zero. The
 helper automatically removes its owned log and directory on normal exit or EOF,
 including after a structured request error. Its final exit response may be
 removed before a separate read; use process status to confirm shutdown.
+The shared `tmp/validated-world/` parent remains. Database workspaces and default
+review-evidence exports are also grouped there; cleanup never sweeps that parent.
 
 Use `--keep-log` only when diagnostics are explicitly needed after shutdown.
 Caller-supplied logs are also retained. Abnormal exits preserve diagnostics;

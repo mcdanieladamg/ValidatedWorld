@@ -473,9 +473,15 @@ class Application:
         return {"reference": session.reference(), "supplementalFingerprint": fingerprint(evidence),
                 "entityIds": [v["entityId"] for v in evidence], "requiresNewPlan": True}
 
-    def review_export(self, reference, plan_fingerprint, packet_id, destination, limit=100):
+    def review_export(self, reference, plan_fingerprint, packet_id, destination=None, limit=100):
         from .review_packets import export_packet
         review = self.packet_review(reference, plan_fingerprint)
+        if destination is None:
+            from .path_safety import project_temp_root
+            from uuid import uuid4
+            session = self.locate(reference)
+            parent = project_temp_root(Path(session.base.path).absolute().parent)
+            destination = parent / ("vw-review-" + uuid4().hex)
         result = export_packet(review, packet_id, destination, limit)
         path = Path(result["manifestPath"]).parent
         stat = path.stat()

@@ -62,7 +62,10 @@ final response. Tests cover error followed by graceful EOF, requested diagnostic
 retention, abnormal exit and preservation of unexpected neighboring files.
 HTML workflow tests deny every OS-temp SQLite allocation while exercising
 initialization, reads, SQL export, backup, reviewed publication and discard.
-Each allocation must use the selected document's parent. A denied selected
+Each allocation must use `tmp/validated-world/` under the selected document's
+parent. The shared parent remains empty after successful managed completion;
+other sessions and unknown files must survive cleanup. Linked temporary parents
+and file collisions must be rejected without fallback or publication. A denied selected
 parent must fail with its path, without a fallback or an HTML publication.
 Windows regressions also deny hard-link creation across database initialization,
 database backup, HTML creation/backup, reads, SQL export and reviewed updates.

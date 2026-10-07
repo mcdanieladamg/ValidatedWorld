@@ -8,9 +8,11 @@ the exact current `reference`; save new references after mutations.
    manifest: each `ownedOrdinal` belongs to exactly one `packetId`. Save the
    `planFingerprint`. Initial packets follow top-level scopes; global evidence
    belongs to `synthesis`. Repeated shared context has explicit labels.
-2. `change.review-export` takes `planFingerprint`, `packetId`, absolute
-   `destinationPath` (nonexistent directory under an authorized existing parent),
-   and optional page `limit`. It returns a compact `manifestPath`, binding and
+2. `change.review-export` takes `planFingerprint`, `packetId`, and optional page
+   `limit`. Omit `destinationPath` for a unique `vw-review-*` directory under
+   `tmp/validated-world/` in the selected project file's parent. An explicit
+   absolute `destinationPath` remains supported for a nonexistent directory
+   under an authorized existing parent. It returns a compact `manifestPath`, binding and
    page count. Paged `change.review-packet` supplies evidence directly if needed.
 3. Launch a fresh read-only worker with this reference, intent, launcher, manifest
    path and exact binding. It verifies manifest page hashes and reads every page:

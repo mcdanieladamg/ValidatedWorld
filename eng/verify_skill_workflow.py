@@ -38,10 +38,20 @@ def trial_directory():
         else:
             # Inspect the uniquely allocated trial before recursive cleanup.
             entries = list(root.iterdir())
-            log_directories = [item for item in entries if item.name.startswith("vw-ndjson-")]
+            shared = root / "tmp" / "validated-world"
+            if (root / 'tmp').exists():
+                for directory in (root / 'tmp', shared):
+                    if (directory.is_symlink() or not directory.is_dir()
+                            or directory.resolve() != directory
+                            or getattr(directory.lstat(), 'st_reparse_tag', None) == 0xA0000003):
+                        raise AssertionError(f"Refusing unexpected temporary parent cleanup: {directory}")
+                if list((root / 'tmp').iterdir()) != [shared]:
+                    raise AssertionError(f"Refusing unexpected temporary parent contents: {root / 'tmp'}")
+            log_directories = list(shared.iterdir()) if shared.exists() else []
             for directory in log_directories:
-                if (directory.is_symlink() or not directory.is_dir()
-                        or directory.resolve().parent != root
+                if (not directory.name.startswith('vw-ndjson-')
+                        or directory.is_symlink() or not directory.is_dir()
+                        or directory.resolve().parent != shared
                         or any(item.name != "responses.jsonl" or item.is_symlink()
                                or not item.is_file() or item.resolve().parent != directory.resolve()
                                for item in directory.iterdir())):
@@ -50,7 +60,7 @@ def trial_directory():
                     or not root.name.startswith("vw-workflow-examples-")
                     or any(item.name not in {"docs-vw.html", ".docs-vw.html.vw-lock", "responses.jsonl"}
                            or item.is_symlink() or not item.is_file()
-                           or item.resolve().parent != root for item in entries if item not in log_directories)):
+                           or item.resolve().parent != root for item in entries if item.name != 'tmp')):
                 raise AssertionError(f"Refusing unexpected trial cleanup: {root}")
             shutil.rmtree(root)
 
@@ -147,7 +157,7 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                 if not readiness.startswith(prefix):
                     raise AssertionError(f"Log host did not start: {readiness}")
                 response_log = Path(readiness.removeprefix(prefix).rstrip("\n"))
-                if (response_log.parent.parent != trial["path"] or response_log.name != "responses.jsonl"
+                if (response_log.parent.parent != trial["path"] / 'tmp' / 'validated-world' or response_log.name != "responses.jsonl"
                         or not response_log.parent.name.startswith("vw-ndjson-")):
                     raise AssertionError(f"Unexpected log allocation: {response_log}")
             for command in ("host.help", "project.init", "project.verify", "project.status",
@@ -210,6 +220,8 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                 raise AssertionError("Example left its owned response directory")
             if any(document.parent.glob("vw-*-*")):
                 raise AssertionError("Example left a temporary workspace")
+            if list((document.parent / 'tmp' / 'validated-world').iterdir()):
+                raise AssertionError("Example left a temporary workspace in the shared parent")
             if list(document.parent.glob("*.vw-lock")) or list(document.parent.glob("*.vw.db")):
                 raise AssertionError("Example left a working DB or lock")
         finally:

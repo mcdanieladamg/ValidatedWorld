@@ -12,6 +12,17 @@ import sys
 import tempfile
 
 
+def _project_temp_root(project_folder):
+    # Locate the same bundled source as the launcher, including under -I -S.
+    for parent in Path(__file__).resolve().parents:
+        source = parent / "src"
+        if (source / "validated_world" / "__main__.py").is_file():
+            sys.path.insert(0, str(source))
+            from validated_world.path_safety import project_temp_root
+            return project_temp_root(project_folder)
+    raise ValueError("bundled ValidatedWorld source was not found")
+
+
 def _remove_log(directory, response_log, identity):
     if directory.resolve() != directory or response_log.is_symlink():
         raise ValueError("owned log path changed")
@@ -42,8 +53,10 @@ def main() -> None:
         if not root.is_absolute():
             parser.error("temp-root must be an absolute path")
         try:
+            if not arguments.temp_root:
+                root = _project_temp_root(root)
             directory = Path(tempfile.mkdtemp(prefix="vw-ndjson-", dir=root)).resolve()
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             parser.error(f"cannot create temporary response directory: {exc}")
         response_log = directory / "responses.jsonl"
     try:

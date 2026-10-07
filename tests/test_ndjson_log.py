@@ -32,7 +32,7 @@ class NdjsonLogTests(unittest.TestCase):
                 readiness = process.stderr.readline()
                 self.assertTrue(readiness.startswith("NDJSON ready; responses: "), readiness)
                 log = Path(readiness.removeprefix("NDJSON ready; responses: ").rstrip("\n"))
-                self.assertEqual(log.parent.parent, project_folder)
+                self.assertEqual(log.parent.parent, project_folder / 'tmp' / 'validated-world')
                 process.stdin.write('{"version":1,"command":"host.help","payload":{}}\n')
                 process.stdin.flush()
                 # A separate interpreter must see the response before the host exits.
@@ -56,7 +56,8 @@ for _ in range(200):
                 process.stdin.close()
                 self.assertEqual(process.wait(timeout=10), 0)
                 self.assertFalse(log.parent.exists())
-                self.assertEqual(list(project_folder.iterdir()), [])
+                self.assertEqual(list(project_folder.iterdir()), [project_folder / 'tmp'])
+                self.assertEqual(list(log.parent.parent.iterdir()), [])
                 self.assertEqual(process.stderr.read(), '')
                 self.assertEqual(list(launch_temp.iterdir()), [])
             finally:
@@ -101,7 +102,7 @@ for _ in range(200):
                                     capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(result.stderr.startswith('NDJSON ready; responses: '))
-            self.assertEqual(list(Path(temporary).iterdir()), [])
+            self.assertEqual(list((Path(temporary) / 'tmp' / 'validated-world').iterdir()), [])
 
     def test_requested_diagnostics_are_retained_after_clean_exit(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -124,7 +125,7 @@ for _ in range(200):
                 diagnostics = io.StringIO()
 
                 def launch(*args, **kwargs):
-                    directory, = root.iterdir()
+                    directory, = (root / 'tmp' / 'validated-world').iterdir()
                     if abnormal:
                         raise SystemExit(1)
                     (directory / 'human.txt').write_text('preserve me', encoding='utf-8')
@@ -138,7 +139,7 @@ for _ in range(200):
                         self.assertEqual(raised.exception.code, 1)
                     else:
                         helper.main()
-                directory, = root.iterdir()
+                directory, = (root / 'tmp' / 'validated-world').iterdir()
                 self.assertTrue((directory / 'responses.jsonl').exists())
                 if abnormal:
                     self.assertIn(f'Response log retained: {directory}', diagnostics.getvalue())
@@ -153,6 +154,7 @@ for _ in range(200):
         spec.loader.exec_module(helper)
         diagnostics = io.StringIO()
         with patch.object(sys, "argv", [str(HELPER)]), patch.object(sys, "stderr", diagnostics), \
+                patch.object(helper, "_project_temp_root", return_value=Path.cwd() / 'tmp' / 'validated-world'), \
                 patch.object(helper.tempfile, "mkdtemp", side_effect=PermissionError("fixture root denied")) as allocate, \
                 patch.object(helper.runpy, "run_path") as launch:
             with self.assertRaises(SystemExit) as raised:
@@ -160,7 +162,7 @@ for _ in range(200):
         self.assertEqual(raised.exception.code, 2)
         self.assertIn("fixture root denied", diagnostics.getvalue())
         self.assertNotIn("NDJSON ready", diagnostics.getvalue())
-        allocate.assert_called_once_with(prefix="vw-ndjson-", dir=Path.cwd())
+        allocate.assert_called_once_with(prefix="vw-ndjson-", dir=Path.cwd() / 'tmp' / 'validated-world')
         launch.assert_not_called()
 
     def test_explicit_log_with_missing_parent_reports_path_without_starting_host(self):

@@ -302,7 +302,7 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "change.review-packet": ({"reference", "planFingerprint", "packetId"}, {"limit", "cursor"}),
         "change.review-context": ({"reference", "entityIds"}, set()),
         "change.review-result": ({"reference", "binding", "result"}, set()),
-        "change.review-export": ({"reference", "planFingerprint", "packetId", "destinationPath"}, {"limit"}),
+        "change.review-export": ({"reference", "planFingerprint", "packetId"}, {"destinationPath", "limit"}),
         "change.review-cleanup": ({"reference"}, set()),
         "change.review": ({"reference", "dispositions", "presentedContextNodeIds"}, {"includeOperations", "includeProposedGraph"}),
         "change.validate": ({"reference"}, {"includeOperations", "includeProposedGraph"}),
@@ -446,7 +446,7 @@ def ndjson_loop(inp, out, err) -> int:
             elif command == "change.review-result":
                 value = app.review_result(payload["reference"], payload["binding"], payload["result"])
             elif command == "change.review-export":
-                value = app.review_export(payload["reference"], payload["planFingerprint"], payload["packetId"], payload["destinationPath"], payload.get("limit", 100))
+                value = app.review_export(payload["reference"], payload["planFingerprint"], payload["packetId"], payload.get("destinationPath"), payload.get("limit", 100))
             elif command == "change.review-cleanup":
                 app.session(payload["reference"])
                 value = app.cleanup_review_exports(payload["reference"]["sessionId"])

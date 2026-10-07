@@ -41,12 +41,13 @@ def _remove_owned(root):
 
 def _workspace_parent(path):
     # Use only the caller's selected authority, never graph text or OS Temp.
+    from .path_safety import project_temp_root
     root = html.safe_path(path)
     try:
         root.parent.mkdir(parents=True, exist_ok=True)
+        return project_temp_root(root.parent)
     except OSError as exc:
-        raise OSError(f'cannot prepare SQLite workspace beside {root}: {exc}') from exc
-    return root.parent
+        raise OSError(f'cannot prepare SQLite workspace for {root}: {exc}') from exc
 
 
 @contextmanager

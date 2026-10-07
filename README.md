@@ -14,6 +14,9 @@ managed by your AI agent.
 The graph is stored in your project as a human-friendly HTML file that you can open in a browser
 to read and explore.
 
+Temporary working folders are grouped under `tmp/validated-world/` in the
+project. Completed work cleans up its own folders; this shared parent remains.
+
 ValidatedWorld is available as the **ValidatedWorld** plugin and as a standalone
 **AI agent skill**. Ask the agent to understand the project or
 make a change; it retrieves relevant context, reviews the affected knowledge and

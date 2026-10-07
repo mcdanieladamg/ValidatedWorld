@@ -60,11 +60,17 @@ an existing file. Both refuse a destination created by another writer after
 preflight; existing-document updates continue to use atomic replacement.
 
 HTML initialization, reads, SQL export and managed changes allocate unique SQLite
-workspaces beside the selected document, independent of the process's OS-temp
-configuration or working directory. The selected parent must be writable even
-for reads. Allocation failure reports that parent and does not fall back elsewhere.
+workspaces under `tmp/validated-world/` in the selected document's parent,
+independent of the process's OS-temp configuration or working directory.
+The shared parent is created if needed and remains after cleanup. Linked parents
+and collisions with existing files are rejected. The project must be writable
+even for reads. Allocation failure reports its path and does not fall back elsewhere.
 Ordinary completion, discard and graceful shutdown remove owned workspaces;
 explicit retention and committed unpublished results preserve their reported DBs.
+Session response logs and default packet-review exports use the same shared
+parent. Cleanup removes only owned operation subfolders, preserving other live
+sessions and unknown files. Atomic publication staging files and lock sidecars
+remain beside the document until their operation finishes.
 
 ## JSON fields
 

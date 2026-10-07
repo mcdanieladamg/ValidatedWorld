@@ -329,9 +329,9 @@ class HtmlProjectTests(unittest.TestCase):
 
         @contextmanager
         def aliased_temp(**kwargs):
-            self.assertEqual(kwargs['dir'], self.root)
+            self.assertEqual(kwargs['dir'], self.root / 'tmp' / 'validated-world')
             with original(**kwargs) as directory:
-                yield str(alias / Path(directory).name)
+                yield str(alias / 'tmp' / 'validated-world' / Path(directory).name)
 
         destination = self.root / 'aliased-temp.html'
         with patch('validated_world.document_store.tempfile.TemporaryDirectory', aliased_temp):
@@ -355,7 +355,7 @@ class HtmlProjectTests(unittest.TestCase):
         def allocate(suffix=None, prefix=None, dir=None):
             if dir is None:
                 raise PermissionError('[WinError 5] OS Temp is denied')
-            self.assertEqual(Path(dir), self.root)
+            self.assertEqual(Path(dir), self.root / 'tmp' / 'validated-world')
             allocations.append(prefix)
             return original(suffix=suffix, prefix=prefix, dir=dir)
 
@@ -369,12 +369,49 @@ class HtmlProjectTests(unittest.TestCase):
             self.store.backup(destination, self.root / 'backup.html')
             app, session = self.proposal(ordinary=True)
             workspace = self.store.workspaces[str(self.folder)]
-            self.assertEqual(workspace.directory.parent, self.root)
+            self.assertEqual(workspace.directory.parent, self.root / 'tmp' / 'validated-world')
             self.assertEqual(app.write(session.reference())['status'], 'written')
             app.begin(str(self.folder), self.project.graph.project_id, 'tester', 'Discard trial')
             app.close()
         self.assertTrue({'vw-init-', 'vw-read-', 'vw-sql-', 'vw-change-'} <= set(allocations))
         self.assertEqual(set(self.root.iterdir()), before | {destination, self.root / 'backup.html'})
+        self.assertEqual(list((self.root / 'tmp' / 'validated-world').iterdir()), [])
+
+    def test_shared_temporary_parent_preserves_neighbors_and_other_live_sessions(self):
+        shared = self.root / 'tmp' / 'validated-world'
+        neighbor = shared / 'human.txt'
+        neighbor.write_bytes(b'preserve shared files')
+        second = self.root / 'other.html'
+        self.store.initialize(second, self.project.graph)
+        self.store.begin_workspace(self.folder)
+        self.store.begin_workspace(second)
+        first_workspace = self.store.workspaces[str(self.folder)].directory
+        other_workspace = self.store.workspaces[str(second)].directory
+        self.store.close_workspace(self.folder)
+        self.assertFalse(first_workspace.exists())
+        self.assertTrue(other_workspace.exists())
+        self.assertEqual(neighbor.read_bytes(), b'preserve shared files')
+        self.store.close_workspace(second)
+        self.assertEqual(list(shared.iterdir()), [neighbor])
+
+    def test_shared_parent_collision_and_links_fail_without_publication(self):
+        from unittest.mock import patch
+        from validated_world.path_safety import is_junction
+        shared = self.root / 'tmp' / 'validated-world'
+        shared.rmdir()
+        shared.write_bytes(b'human owned')
+        destination = self.root / 'blocked.html'
+        with self.assertRaisesRegex(OSError, 'validated-world'):
+            self.store.initialize(destination, self.project.graph)
+        self.assertFalse(destination.exists())
+        self.assertEqual(shared.read_bytes(), b'human owned')
+        shared.unlink()
+        for target in (self.root / 'tmp', shared):
+            with self.subTest(target=target), patch('validated_world.path_safety.is_junction',
+                    side_effect=lambda p: p == target or is_junction(p)):
+                with self.assertRaisesRegex(ValueError, 'linked temporary workspace path'):
+                    self.store.initialize(destination, self.project.graph)
+            self.assertFalse(destination.exists())
 
     def test_denied_project_workspace_reports_selected_parent_without_fallback(self):
         from unittest.mock import patch
