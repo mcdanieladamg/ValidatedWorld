@@ -58,3 +58,10 @@ deep-link reload with no console or CSP errors. Full units passed 166 tests with
 90% branch coverage. These local checks are separate from the earlier external
 machine reports. Direct HTML saving can leave a partial file when interrupted;
 unsaved work and approvals are intentionally discarded with the process.
+
+Version 1.0.3 removes reverse-DNS resolution from both optional loopback servers.
+DNS-denied regressions failed before the correction and passed afterward. Local
+verification passed 168 units with 90% branch coverage, both rebuilt archive
+workflows and temporary-path alias checks. The startup tests retain their
+30-second budget and now report child exit status/stderr. The reported macOS CI
+timeout requires a rerun on that runner; it was not reproduced on a local Mac.

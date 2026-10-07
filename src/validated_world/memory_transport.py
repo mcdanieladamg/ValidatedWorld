@@ -1,13 +1,26 @@
 """Optional loopback transports. State and packet bytes live only in this process."""
 from copy import deepcopy
 from hashlib import sha256
-from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import StringIO
 import json
 import secrets
+from socketserver import TCPServer, ThreadingMixIn
 import threading
 from urllib.parse import urlsplit
 from urllib.request import Request, ProxyHandler, build_opener
+
+
+class LoopbackHTTPServer(HTTPServer):
+    def server_bind(self):
+        # HTTPServer resolves its name through reverse DNS before startup.
+        # Our numeric loopback endpoint needs no resolver or external network.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
+class ThreadedLoopbackHTTPServer(ThreadingMixIn, LoopbackHTTPServer):
+    daemon_threads = True
 
 
 class QuietHandler(BaseHTTPRequestHandler):
@@ -47,7 +60,7 @@ class PacketTransport:
                         self.respond(410); return
                     self.respond(200, raw)
 
-        self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        self.server = ThreadedLoopbackHTTPServer(('127.0.0.1', 0), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
@@ -127,7 +140,7 @@ def serve(out, err):
             except (ValueError, UnicodeError, OSError, AttributeError) as exc:
                 self.respond(400, encode({'error': str(exc)}))
 
-    server = HTTPServer(('127.0.0.1', 0), Handler)
+    server = LoopbackHTTPServer(('127.0.0.1', 0), Handler)
     try:
         out.write(json.dumps({'controllerUrl': f'http://127.0.0.1:{server.server_port}{token}'}) + '\n'); out.flush()
         while not exiting: server.handle_request()

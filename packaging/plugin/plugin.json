@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "validated-world",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Keep project design and documentation consistent beyond an agent context window.",
   "author": {"name": "Adam McDaniel", "url": "https://github.com/mcdanieladamg/ValidatedWorld"},
   "homepage": "https://github.com/mcdanieladamg/ValidatedWorld",
