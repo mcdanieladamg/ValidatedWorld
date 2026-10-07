@@ -17,11 +17,11 @@ Codex fallback metadata parity, bundled SVG branding, onboarding and policy
 documents. These checks do not reproduce OpenAI's security scans or establish
 catalog eligibility.
 
-The source manifest is [portable plugin.json](../packaging/python-plugin/plugin.json).
+The source manifest is [portable plugin.json](../packaging/plugin/plugin.json).
 OpenAI listing metadata lives in `extensions.com.openai.interface`; the Codex
 compatibility manifest carries the same listing as a fallback. Root OpenAI
 settings take precedence rather than merging with the fallback. Branding is
-authored SVG under `packaging/python-plugin/assets`, covered by the project MIT
+authored SVG under `packaging/plugin/assets`, covered by the project MIT
 license. Icons have no external resources, scripts or font dependencies.
 
 Build and verify the release, using an available Python 3.11+ interpreter.
@@ -29,12 +29,12 @@ Pick an unused version/output directory; builds do not
 overwrite existing output.
 
 ```powershell
-.\eng\Build-PythonPackage.ps1 -Version 1.0.2
-.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.2 -PythonExecutable .\.venv\Scripts\python.exe
+.\eng\Build-Package.ps1 -Version 1.0.2
+.\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/1.0.2 -PythonExecutable .\.venv\Scripts\python.exe
 ```
 
 The ZIPs and `SHA256SUMS.txt` are regenerable outputs under
-`artifacts/python-release/1.0.2`. The archives can be built and tested before the
+`artifacts/release/1.0.2`. The archives can be built and tested before the
 human commits the release preparation. Before publication, merge exactly those
 reviewed sources and target that commit with the release tag. If packaged sources
 change after testing, build into a fresh output directory and test the new bytes.

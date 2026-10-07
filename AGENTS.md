@@ -11,7 +11,7 @@ the requested work.
 ```powershell
 $vwPython = '.\.venv\Scripts\python.exe' # or another available Python 3.11+
 & $vwPython --version
-$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 & $vwPython -m validated_world project verify docs-vw.html
 & $vwPython -m validated_world read node docs-vw.html purpose
 & $vwPython -m validated_world read tag docs-vw.html project:status --limit 10

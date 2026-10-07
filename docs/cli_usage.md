@@ -13,7 +13,7 @@ ValidatedWorld runs locally with Python 3.11+. From a source
 checkout, make the package importable and run it with:
 
 ```powershell
-$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 py -3.11 -m validated_world --help
 ```
 

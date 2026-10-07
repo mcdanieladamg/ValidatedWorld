@@ -19,7 +19,7 @@ from a Codex marketplace listing, use that listing's installation mechanism.
 The standalone ZIP contains `SKILL.md` at its root. Extract it into a folder named
 `validated-world` in the host's skill location (for current Codex local skills,
 `~/.agents/skills/validated-world` or the project's `.agents/skills/validated-world`).
-Install the entire folder, including `scripts`, `references`, `src-python` and
+Install the entire folder, including `scripts`, `references`, `src` and
 the license. The plugin contains that same complete skill under
 `skills/validated-world`; it does not need application source outside that folder.
 Host-specific installation and public-directory acceptance remain separate checks.
@@ -27,18 +27,18 @@ Host-specific installation and public-directory acceptance remain separate check
 For a local Codex test of a built plugin candidate, run:
 
 ```powershell
-.\eng\Install-LocalPythonPlugin.ps1 -Version <version>
+.\eng\Install-LocalPlugin.ps1 -Version <version>
 ```
 
 This developer helper extracts the versioned archive under `artifacts/local-plugin`,
-registers a local marketplace and installs `validated-world-python`. After
-installation it removes older local Python plugin installations made by this
+registers a local marketplace and installs `validated-world`. After
+installation it removes older local plugin installations made by this
 repository. Restart Codex and start a new task to use the installed skill.
 Avoid selecting a separately installed older ValidatedWorld skill.
 
 The package uses an available Python runtime, including an explicitly managed
 `uv` environment when configured. It does not install a system runtime.
-Python is the interpreter; the bundled `src-python/validated_world` files are
+Python is the interpreter; the bundled `src/validated_world` files are
 ValidatedWorld's application code. A host-provided interpreter can run them
 without installing a global Python package or copying a developer's `.venv`.
 Prefer runtime paths supplied by the agent host; otherwise check existing

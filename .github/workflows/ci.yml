@@ -28,7 +28,7 @@ jobs:
           VW_CI_SKIP_WINDOWS: ${{ secrets.VW_CI_SKIP_WINDOWS }}
           VW_CI_SKIP_LINUX: ${{ secrets.VW_CI_SKIP_LINUX }}
           VW_CI_SKIP_MACOS: ${{ secrets.VW_CI_SKIP_MACOS }}
-        run: python eng/python_ci_config.py --github-output "$GITHUB_OUTPUT"
+        run: python eng/ci_config.py --github-output "$GITHUB_OUTPUT"
 
   windows:
     name: Python Windows 3.11 tests
@@ -43,14 +43,14 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install ".[test]"
-      - run: python -m coverage run --branch -m unittest discover -s tests-python -v
+      - run: python -m coverage run --branch -m unittest discover -s tests -v
       - run: python -m coverage report
       - run: python -m validated_world project verify docs-vw.html
       - shell: pwsh
         run: |
-          .\eng\Build-PythonPackage.ps1 -Version 0.3.0-dev
-          .\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
-          .\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable (Get-Command python).Source
+          .\eng\Build-Package.ps1 -Version 0.3.0-dev
+          .\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/0.3.0-dev
+          .\eng\Test-PackageTempAlias.ps1 -PackagesDirectory artifacts/release/0.3.0-dev -PythonExecutable (Get-Command python).Source
 
   linux:
     name: Python Linux 3.11 tests
@@ -65,14 +65,14 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install ".[test]"
-      - run: python -m coverage run --branch -m unittest discover -s tests-python -v
+      - run: python -m coverage run --branch -m unittest discover -s tests -v
       - run: python -m coverage report
       - run: python -m validated_world project verify docs-vw.html
       - shell: pwsh
         run: |
-          ./eng/Build-PythonPackage.ps1 -Version 0.3.0-dev
-          ./eng/Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
-          ./eng/Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable (Get-Command python).Source
+          ./eng/Build-Package.ps1 -Version 0.3.0-dev
+          ./eng/Test-Package.ps1 -PackagesDirectory artifacts/release/0.3.0-dev
+          ./eng/Test-PackageTempAlias.ps1 -PackagesDirectory artifacts/release/0.3.0-dev -PythonExecutable (Get-Command python).Source
 
   macos:
     name: Python macOS 3.11 tests
@@ -87,14 +87,14 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install ".[test]"
-      - run: python -m coverage run --branch -m unittest discover -s tests-python -v
+      - run: python -m coverage run --branch -m unittest discover -s tests -v
       - run: python -m coverage report
       - run: python -m validated_world project verify docs-vw.html
       - shell: pwsh
         run: |
-          ./eng/Build-PythonPackage.ps1 -Version 0.3.0-dev
-          ./eng/Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev
-          ./eng/Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/0.3.0-dev -PythonExecutable (Get-Command python).Source
+          ./eng/Build-Package.ps1 -Version 0.3.0-dev
+          ./eng/Test-Package.ps1 -PackagesDirectory artifacts/release/0.3.0-dev
+          ./eng/Test-PackageTempAlias.ps1 -PackagesDirectory artifacts/release/0.3.0-dev -PythonExecutable (Get-Command python).Source
 
   aggregate:
     name: Python platform aggregate
@@ -116,4 +116,4 @@ jobs:
           LINUX_RESULT: ${{ needs.linux.result }}
           MACOS_RESULT: ${{ needs.macos.result }}
           ALL_SKIPPED: ${{ needs.configure.outputs.all_skipped }}
-        run: python eng/python_ci_config.py --check-aggregate
+        run: python eng/ci_config.py --check-aggregate
