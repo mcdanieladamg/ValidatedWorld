@@ -34,11 +34,11 @@ function Copy-Engine([string] $destination) {
     }
     $projectFile = Join-Path $destination 'pyproject.toml'
     $projectText = [IO.File]::ReadAllText($projectFile)
-    $projectText = [regex]::Replace($projectText, '(?m)^version = "[^"]+"$', "version = `"$pythonVersion`"")
+    $projectText = [regex]::Replace($projectText, '(?m)^version = "[^"]+"(?=\r?$)', "version = `"$pythonVersion`"")
     [IO.File]::WriteAllText($projectFile, $projectText, [Text.UTF8Encoding]::new($false))
     $initFile = Join-Path $destination 'src/validated_world/__init__.py'
     $initText = [IO.File]::ReadAllText($initFile)
-    $initText = [regex]::Replace($initText, '(?m)^__version__ = "[^"]+"$', "__version__ = `"$pythonVersion`"")
+    $initText = [regex]::Replace($initText, '(?m)^__version__ = "[^"]+"(?=\r?$)', "__version__ = `"$pythonVersion`"")
     [IO.File]::WriteAllText($initFile, $initText, [Text.UTF8Encoding]::new($false))
 }
 

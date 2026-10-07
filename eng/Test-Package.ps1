@@ -13,7 +13,7 @@ if ([string]::IsNullOrWhiteSpace($PackagesDirectory)) { $PackagesDirectory = Joi
 $packages = [IO.Path]::GetFullPath($PackagesDirectory)
 $hashes = Join-Path $packages 'SHA256SUMS.txt'
 if (-not (Test-Path -LiteralPath $hashes -PathType Leaf)) { throw "Missing package hashes: $hashes" }
-$temporary = Join-Path ([IO.Path]::GetTempPath()) ('ValidatedWorld-python-package-' + [Guid]::NewGuid().ToString('N'))
+$temporary = Join-Path ([IO.Path]::GetTempPath()) ('ValidatedWorld-package-' + [Guid]::NewGuid().ToString('N'))
 $oldPythonPath = $env:PYTHONPATH
 New-Item -ItemType Directory -Force -Path $temporary | Out-Null
 try {

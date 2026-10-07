@@ -18,15 +18,23 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
+COMMAND_TIMEOUT_SECONDS = 30
+
+
 @contextmanager
 def trial_directory():
     root = Path(tempfile.mkdtemp(prefix="vw-workflow-examples-")).resolve()
     trial = {"path": root, "retain": False}
     try:
         yield trial
+    except BaseException:
+        # Preserve interrupted work without masking the command failure or
+        # guessing whether a working DB needs committed-unpublished recovery.
+        trial["retain"] = True
+        raise
     finally:
         if trial["retain"]:
-            print(f"Preserved unpublished example project: {root}", file=sys.stderr)
+            print(f"Preserved workflow trial for diagnostics or recovery: {root}", file=sys.stderr)
         else:
             # Inspect the uniquely allocated trial before recursive cleanup.
             entries = list(root.iterdir())
@@ -40,7 +48,7 @@ def trial_directory():
                     raise AssertionError(f"Refusing unexpected log cleanup: {directory}")
             if (root.parent != Path(tempfile.gettempdir()).resolve()
                     or not root.name.startswith("vw-workflow-examples-")
-                    or any(item.name not in {"docs-vw.html", "docs-vw.html.vw-lock", "responses.jsonl"}
+                    or any(item.name not in {"docs-vw.html", ".docs-vw.html.vw-lock", "responses.jsonl"}
                            or item.is_symlink() or not item.is_file()
                            or item.resolve().parent != root for item in entries if item not in log_directories)):
                 raise AssertionError(f"Refusing unexpected trial cleanup: {root}")
@@ -83,11 +91,11 @@ runpy.run_path(sys.argv[0], run_name="__main__")
         )
         log_reader = None
 
-        def response_line():
+        def response_line(request_command):
             nonlocal log_reader
             if not log_output:
                 return process.stdout.readline()
-            deadline = time.monotonic() + 10
+            deadline = time.monotonic() + COMMAND_TIMEOUT_SECONDS
             pending = ""
             while time.monotonic() < deadline:
                 if log_reader is None and response_log.exists():
@@ -99,7 +107,9 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                 if process.poll() is not None:
                     raise AssertionError(f"Log host exited without a complete response: {process.stderr.read()}")
                 time.sleep(0.02)
-            raise AssertionError("Live log response did not become readable before timeout")
+            raise AssertionError(
+                f"Live log response timed out during {request_command} after {COMMAND_TIMEOUT_SECONDS}s; "
+                f"host status={process.poll()}, log={response_log}, incomplete characters={len(pending)}")
 
         def expand(value):
             if isinstance(value, str):
@@ -116,7 +126,7 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                 request["payload"].update(overrides)
             process.stdin.write(json.dumps(request) + "\n")
             process.stdin.flush()
-            line = response_line()
+            line = response_line(command)
             if not line:
                 raise AssertionError(f"Host closed during {command}: {process.stderr.read()}")
             result = json.loads(line)
@@ -192,7 +202,7 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             else:
                 send("host.exit")
             process.stdin.close()
-            exit_code = process.wait(timeout=10)
+            exit_code = process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
             diagnostics = process.stderr.read()
             if exit_code != 0 or diagnostics != "":
                 raise AssertionError(f"Example host did not exit cleanly: {exit_code}, {diagnostics}")
@@ -203,13 +213,18 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             if list(document.parent.glob("*.vw-lock")) or list(document.parent.glob("*.vw.db")):
                 raise AssertionError("Example left a working DB or lock")
         finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait(timeout=10)
-            for stream in (process.stdin, process.stdout, process.stderr):
-                stream.close()
             if log_reader is not None:
                 log_reader.close()
+            if process.poll() is None:
+                # Give the host EOF to release its own session and locks first.
+                process.stdin.close()
+                try:
+                    process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
+            for stream in (process.stdin, process.stdout, process.stderr):
+                stream.close()
     transport = "live UTF-8 log" if log_output else "pipes"
     restriction = "; hard links denied" if deny_hard_links else ""
     print(f"Bundled author/review/save examples passed via {transport} (offline review fixture{restriction}).")
