@@ -58,6 +58,11 @@ def _svg(root: Path, value: object) -> None:
 def verify(root: Path) -> None:
     portable = json.loads((root / "plugin.json").read_text(encoding="utf-8"))
     overlay = json.loads((root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+    name = portable.get("name")
+    if not isinstance(name, str) or len(name) > 64 or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) is None:
+        raise ValueError("Plugin name must use lowercase letters, numbers and single hyphens, up to 64 characters")
+    if overlay.get("name") != name:
+        raise ValueError("Portable and compatibility plugin identities disagree")
     extension = portable["extensions"]["com.openai"]
     interface = extension["interface"]
     if interface != overlay["interface"]:

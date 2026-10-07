@@ -15,16 +15,16 @@ runtime as a test workaround. From the checkout root:
 ```powershell
 $vwPython = 'C:\path\to\python.exe'
 & $vwPython --version
-$env:PYTHONPATH = (Join-Path (Get-Location) 'src-python')
-& $vwPython -m unittest discover -s tests-python -p test_html_project.py -v
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
+& $vwPython -m unittest discover -s tests -p test_html_project.py -v
 & $vwPython -m validated_world project verify docs-vw.html
-& $vwPython -m coverage run --branch -m unittest discover -s tests-python -v
+& $vwPython -m coverage run --branch -m unittest discover -s tests -v
 & $vwPython -m coverage report --skip-covered
 .\eng\Test-DeveloperTools.ps1
 .\eng\Test-Blueprint.ps1 -PythonExecutable $vwPython
-.\eng\Build-PythonPackage.ps1 -Version 1.0.2
-.\eng\Test-PythonPackage.ps1 -PackagesDirectory artifacts/python-release/1.0.2 -PythonExecutable $vwPython
-.\eng\Test-PythonPackageTempAlias.ps1 -PackagesDirectory artifacts/python-release/1.0.2 -PythonExecutable $vwPython
+.\eng\Build-Package.ps1 -Version 1.0.2
+.\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/1.0.2 -PythonExecutable $vwPython
+.\eng\Test-PackageTempAlias.ps1 -PackagesDirectory artifacts/release/1.0.2 -PythonExecutable $vwPython
 ```
 
 The build deliberately refuses an existing output directory. Inspect an old
@@ -91,7 +91,7 @@ Offline commands make no product model API calls. Follow the repository's
 bounded repair/retry rules; do not rerun unchanged failures hoping for success.
 The coverage run executes the full unit suite and enforces the configured
 threshold, so it need not be immediately duplicated. Without coverage, the
-offline suite is `python -m unittest discover -s tests-python -v`; record that
+offline suite is `python -m unittest discover -s tests -v`; record that
 coverage was not measured. For an intentionally provisioned developer environment:
 
 ```powershell
@@ -112,7 +112,7 @@ Reuse the existing `.venv` rather than recreating it:
 .venv\Scripts\python.exe -m pip install PyYAML
 $vwValidator = Join-Path $env:USERPROFILE '.codex\skills\.system\skill-creator\scripts\quick_validate.py'
 .venv\Scripts\python.exe -X utf8 $vwValidator skills/validated-world
-.venv\Scripts\python.exe -X utf8 $vwValidator packaging/python-plugin/skills/validated-world
+.venv\Scripts\python.exe -X utf8 $vwValidator packaging/plugin/skills/validated-world
 ```
 
 The validator path above is the local Windows system-skill location; use the

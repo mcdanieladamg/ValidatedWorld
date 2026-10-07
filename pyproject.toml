@@ -19,13 +19,13 @@ test = ["coverage>=7,<8", "pytest>=8,<9"]
 validated-world = "validated_world.cli:main"
 
 [tool.setuptools]
-package-dir = {"" = "src-python"}
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-where = ["src-python"]
+where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests-python"]
+testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.coverage.run]

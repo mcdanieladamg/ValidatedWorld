@@ -11,7 +11,7 @@ if (-not $Path) { $Path = Join-Path $PSScriptRoot '../docs-vw.html' }
 $vwRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $vwPython = if ([string]::IsNullOrWhiteSpace($PythonExecutable)) { (Get-Command python -ErrorAction Stop).Source } else { (Resolve-Path -LiteralPath $PythonExecutable).Path }
 $vwOldPythonPath = $env:PYTHONPATH
-$env:PYTHONPATH = Join-Path $vwRoot 'src-python'
+$env:PYTHONPATH = Join-Path $vwRoot 'src'
 function Read-VwCliJson {
     param([string[]] $Arguments)
     $vwOutput = & $vwPython -m validated_world @Arguments
