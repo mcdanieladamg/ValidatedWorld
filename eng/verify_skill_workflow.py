@@ -29,43 +29,24 @@ def trial_directory():
         yield trial
     except BaseException:
         # Preserve interrupted work without masking the command failure or
-        # guessing whether a working DB needs committed-unpublished recovery.
+        # guessing about unknown files in a developer trial.
         trial["retain"] = True
         raise
     finally:
         if trial["retain"]:
-            print(f"Preserved workflow trial for diagnostics or recovery: {root}", file=sys.stderr)
+            print(f"Preserved workflow trial for diagnostics: {root}", file=sys.stderr)
         else:
             # Inspect the uniquely allocated trial before recursive cleanup.
             entries = list(root.iterdir())
-            shared = root / "tmp" / "validated-world"
-            if (root / 'tmp').exists():
-                for directory in (root / 'tmp', shared):
-                    if (directory.is_symlink() or not directory.is_dir()
-                            or directory.resolve() != directory
-                            or getattr(directory.lstat(), 'st_reparse_tag', None) == 0xA0000003):
-                        raise AssertionError(f"Refusing unexpected temporary parent cleanup: {directory}")
-                if list((root / 'tmp').iterdir()) != [shared]:
-                    raise AssertionError(f"Refusing unexpected temporary parent contents: {root / 'tmp'}")
-            log_directories = list(shared.iterdir()) if shared.exists() else []
-            for directory in log_directories:
-                if (not directory.name.startswith('vw-ndjson-')
-                        or directory.is_symlink() or not directory.is_dir()
-                        or directory.resolve().parent != shared
-                        or any(item.name != "responses.jsonl" or item.is_symlink()
-                               or not item.is_file() or item.resolve().parent != directory.resolve()
-                               for item in directory.iterdir())):
-                    raise AssertionError(f"Refusing unexpected log cleanup: {directory}")
             if (root.parent != Path(tempfile.gettempdir()).resolve()
                     or not root.name.startswith("vw-workflow-examples-")
-                    or any(item.name not in {"docs-vw.html", ".docs-vw.html.vw-lock", "responses.jsonl"}
-                           or item.is_symlink() or not item.is_file()
-                           or item.resolve().parent != root for item in entries if item.name != 'tmp')):
+                    or any(item.name != "docs-vw.html" or item.is_symlink()
+                           or not item.is_file() or item.resolve().parent != root for item in entries)):
                 raise AssertionError(f"Refusing unexpected trial cleanup: {root}")
             shutil.rmtree(root)
 
 
-def verify(skill: Path, *, log_output: bool = False, deny_hard_links: bool = False) -> None:
+def verify(skill: Path, *, session_http: bool = False, deny_hard_links: bool = False) -> None:
     if deny_hard_links and os.name != 'nt':
         raise ValueError('Hard-link denial exercises the Windows publication contract.')
     reference_text = (skill / "references" / "command-workflow.md").read_text(encoding="utf-8")
@@ -76,50 +57,38 @@ def verify(skill: Path, *, log_output: bool = False, deny_hard_links: bool = Fal
     launcher = (skill / "scripts" / "validated_world.py").resolve()
     with trial_directory() as trial:
         document = trial["path"] / "docs-vw.html"
-        response_log = trial["path"] / "responses.jsonl"
         bindings: dict = {"$PATH": str(document)}
-        command = ([sys.executable, "-X", "utf8", "-I", "-S", str(skill / "scripts" / "ndjson_log.py")]
-                   if log_output else [sys.executable, "-X", "utf8", "-I", "-S", str(launcher), "ndjson"])
-        if deny_hard_links:
-            # Test-only audit hook covers the actual isolated child, including
-            # engine initialization and HTML publication, rather than a mock in
-            # the parent process. Never changes permissions on the host.
-            bootstrap = '''import runpy, sys
-def deny(event, arguments):
-    if event == "os.link":
-        raise PermissionError("[WinError 5] fixture denies hard-link creation")
-sys.addaudithook(deny)
-sys.argv = sys.argv[1:]
+        command = [sys.executable, "-B", "-X", "utf8", "-I", "-S", str(launcher), "serve" if session_http else "ndjson"]
+        # Reject every implicit filesystem write in the actual isolated child.
+        # Only the human-selected HTML destination is writable by the product.
+        bootstrap = '''import os, pathlib, runpy, sys
+selected = pathlib.Path(sys.argv[1]).resolve()
+def audit(event, arguments):
+    if event == "open":
+        path, mode, flags = arguments
+        writing = (isinstance(mode, str) and any(c in mode for c in "wax+")) or (flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT))
+        if writing and (not isinstance(path, (str, bytes, os.PathLike)) or pathlib.Path(path).resolve() != selected):
+            raise PermissionError("fixture rejects implicit file writes: " + str(path))
+    if event in {"os.mkdir", "os.rename", "os.link", "os.remove", "os.rmdir", "tempfile.mkdtemp"}:
+        raise PermissionError("fixture rejects temporary filesystem operations: " + event)
+sys.addaudithook(audit)
+sys.argv = sys.argv[2:]
 runpy.run_path(sys.argv[0], run_name="__main__")
 '''
-            command = command[:5] + ['-c', bootstrap] + command[5:]
-        process = subprocess.Popen(
-            command,
-            cwd=trial["path"],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding="utf-8",
-        )
-        log_reader = None
+        command = command[:6] + ['-c', bootstrap, str(document)] + command[6:]
+        process = subprocess.Popen(command, cwd=trial["path"], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+        from urllib.request import Request, ProxyHandler, build_opener
+        client = build_opener(ProxyHandler({}))
+        controller = None
 
-        def response_line(request_command):
-            nonlocal log_reader
-            if not log_output:
-                return process.stdout.readline()
-            deadline = time.monotonic() + COMMAND_TIMEOUT_SECONDS
-            pending = ""
-            while time.monotonic() < deadline:
-                if log_reader is None and response_log.exists():
-                    log_reader = response_log.open(encoding="utf-8")
-                if log_reader is not None:
-                    pending += log_reader.readline()
-                    if pending.endswith("\n"):
-                        return pending
-                if process.poll() is not None:
-                    raise AssertionError(f"Log host exited without a complete response: {process.stderr.read()}")
-                time.sleep(0.02)
-            raise AssertionError(
-                f"Live log response timed out during {request_command} after {COMMAND_TIMEOUT_SECONDS}s; "
-                f"host status={process.poll()}, log={response_log}, incomplete characters={len(pending)}")
+        def pipe_line():
+            from queue import Queue, Empty
+            from threading import Thread
+            response = Queue()
+            Thread(target=lambda: response.put(process.stdout.readline()), daemon=True).start()
+            try: return response.get(timeout=COMMAND_TIMEOUT_SECONDS)
+            except Empty: raise AssertionError(f"Pipe response timed out after {COMMAND_TIMEOUT_SECONDS}s")
 
         def expand(value):
             if isinstance(value, str):
@@ -134,9 +103,15 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             request = expand(examples[command][index])
             if overrides:
                 request["payload"].update(overrides)
-            process.stdin.write(json.dumps(request) + "\n")
-            process.stdin.flush()
-            line = response_line(command)
+            if session_http:
+                try:
+                    with client.open(Request(controller, data=json.dumps(request).encode('utf-8'), headers={'Content-Type': 'application/json'}), timeout=COMMAND_TIMEOUT_SECONDS) as response:
+                        line = response.read().decode('utf-8')
+                except OSError as exc:
+                    raise AssertionError(f"Session response failed during {command}: {exc}") from exc
+            else:
+                process.stdin.write(json.dumps(request) + "\n"); process.stdin.flush()
+                line = pipe_line()
             if not line:
                 raise AssertionError(f"Host closed during {command}: {process.stderr.read()}")
             result = json.loads(line)
@@ -151,15 +126,9 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             return payload
 
         try:
-            if log_output:
-                readiness = process.stderr.readline()
-                prefix = "NDJSON ready; responses: "
-                if not readiness.startswith(prefix):
-                    raise AssertionError(f"Log host did not start: {readiness}")
-                response_log = Path(readiness.removeprefix(prefix).rstrip("\n"))
-                if (response_log.parent.parent != trial["path"] / 'tmp' / 'validated-world' or response_log.name != "responses.jsonl"
-                        or not response_log.parent.name.startswith("vw-ndjson-")):
-                    raise AssertionError(f"Unexpected log allocation: {response_log}")
+            if session_http:
+                readiness = pipe_line()
+                controller = json.loads(readiness)["controllerUrl"]
             for command in ("host.help", "project.init", "project.verify", "project.status",
                             "read.node", "read.search", "read.dependencies", "read.context",
                             "change.begin", "change.apply", "change.patch", "change.show"):
@@ -189,9 +158,6 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             }
             send("change.agent-review")
             written = send("change.agent-write")
-            if written["status"] == "unpublished":
-                trial["retain"] = True
-                raise AssertionError(f"Preserve committed working DB for recovery: {written['workingDbPath']}")
             if written["status"] != "written":
                 raise AssertionError(f"Example failed to publish: {written}")
             if not send("project.verify")["isValid"]:
@@ -201,35 +167,19 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                 raise AssertionError("Patched claim was not published")
             if document.read_bytes() == before_write:
                 raise AssertionError("Published document did not change")
-            if log_output:
-                # Close readers before Windows deletes the owned log. The helper
-                # can remove it before an exit response is read; use process status.
-                if log_reader is not None:
-                    log_reader.close()
-                    log_reader = None
-                process.stdin.write(json.dumps(expand(examples["host.exit"][0])) + "\n")
-                process.stdin.flush()
-            else:
-                send("host.exit")
+            send("host.exit")
             process.stdin.close()
             exit_code = process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
             diagnostics = process.stderr.read()
             if exit_code != 0 or diagnostics != "":
                 raise AssertionError(f"Example host did not exit cleanly: {exit_code}, {diagnostics}")
-            if log_output and response_log.parent.exists():
-                raise AssertionError("Example left its owned response directory")
-            if any(document.parent.glob("vw-*-*")):
-                raise AssertionError("Example left a temporary workspace")
-            if list((document.parent / 'tmp' / 'validated-world').iterdir()):
-                raise AssertionError("Example left a temporary workspace in the shared parent")
-            if list(document.parent.glob("*.vw-lock")) or list(document.parent.glob("*.vw.db")):
-                raise AssertionError("Example left a working DB or lock")
+            if list(document.parent.iterdir()) != [document]:
+                raise AssertionError("Example created files or directories beyond its HTML document")
         finally:
-            if log_reader is not None:
-                log_reader.close()
             if process.poll() is None:
                 # Give the host EOF to release its own session and locks first.
                 process.stdin.close()
+                if session_http: process.terminate()
                 try:
                     process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
                 except subprocess.TimeoutExpired:
@@ -237,11 +187,11 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                     process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
             for stream in (process.stdin, process.stdout, process.stderr):
                 stream.close()
-    transport = "live UTF-8 log" if log_output else "pipes"
+    transport = "in-memory controller" if session_http else "pipes"
     restriction = "; hard links denied" if deny_hard_links else ""
-    print(f"Bundled author/review/save examples passed via {transport} (offline review fixture{restriction}).")
+    print(f"Bundled author/review/save examples passed via {transport} (offline review fixture; only selected HTML writable{restriction}).")
 
 
 if __name__ == "__main__":
-    verify(Path(sys.argv[1]).resolve(), log_output="--log-output" in sys.argv[2:],
+    verify(Path(sys.argv[1]).resolve(), session_http="--session-http" in sys.argv[2:],
            deny_hard_links="--deny-hard-links" in sys.argv[2:])

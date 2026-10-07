@@ -27,7 +27,7 @@ section { margin-block: 2rem; }
   "title": "ValidatedWorld Architecture and Product Evaluation",
   "purpose": "purpose",
   "created": "2026-09-14T16:34:55.4514187+00:00",
-  "updated": "2026-10-07T17:50:22.3860280+00:00",
+  "updated": "2026-10-07T19:19:10.3489760+00:00",
   "nodes": [
     {
       "id": "ai-author-limits",
@@ -60,7 +60,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "ai-author-tools",
-      "text": "The skill guides the host author through public Python read and change commands. The engine provides bounded graph queries, previewed sessions, and atomic writes without an in-product model tool loop or model API calls.",
+      "text": "The skill guides the host author through public Python read and change commands. The engine provides bounded graph queries, previewed sessions, and reviewed writes without an in-product model tool loop or model API calls.",
       "kind": "tool-contract",
       "tags": [
         "status:implemented",
@@ -141,7 +141,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "ai-review-single-request",
-      "text": "One logical task has one complete reviewed atomic write. Exact evidence can use a paged single-reviewer preview or deterministic branch packets plus fresh synthesis. Lossless refinement and complete presentation never partition the transaction. Spawning and scheduling belong to the host; the engine makes no model API call.",
+      "text": "One logical task has one complete reviewed save. Exact evidence can use a paged single-reviewer preview or deterministic branch packets plus fresh synthesis. Lossless refinement and complete presentation never partition the transaction. Spawning and scheduling belong to the host; the engine makes no model API call.",
       "kind": "limitation",
       "tags": [
         "phase:t17",
@@ -294,7 +294,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "component-application",
-      "text": "The Python application module owns project use cases, bounded query APIs, process-local change sessions, review-state accounting, semantic-review planning, and atomic-write orchestration.",
+      "text": "The Python application module owns project use cases, bounded query APIs, process-local change sessions, review-state accounting, semantic-review planning, and reviewed-write orchestration.",
       "kind": "component",
       "tags": [
         "layer:application",
@@ -304,7 +304,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "component-cli",
-      "text": "The Python CLI composes the application, query, protocol, storage and temporary evidence adapters. It exposes one-shot commands and a strict persistent NDJSON interface without a product model-provider client.",
+      "text": "The Python CLI composes the application, query, protocol, storage and in-memory evidence adapters. It exposes one-shot commands and a strict persistent NDJSON interface without a product model-provider client.",
       "kind": "component",
       "tags": [
         "layer:interface",
@@ -324,7 +324,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "component-persistence",
-      "text": "storage.py uses standard-library sqlite3 for exact-schema verification, strict mapping, verified backup/export and atomic transactions. document_format.py extracts and serializes the complete typed graph JSON block; html_project.py owns the separately versioned inline JavaScript view with section anchors. document_store.py is the shared project-path boundary for atomic HTML file replacement and owned temporary SQLite workspaces. HTML initialization, reads, SQL export and managed changes allocate unique SQLite directories under tmp/validated-world in the caller-selected document's parent, independently of OS Temp and the process working directory. The shared parent is created when needed and remains after cleanup. It rejects linked parents and existing-file collisions. The project must be writable even for reads; allocation failures name their path and do not fall back elsewhere. Cleanup removes only owned operation children, preserving unknown files and other live sessions. Publication stages and lock sidecars remain beside the document. Owned allocations are canonicalized before explicit linked-path checks. Ordinary success, discard and graceful close clean workspaces; instructed retention and committed unpublished recovery preserve their reported DBs. file_publication.py shares same-directory new-file publication across SQLite initialization/backups and HTML creation/backups. Windows uses os.rename, which refuses an existing destination without hard-link creation; POSIX retains hard-link publication because its ordinary rename can overwrite. Verified SQLite connections close before publication. Both preserve destinations created after preflight, while existing HTML updates retain atomic replacement. Filesystem, JSON and viewer behavior stay outside Core. Caller-owned DB paths retain the same engine contract. Windows Python 3.11 regressions deny default OS-temp allocations across initialization, reads, SQL export, backup, reviewed publication and discard, and verify selected-parent denial without fallback, shared-parent collisions and links, and preservation of neighboring files and concurrent workspaces. Windows regressions deny hard links for database and HTML creation/backups, reads, SQL export and reviewed writes, preserve competing destination bytes, and clean stages after denied publication. Isolated packaged log workflows use a test-only child audit hook that rejects every hard-link call; actual remote-host permission acceptance remains separate.",
+      "text": "storage.py uses standard-library sqlite3 for exact-schema verification, strict mapping and atomic SQLite transactions. HTML initialization, reads, SQL export and reviewed changes use the same fixed four-table mapping in :memory:, with memory temp storage and journaling. document_format.py validates the passive typed graph in RAM; html_project.py owns the separately versioned inline browser view. document_store.py renders and verifies in RAM, checks selected source bytes, then writes directly to the HTML file without lock, staging, DB or recovery sidecars. New HTML projects and backups use exclusive creation; neighbors remain untouched. Interrupted saving may leave partial HTML, and post-commit save failure consumes the session and discards WIP. Read-only access needs no writable parent. Explicit caller-owned DB authority and conversion destinations retain their disk engine contracts; file_publication.py serves intentional disk DB initialization/backups. Core remains independent of IO and providers. Isolated Python 3.11 package audits deny all implicit filesystem writes and temporary operations across create/read/review/save.",
       "kind": "component",
       "tags": [
         "layer:persistence",
@@ -459,7 +459,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "gap-bulk-authoring",
-      "text": "The preferred conversational authoring path now has a bounded local JSONL bulk-planning workflow for large initial imports, refactors, and generated structures; chunk application still remains subject to the ordinary reviewed session and atomic write.",
+      "text": "The preferred conversational authoring path now has a bounded local JSONL bulk-planning workflow for large initial imports, refactors, and generated structures; chunk application still remains subject to the ordinary reviewed session and reviewed write.",
       "kind": "product-gap",
       "tags": [
         "area:authoring",
@@ -493,7 +493,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "gap-high-fanout-review",
-      "text": "Fingerprint-bound deterministic review packets, temporary complete page delivery, explicit lossless refinement, cited worker dialogue, unique coverage and fresh synthesis are implemented for one atomic proposal. Controlled Codex Desktop broad-purpose and cross-branch review passed; a 1000-extra-character fixture demonstrates complete affected analysis and ownership. Precise direct dependencies and full upstream context reduce accidental fan-out without hiding consequences. Search can reveal missing links but cannot prove completeness. Arbitrary enterprise-scale retrieval, actual host context exhaustion recovery and semantic composition beyond the tested cases remain unproven; report concrete inability rather than truncating or assuming branch independence.",
+      "text": "Fingerprint-bound deterministic review packets, in-memory complete page delivery, explicit lossless refinement, cited worker dialogue, unique coverage and fresh synthesis are implemented for one coherent proposal. Controlled Codex Desktop broad-purpose and cross-branch review passed; a 1000-extra-character fixture demonstrates complete affected analysis and ownership. Precise direct dependencies and full upstream context reduce accidental fan-out without hiding consequences. Search can reveal missing links but cannot prove completeness. Arbitrary enterprise-scale retrieval, actual host context exhaustion recovery and semantic composition beyond the tested cases remain unproven; report concrete inability rather than truncating or assuming branch independence.",
       "kind": "product-gap",
       "tags": [
         "area:scale",
@@ -505,7 +505,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "gap-history-recovery",
-      "text": "Built-in history, undo, and audit storage are intentionally outside the current product boundary; atomicity protects each write, while backup and external versioning remain the recovery mechanisms.",
+      "text": "Built-in history, undo, durable WIP and audit storage remain outside the product boundary. SQLite transactions are atomic in RAM, while direct HTML saves may be partial on interruption. Caller-requested backups or external version control provide recovery; the skill does not create implicit backup files.",
       "kind": "accepted-boundary",
       "tags": [
         "area:recovery",
@@ -601,7 +601,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "gap-repository-merge",
-      "text": "ValidatedWorld's T21 standalone three-way graph merge now distinguishes compatible stable-ID node and edge edits from explicit conflicts and emits operations relative to ours for normal review and atomic write. Ordinary Git still cannot safely merge SQLite pages; native Git driver integration remains deferred unless practical use justifies it.",
+      "text": "ValidatedWorld's T21 standalone three-way graph merge now distinguishes compatible stable-ID node and edge edits from explicit conflicts and emits operations relative to ours for normal review and reviewed write. Ordinary Git still cannot safely merge SQLite pages; native Git driver integration remains deferred unless practical use justifies it.",
       "kind": "product-gap",
       "tags": [
         "area:repository",
@@ -799,7 +799,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "interface-ndjson",
-      "text": "The long-lived NDJSON host offers strict versioned request/result envelopes, exact session references, bounded reads, incremental patches, review, write, and discard. It flushes each result before reading the next request. Packaged skills include an optional standard-library scripts/ndjson_log.py launcher that keeps stdin live and writes raw UTF-8 results directly to an exclusively created response log. Ordinary terminal startup sets the execution tool's working directory to the identified, authorized project folder and invokes the helper without log arguments. The helper creates an owned unique vw-ndjson-* temporary subdirectory under tmp/validated-world in that working directory, avoiding OS-temp visibility differences between executions. The shared parent is created when needed, rejects links and file collisions, and remains after cleanup. Allocation failure stops startup without falling back to another directory. The announced absolute path and a live host.help response must be readable through a separate command before project creation or changes. Explicit --temp-root or caller-supplied absolute-log overrides remain available for deliberately selected authorized shared working areas; existing logs are never overwritten. Agents retain only an actual live session handle and read complete new log lines, avoiding buffered shell capture and terminal echoes or wrapping. The helper changes no review gate, sandbox permission or project authority; logs are temporary evidence, not durable proposals or session recovery. Required save results and review evidence are read while the host is alive. External log readers are closed before host.exit. Normal helper exit or EOF automatically removes its owned log and directory, including after structured request errors; process exit code zero confirms shutdown because the final response may already be removed. Explicit --keep-log retains requested diagnostics, caller-supplied logs remain caller-owned, and abnormal exits retain logs. Cleanup never recurses, refuses unexpected or replaced files, and reports exact remaining paths on failure. Forced termination may leave artifacts because cleanup cannot run. Project and unpublished recovery DBs are never log-cleanup targets. Windows Python 3.11 tests exercise default allocation and separate-process live reads across differing temp environments, isolated packaged author/review/save without startup flags, protected logs, allocation failure without fallback, normal/error shutdown cleanup, requested retention, abnormal exit and preservation of unexpected files; clean remote-host acceptance remains separate.",
+      "text": "The long-lived NDJSON host provides strict versioned request/result envelopes, exact references, bounded reads, incremental patches, review, write and discard. Each response flushes before the next request. Native retained UTF-8 pipes are the default; a host live terminal must expose complete response lines without buffered capture or terminal echoes. Optional serve/request commands keep the same application in RAM through a random loopback controller URL when host permissions allow it. The controller processes requests serially and uses 30-second client timeouts; reviewer URLs are separately authorized, read-only packet endpoints. No response logs or temporary folders are produced. Agents retain an actual running process handle, check live host.help before mutation and do not invent handles after exit. Strict errors can be corrected in the same process. host.exit, EOF and discard release unsaved state and revoke evidence; process loss leaves no product WIP files. Loopback denial uses native pipes rather than broader permissions; if no usable persistent transport exists, leave work unsaved.",
       "kind": "interface",
       "tags": [
         "status:implemented",
@@ -905,7 +905,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "phase-t21",
-      "text": "Graph-aware three-way merge and optional Git integration. Classify compatible stable-ID edits and explicit conflicts across base, ours, and theirs; never merge SQLite pages; submit any merged proposal through normal affected analysis, review, and atomic write. Evaluate a read-only Git diff driver only after the standalone merge contract is stable.",
+      "text": "Graph-aware three-way merge and optional Git integration. Classify compatible stable-ID edits and explicit conflicts across base, ours, and theirs; never merge SQLite pages; submit any merged proposal through normal affected analysis, review, and reviewed write. Evaluate a read-only Git diff driver only after the standalone merge contract is stable.",
       "kind": "development-phase",
       "tags": [
         "phase:t21",
@@ -927,7 +927,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "phase-t23",
-      "text": "Large-import and bulk-authoring workflow. Design bounded resumable import planning for large initial graphs and refactors without bypassing review or the atomic final write. Prefer validated local manifests and scope-sized batches to keep agent interaction manageable without requiring a whole-project provider request.",
+      "text": "Large-import and bulk-authoring workflow. Design bounded resumable import planning for large initial graphs and refactors without bypassing review or the reviewed final save. Prefer validated local manifests and scope-sized batches to keep agent interaction manageable without requiring a whole-project provider request.",
       "kind": "development-phase",
       "tags": [
         "phase:t23",
@@ -960,7 +960,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "phase-t26",
-      "text": "Previewed editing is implemented through the shared Python application and strict NDJSON agent execution surface. Incremental proposals, ordinary complete affected/context review, exact preview, bound host decisions, write and discard preserve stale-state rejection, complete coverage and atomicity. Fresh review is the ordinary skill workflow; the main agent selects the rare dependency-skip exception for fully understood consequences contained in one batch. Sessions remain process-local without durable drafts.",
+      "text": "Previewed editing is implemented through the shared Python application and strict NDJSON agent execution surface. Incremental proposals, ordinary complete affected/context review, exact preview, bound host decisions, write and discard preserve stale-state rejection, complete coverage and SQLite transaction atomicity. Fresh review is the ordinary skill workflow; the main agent selects the rare dependency-skip exception for fully understood consequences contained in one batch. Sessions remain process-local without durable drafts.",
       "kind": "development-phase",
       "tags": [
         "phase:t26",
@@ -993,7 +993,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "phase-t29",
-      "text": "Completed public release and discovery after T34, T36 and T37. ValidatedWorld is published as the OpenAI plugin ValidatedWorld and through GitHub standalone skill and portable plugin releases. Delivered public metadata, synchronized package versions, SVG branding, onboarding, MIT licensing, privacy/terms/support documents, publishing instructions and release notes. The public description explains graph-wide conceptual consistency beyond context windows, targeted retrieval, batched fresh no-parent-history review and a human-friendly HTML graph stored in the project. Skill routing text and language guidance recommend English for stored workflows without restricting project text. The graph engine, persistent session workflow and accepted 1.x document compatibility contract remain intact. Local package/host exercises and maintainer-reported external Plus and Free account use provide verification evidence without personal identifiers. Repeatable packet/question-worker, dependency-skip and publication-recovery checks remain available in developer verification. T29 is the final completed roadmap phase; no successor remains.",
+      "text": "Completed public release and discovery after T34, T36 and T37. ValidatedWorld is published as the OpenAI plugin ValidatedWorld and through GitHub standalone skill and portable plugin releases. Delivered public metadata, synchronized package versions, SVG branding, onboarding, MIT licensing, privacy/terms/support documents, publishing instructions and release notes. The public description explains graph-wide conceptual consistency beyond context windows, targeted retrieval, batched fresh no-parent-history review and a human-friendly HTML graph stored in the project. Skill routing text and language guidance recommend English for stored workflows without restricting project text. The graph engine, persistent session workflow and accepted 1.x document compatibility contract remain intact. Local package/host exercises and maintainer-reported external Plus and Free account use provide verification evidence without personal identifiers. Repeatable packet/question-worker, dependency-skip, direct-save failure and in-memory transport checks remain available in developer verification. T29 is the final completed roadmap phase; no successor remains.",
       "kind": "development-phase",
       "tags": [
         "phase:t29",
@@ -1004,7 +1004,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "phase-t30",
-      "text": "MVP hardening preserves artifact-path authority independent of graph prose, safe relative/absolute path and link handling, complete revision-bound review evidence, stale-state rejection and one atomic write. Regression coverage exercises adversarial artifacts, guarded proposals, large values and complete presentation. The current shared local engine uses host review and has no product model dispatch or allocation ceilings.",
+      "text": "MVP hardening preserves artifact-path authority independent of graph prose, safe relative/absolute path and link handling, complete revision-bound review evidence, stale-state rejection and one reviewed write. Regression coverage exercises adversarial artifacts, guarded proposals, large values and complete presentation. The current shared local engine uses host review and has no product model dispatch or allocation ceilings.",
       "kind": "development-phase",
       "tags": [
         "phase:t30",
@@ -1048,7 +1048,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "phase-t34",
-      "text": "Fresh-context skill tools, review packets and graph-authoring guidance are implemented. The main host agent authors one atomic proposal; optional question workers retrieve committed context and fresh no-parent-history read-only reviewers assess exact proposal evidence. Deterministic scope/ordinal ownership, lossless explicit refinement, temporary paged evidence exports, bound supplemental context, cited needs-context/block/allow results and a separate synthesis gate are delivered. Artificial analysis and review allocation controls are removed; paging and deliberate query selection remain. Workers can continue dialogue after their initial results. Codex Desktop was exercised with extracted packages. Runtime and agent capability requirements govern compatibility. Controlled cross-branch synthesis is demonstrated, while arbitrary enterprise-scale usefulness and synthesis feasibility remain unproven. The engine checks shape, coverage and bindings but cannot authenticate reviewer identity or prove truth.",
+      "text": "Fresh-context skill tools, review packets and graph-authoring guidance are implemented. The main host agent authors one coherent proposal; optional question workers retrieve committed context and fresh no-parent-history read-only reviewers assess exact proposal evidence. Deterministic scope/ordinal ownership, lossless explicit refinement, in-memory paged evidence delivery, bound supplemental context, cited needs-context/block/allow results and a separate synthesis gate are delivered. Artificial analysis and review allocation controls are removed; paging and deliberate query selection remain. Workers can continue dialogue after their initial results. Codex Desktop was exercised with extracted packages. Runtime and agent capability requirements govern compatibility. Controlled cross-branch synthesis is demonstrated, while arbitrary enterprise-scale usefulness and synthesis feasibility remain unproven. The engine checks shape, coverage and bindings but cannot authenticate reviewer identity or prove truth.",
       "kind": "development-phase",
       "tags": [
         "phase:t34",
@@ -1070,7 +1070,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "phase-t36",
-      "text": "Dependency-skip cleanup is delivered through the public engine and both packaged skills. The main agent selects it at its own judgment for rare corrections to poorly structured knowledge, with no downstream consequences or only specific known consequential edits contained in the batch. It does not require a separate authorization request. Uncertain impact calls for normal review; review breadth, a block or an unavailable host capability alone is insufficient. One batch can add, replace or remove nodes and edges, including scope/dependency repairs. NDJSON skipDependencies:true presents only exact own-edit before/after values and saves atomically without upstream/downstream traversal, dispositions or reviewers. Direct change write \u003cdatabase\u003e \u003coperation-batch.json\u003e --skip-dependencies is also an agent execution surface. Structural validity, active rules, complete exact preview, binding and stale-write checks remain. Later mutations/sessions default to normal review. Regressions and disposable public/package checks cover multi-edit and edge-only batches, high-level cleanup, reset, invalid/stale writes and rollback. Phase identifiers belong only to repository development records, never product usage instructions.",
+      "text": "Dependency-skip cleanup is delivered through the public engine and both packaged skills. The main agent selects it at its own judgment for rare corrections to poorly structured knowledge, with no downstream consequences or only specific known consequential edits contained in the batch. It does not require a separate authorization request. Uncertain impact calls for normal review; review breadth, a block or an unavailable host capability alone is insufficient. One batch can add, replace or remove nodes and edges, including scope/dependency repairs. NDJSON skipDependencies:true presents only exact own-edit before/after values and saves after one atomic SQLite transaction without upstream/downstream traversal, dispositions or reviewers. Direct change write \u003cdatabase\u003e \u003coperation-batch.json\u003e --skip-dependencies is also an agent execution surface. Structural validity, active rules, complete exact preview, binding and stale-write checks remain. Later mutations/sessions default to normal review. Regressions and disposable public/package checks cover multi-edit and edge-only batches, high-level cleanup, reset, invalid/stale writes and rollback. Phase identifiers belong only to repository development records, never product usage instructions.",
       "kind": "development-phase",
       "tags": [
         "phase:t36",
@@ -1081,7 +1081,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "phase-t37",
-      "text": "Delivered a self-contained browsable HTML file as default project authority with SQLite as the verified temporary transformation and review engine. One readable passive JSON block contains the complete graph; the separately versioned inline JavaScript viewer starts at the actual purpose node and links scope breadcrumbs, children, relationships, metadata and tag indexes through stable anchors. The fixed inline viewer requires JavaScript, with no external assets, tutorial prose, network requests or server for human browsing. Import ignores presentation, accepts compatible JSON changes and fails parsing incompatible data. Export regenerates presentation and atomically replaces only the selected file, preserving exact graph values and timestamps on no-op conversion. Managed guarded writes publish before deleting their owned DB; committed unpublished results retain the DB for exact retry. Explicit instructed DB authority and working-DB retention remain supported. Canonical docs-vw.html, sample HTML files, public commands, skills and developer tooling use the single current format with no folder compatibility reader. T29 remains the publishing phase.",
+      "text": "Delivered a self-contained browsable HTML file as default project authority with SQLite as the verified in-memory transformation and review engine. One readable passive JSON block contains the complete graph; the separately versioned inline JavaScript viewer starts at the actual purpose node and links scope breadcrumbs, children, relationships, metadata and tag indexes through stable anchors. The fixed inline viewer requires JavaScript, with no external assets, tutorial prose, network requests or server for human browsing. Import ignores presentation, accepts compatible JSON changes and fails parsing incompatible data. Export regenerates presentation and writes directly to only the selected file, preserving exact graph values and timestamps on no-op conversion. Managed work remains in RAM without temporary files; interrupted saves may be partial and failed post-commit saves discard WIP. Explicit instructed DB authority and conversion destinations remain supported. Canonical docs-vw.html, sample HTML files, public commands, skills and developer tooling use the single current format with no folder compatibility reader. The release roadmap is complete.",
       "kind": "development-phase",
       "tags": [
         "phase:t37",
@@ -1113,7 +1113,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "plugin-edit-tools",
-      "text": "The strict NDJSON interface executes the agent workflow: coherent operation batches, ordinary complete affected/context analysis, exact preview, deterministic packet ownership/refinement, bound supplemental context, cited results, write, patch, expand and discard. Exact references reject stale input. The main agent can explicitly set skipDependencies:true on apply/patch for a rare cleanup with no downstream consequences or only exact known consequences handled in the batch. It then previews only own-edit before/after values, without consequence/scope traversal or reviewer gates. Every later mutation/session defaults to ordinary review. Structural validity, active rules, full exact preview, stale-base checks and atomicity remain. Direct change write is another agent execution surface. Temporary packet exports use safe generated files and cleanup.",
+      "text": "The strict NDJSON interface executes the agent workflow: coherent operation batches, ordinary complete affected/context analysis, exact preview, deterministic packet ownership/refinement, bound supplemental context, cited results, write, patch, expand and discard. Exact references reject stale input. The main agent can explicitly set skipDependencies:true on apply/patch for a rare cleanup with no downstream consequences or only exact known consequences handled in the batch. It then previews only own-edit before/after values, without consequence/scope traversal or reviewer gates. Every later mutation/session defaults to ordinary review. Structural validity, active rules, full exact preview, stale-base checks and atomic SQLite transactions remain. Direct change write is another agent execution surface. Packet delivery uses read-only in-memory URLs or bounded native messages; endpoint cleanup revokes RAM access without filesystem deletion.",
       "kind": "requirement",
       "tags": [
         "area:plugin",
@@ -1146,7 +1146,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "plugin-local-storage",
-      "text": "The local MVP uses an ordinary supported filesystem for one project HTML file and its temporary SQLite engine. Keep project documents outside plugin caches and installations. The fixed inline viewer requires JavaScript, with no fetch, server, remote asset or network for human browsing. Publication stages and verifies a sibling file before atomic replacement. Simultaneous edits are unsupported. Users may separately synchronize closed verified snapshots. Cloud APIs, credentials, remote mounts and cross-device coordination are outside local skill delivery.",
+      "text": "The local skill stores durable knowledge in the caller-selected project HTML; ordinary reads, SQLite transformations, proposals and review evidence stay in RAM. Keep documents outside installations. Human browsing uses the fixed inline JavaScript viewer with no fetch, remote assets or server. Saving renders and validates in memory then writes directly, without lock or stage files; interrupted saves may be partial. Optimistic source checks reject already changed baselines but do not serialize racing writers. Use one writer per selected document. Users may separately version or synchronize closed verified snapshots. Cloud coordination remains outside local delivery.",
       "kind": "requirement",
       "tags": [
         "area:plugin",
@@ -1222,7 +1222,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "plugin-reviewer-boundary",
-      "text": "The main host agent authors. Ordinary writes use fresh no-parent-history read-only workers reviewing exact preview/packet evidence with cited bound decisions; packet review also uses separate synthesis. change.agent-write checks exact coverage/bindings before one atomic write. The engine cannot prove reviewer identity. The main agent may independently select the rare dependency-skip exception for understood impact contained in the batch and save its completely previewed edits without workers. CLI/NDJSON are agent execution surfaces; there is no product model API client or key setting.",
+      "text": "The main host agent authors. Ordinary writes use fresh no-parent-history read-only workers reviewing exact preview/packet evidence with cited bound decisions; packet review also uses separate synthesis. change.agent-write checks exact coverage/bindings before one reviewed write. The engine cannot prove reviewer identity. The main agent may independently select the rare dependency-skip exception for understood impact contained in the batch and save its completely previewed edits without workers. CLI/NDJSON are agent execution surfaces; there is no product model API client or key setting.",
       "kind": "requirement",
       "tags": [
         "area:plugin",
@@ -1233,7 +1233,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "plugin-session-lifecycle",
-      "text": "Proposals and reviews stay process-local; restarting loses unfinished work and never saves automatically. Managed HTML sessions import once into owned temporary SQLite under tmp/validated-world in the selected document's parent. Default session response logs and exported review packets also use unique children of that shared project-local parent. Cleanup never sweeps the parent; it remains in place and preserves other sessions and unknown files. Discard and graceful EOF remove uncommitted workspaces and review exports. Atomic document publication consumes the session and precedes working-DB cleanup unless keepWorkingDb or the named deletion policy retains it. Retention does not change authority. A committed unpublished result consumes the session but retains its DB and retry record; retry exports that exact result without repeating the transaction or rebasing over changed source bytes. HTML replacement keeps the old or new complete file, with no directory recovery protocol. Cleanup failures report warnings and exact remaining paths. Caller-owned DBs remain intact.",
+      "text": "HTML working SQLite state, proposals, reviews, supplements and packet bytes remain process-local in RAM. Restarting loses WIP without automatically saving. Success consumes the proposal, saves directly to the selected HTML, closes its RAM connection and revokes packet endpoints. Discard and graceful EOF release unsaved state; abnormal process loss leaves no implicit work files or folders. A SQLite transaction failure rolls back in RAM and can leave the live proposal available for repair. A direct HTML save failure after RAM commit consumes the session, discards WIP and reports html-publication-failure; verify or restore potentially partial HTML before a fresh session. There is no managed working-DB retention, log retention or retry-export record. Caller-owned DB authority and explicit conversion destinations remain intentional outputs. Existing unknown files or old recovery artifacts are never swept.",
       "kind": "requirement",
       "tags": [
         "area:plugin",
@@ -1244,7 +1244,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "plugin-shared-engine",
-      "text": "The standalone skill and skills-only plugin invoke the same packaged Python engine used by the checkout CLI. Business logic stays in application, validation, protocol, queries and storage boundaries, not prompts or wrappers. The shared project-path adapter manages documentation codecs, publication and owned SQLite workspaces; Core stays independent of JSON, SQLite, files and UI. Preserve strict NDJSON, canonical values, affected analysis, exact review bindings and atomic SQLite transactions without duplicate implementations.",
+      "text": "The standalone skill and skills-only plugin invoke the same packaged Python engine used by the checkout CLI. Business logic stays in application, validation, protocol, queries and storage boundaries, not prompts or wrappers. The shared project-path adapter manages documentation codecs, publication and in-memory SQLite workspaces; Core stays independent of JSON, SQLite, files and UI. Preserve strict NDJSON, canonical values, affected analysis, exact review bindings and atomic SQLite transactions without duplicate implementations.",
       "kind": "requirement",
       "tags": [
         "area:plugin",
@@ -1310,7 +1310,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "plugin-write-contract",
-      "text": "Accept only the exact current proposal after structural validation, active graph rules, complete required preview and unchanged base identity. Ordinary writes require complete affected/context review; ordinary skill agent-write also needs a bound fresh host-subagent allow. The rare dependency-skip batch presents only its own edits and permits agent-write or manual write without context/dispositions or a separate reviewer, only for absent or specific known consequences contained in that batch. Uncertain impact requires ordinary review; broad evidence, blocks and missing host capabilities never justify skipping. Later mutations/sessions default back to normal review. Invalid proposals, incomplete evidence, stale bases and SQLite transaction failures leave durable meaning unchanged. A document write commits the reviewed temporary DB, then publishes the complete document. Publication failure consumes the committed session, retains the DB and reports unpublished recovery; successful publication precedes owned DB deletion. Explicit DB-authoritative writes preserve existing atomic DB behavior without required export.",
+      "text": "Accept only the exact current proposal after structural validation, active graph rules, complete required preview and unchanged base identity. Ordinary writes require complete affected/context review; ordinary skill agent-write also needs a bound fresh host-subagent allow. The rare dependency-skip batch presents only its own edits and permits agent-write or manual write without context/dispositions or a separate reviewer, only for absent or specific known consequences contained in that batch. Uncertain impact requires ordinary review; broad evidence, blocks and missing host capabilities never justify skipping. Later mutations/sessions default back to normal review. Invalid proposals, incomplete evidence, stale bases and SQLite transaction failures leave durable meaning unchanged. An HTML write commits one reviewed SQLite transaction in RAM, then saves directly to the selected file. Post-commit save failure consumes the session and discards WIP, reporting possible partial HTML that must be verified or restored before a fresh session. No implicit work files are created. Explicit DB-authoritative writes preserve existing atomic DB behavior without required export.",
       "kind": "requirement",
       "tags": [
         "area:plugin",
@@ -1352,7 +1352,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "product-current-state",
-      "text": "One selected project representation contains the current graph without retained history. The silent default is a single browsable HTML file, with one passive typed JSON graph block and sections built by its inline JavaScript viewer. Temporary SQLite supports reads and guarded changes. Explicit trusted DB authority preserves the existing workflow without silently selecting two authorities. Retained working DBs and review/retry evidence are runtime outputs, not a maintained second authority.",
+      "text": "One selected project representation holds the current graph without built-in history. The silent default is a browsable HTML file with passive typed JSON and an inline viewer. In-memory SQLite supports verified reads and guarded coherent changes without work files. Proposals, approvals and evidence disappear with the process; before saving, the HTML remains the last saved state. Direct saves may be partial on interruption. Explicit trusted DB authority remains available without selecting two authorities.",
       "kind": "boundary",
       "tags": [
         "status:implemented",
@@ -1372,7 +1372,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "product-language-support",
-      "text": "English is recommended for stored workflow guidance to help retrieval and semantic review; it is not a requirement or a support restriction. Commands, help, diagnostics, bundled templates and examples, documentation and host-agent skill instructions are authored in English. Project titles and graph prose preserve Unicode and the user's language. Deterministic storage, validation, traversal, diff, exact lookup and atomic writes do not interpret language. Ranked lexical discovery includes English function-word tuning, so language can affect retrieval relevance; agents should use exact IDs, tags, phrases and appropriate search terms when needed.",
+      "text": "English is recommended for stored workflow guidance to help retrieval and semantic review; it is not a requirement or a support restriction. Commands, help, diagnostics, bundled templates and examples, documentation and host-agent skill instructions are authored in English. Project titles and graph prose preserve Unicode and the user's language. Deterministic storage, validation, traversal, diff, exact lookup and reviewed writes do not interpret language. Ranked lexical discovery includes English function-word tuning, so language can affect retrieval relevance; agents should use exact IDs, tags, phrases and appropriate search terms when needed.",
       "kind": "product-boundary",
       "tags": [
         "boundary:language",
@@ -1426,7 +1426,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "product-thesis",
-      "text": "ValidatedWorld is a soft semantic change-control system for AI agents: it makes project meaning and dependencies explicit, computes what a proposal may make stale, and normally requires independent agent review before atomically advancing one current state. A rare agent-selected cleanup may omit dependency review when its consequences are already understood and contained in the exact operation batch. It organizes evidence and procedure but does not guarantee semantic truth.",
+      "text": "ValidatedWorld is a soft semantic change-control system for AI agents: it makes project meaning and dependencies explicit, computes what a proposal may make stale, and normally requires independent agent review before advancing one current state. A rare agent-selected cleanup may omit dependency review when its consequences are already understood and contained in the exact operation batch. It organizes evidence and procedure but does not guarantee semantic truth.",
       "kind": "thesis",
       "tags": [
         "priority:p0",
@@ -1469,7 +1469,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "project-status",
-      "text": "ValidatedWorld is published as the OpenAI plugin ValidatedWorld and as complete standalone skill and portable plugin archives on GitHub. The display name is ValidatedWorld and package identifier is validated-world; source layout, release archives, build tools and installer use canonical names without migration suffixes. The agent maintains a graph of project knowledge beyond a single context window, retrieves targeted context and reviews changes through fresh host-subagent batches and synthesis before one atomic update. The graph is stored in the project as a browsable HTML file with typed JSON and an inline viewer; temporary SQLite supports transformation, publication, cleanup and committed-unpublished recovery. Project-local temporary database workspaces, default response logs and default review exports are grouped under tmp/validated-world; owned operation folders are cleaned without removing the shared parent, other sessions, unfamiliar files or retained recovery data. The skill supplies operational runtime guidance; public descriptions focus on graph-wide conceptual consistency and human browsing. English is recommended for stored workflow guidance, not required, and Unicode text is preserved. The accepted 1.x compatibility baseline preserves valid project documents; incompatible document or explicit DB schema changes require a new major version and documented conversion instructions. External Plus and Free account use and local verification records exclude personal identifiers. The public-release phase is complete, all roadmap phases are complete and no phase remains current.",
+      "text": "ValidatedWorld is published as the OpenAI plugin ValidatedWorld and as complete standalone skill and portable plugin archives on GitHub. The display name is ValidatedWorld and package identifier is validated-world; source layout, release archives, build tools and installer use canonical names without migration suffixes. The agent maintains a graph of project knowledge beyond a single context window, retrieves targeted context and reviews changes through fresh host-subagent batches and synthesis before one coherent reviewed update. The graph is stored in the project as a browsable HTML file with typed JSON and an inline viewer; SQLite working state, proposals, approvals and packet bytes stay entirely in RAM. Ordinary skill use creates no temporary directories, DBs, logs, evidence, lock or staging files. Saves render and validate in memory then write directly; interrupted saving may leave partial HTML and failed saves discard WIP. Native persistent pipes remain default, with optional in-memory loopback transports when permitted. Explicit backups, disk DB authority and conversion destinations remain intentional outputs. The skill supplies operational runtime guidance; public descriptions focus on graph-wide conceptual consistency and human browsing. English is recommended for stored workflow guidance, not required, and Unicode text is preserved. The accepted 1.x compatibility baseline preserves valid project documents; incompatible document or explicit DB schema changes require a new major version and documented conversion instructions. External Plus and Free account use and local verification records exclude personal identifiers. The public-release phase is complete, all roadmap phases are complete and no phase remains current.",
       "kind": "project-status",
       "tags": [
         "project:status",
@@ -1556,7 +1556,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "python-port-session",
-      "text": "The strict public Python CLI and persistent NDJSON interface provide paged reads, templates/planning, process-local proposals, normalized patches, complete affected/context analysis, exact references and stale-base rejection. Preview or lossless packets present complete evidence; fresh host decisions, registered supplements and separate packet synthesis bind exact review state. Proposal/review changes invalidate approvals. Structured storage failures, atomic write, discard, temporary-export cleanup and malformed-request recovery preserve the local contract without product model authoring or allocation controls.",
+      "text": "The strict public Python CLI and persistent NDJSON interface provide paged reads, templates/planning, process-local proposals, normalized patches, complete affected/context analysis, exact references and stale-base rejection. Preview or lossless packets present complete evidence; fresh host decisions, registered supplements and separate packet synthesis bind exact review state. Proposal/review changes invalidate approvals. Structured storage failures, reviewed write, discard, in-memory endpoint revocation and malformed-request recovery preserve the local contract without product model authoring or allocation controls.",
       "kind": "implementation-plan",
       "tags": [
         "area:python-port",
@@ -1691,7 +1691,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "query-load-whole-graph",
-      "text": "Each public query currently imports/loads and validates a complete local graph and builds an in-memory GraphIndex. Document reads exercise the verified temporary SQLite mapping without modifying documentation; active change sessions retain one working DB. Substring search scans the snapshot even when output is bounded. Agent-facing paging limits presentation, not local work; indexing and persistent-query optimizations remain future work if realistic latency or memory warrants them.",
+      "text": "Each public query imports and verifies the complete selected graph through in-memory SQLite, then builds an in-memory GraphIndex. Reads neither modify HTML nor need writable directories. Active change sessions retain one RAM SQLite connection. Substring search scans the snapshot despite bounded output; agent pages limit presentation, not local work. Persistent-query and indexing optimizations remain future work if realistic latency or memory warrants them.",
       "kind": "implementation-fact",
       "tags": [
         "phase:t19",
@@ -1877,7 +1877,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "recommend-review-size-preflight",
-      "text": "Use complete exact evidence, compact ownership manifests and generated temporary packet pages to keep parent context useful. Refine packet ownership losslessly and request registered context when real worker capacity or semantic uncertainty requires it. Require every branch and coherent synthesis before one atomic write; never replace coverage with a size estimate.",
+      "text": "Use complete exact evidence, compact ownership manifests and in-memory packet endpoints or bounded native message relay to keep parent context useful. Refine ownership losslessly and register context when actual worker capacity or semantic uncertainty requires it. Require every branch and coherent synthesis before one reviewed transaction; never replace coverage with a size estimate.",
       "kind": "recommendation",
       "tags": [
         "area:ai-review",
@@ -1901,7 +1901,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "recommend-semantic-merge",
-      "text": "ValidatedWorld implements a deterministic, read-only three-way graph merge based on stable IDs. Clean plans emit operations relative to ours and must enter a normal change session for affected analysis, review, fingerprint checking, and atomic write; conflicting replacements remain explicit.",
+      "text": "ValidatedWorld implements a deterministic, read-only three-way graph merge based on stable IDs. Clean plans emit operations relative to ours and must enter a normal change session for affected analysis, review, fingerprint checking, and reviewed write; conflicting replacements remain explicit.",
       "kind": "recommendation",
       "tags": [
         "area:repository",
@@ -1936,7 +1936,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "repository-canonical-database",
-      "text": "This repository tracks docs-vw.html as its detailed product knowledge graph, represented by a self-contained browsable HTML file. Its last verified version accepted in version control is the trusted semantic baseline. Implemented contracts, accepted boundaries, gaps and phase-tagged planned work are distinguished explicitly. Self-hosted reads and ordinary guarded change.write use the checkout public CLI with the file path; the adapter owns temporary SQLite, complete publication and success cleanup. A verified temporary baseline outside the checkout remains until bounded semantic diff review finishes. Preserve stable identities, active rules and one detailed authority; do not maintain a parallel complete DB/JSON/SQL/Markdown mirror. Committed unpublished copies are reported recovery outputs and must be retained until recovery.",
+      "text": "This repository tracks docs-vw.html as its detailed product graph. The last verified version accepted in version control is the reviewed baseline, not proof of truth. Self-hosted reads and ordinary reviewed change.write use the current checkout CLI; the adapter uses RAM SQLite and direct HTML saving. A verified explicit OS-temp baseline remains through bounded semantic and source-diff review. Preserve stable IDs, rules and one authority rather than a full parallel mirror. Product WIP is not persisted; failed saves require verifying or restoring the selected HTML. Preserve unknown files and pre-existing recovery artifacts rather than sweeping them.",
       "kind": "governance",
       "tags": [
         "area:repository",
@@ -2249,7 +2249,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "scope-change-control",
-      "text": "In-memory proposal, affected analysis, review, and atomic write lifecycle.",
+      "text": "In-memory proposal, affected analysis, review, and reviewed write lifecycle.",
       "kind": "scope",
       "tags": [
         "view:workflow"
@@ -2482,7 +2482,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "storage-file",
-      "text": "A closed project normally consists of one self-contained browsable HTML file, conventionally docs-vw.html. Its single passive application/json block contains project metadata and inline typed node/edge arrays as the import authority. A derived inline JavaScript view links graph sections through anchors. SQLite in rollback journal mode is the verified temporary engine for guarded transformations. Explicit human or trusted project instructions may select authoritative .vw.db storage with optional HTML export. Caller-owned DBs are never automatically deleted; managed cleanup follows successful HTML publication unless retention is instructed.",
+      "text": "A closed project consists of one self-contained browsable HTML file, conventionally docs-vw.html. Passive application/json holds metadata and typed node/edge arrays as import authority; the derived inline view links graph sections. Ordinary transformations use SQLite :memory: with memory journaling and temporary storage; no DB or journal file is allocated. Explicit trusted instructions may select authoritative .vw.db storage with optional HTML export. Those caller-owned disk DBs and intentional conversions remain supported and are not deleted.",
       "kind": "storage",
       "tags": [
         "status:implemented",
@@ -2542,7 +2542,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t34-acceptance",
-      "text": "Automated acceptance covers deterministic ownership, lossless refinement, duplicate/foreign/missing coverage, partial pages, page-size-bound cursors, stale proposals/dispositions/supplements/base, strict cited decisions, needs-context/block gates, cross-branch synthesis and atomic writes. Export checks cover Unicode/untrusted identifiers and text, safe names/paths, overwrite, mid-write failure, presentation rollback and cleanup that preserves unknown files. The tracked public-CLI game generator creates incrementally authored sanitized data; a 1000-extra-character purpose proposal retained complete affected evidence and refinable ownership. Count-change QA selects John/Darrell, excludes Tod, supplies full character lineage and exposes a missing-link limitation through search. Extracted standalone/plugin packages and Codex Desktop fresh question, branch and synthesis workers passed controlled block/repair/stale-binding/allow/write/reopen/follow-up and EOF-discard workflows. A missing delivered page caused a real worker needs-context result and blocked write; complete re-export under the identical binding let the continuing reviewer resolve its question. Four branches delivered 10, 13, 20 and 23 items; synthesis reconciled 13 items without reloading all bodies into the parent. Other hosts, actual model context exhaustion recovery and arbitrary enterprise-scale utility remain unverified; instructions fail closed for concrete failures. No machine runtime or active plugin reinstall was required.",
+      "text": "Automated acceptance covers deterministic ownership, lossless refinement, duplicate/foreign/missing coverage, partial pages, page-size-bound cursors, stale proposals/dispositions/supplements/base, strict cited decisions, needs-context/block gates, cross-branch synthesis and atomic writes. Current packet checks cover Unicode/untrusted identifiers as data, hashed in-memory URLs, partial coverage, allocation failure with presentation rollback, stale endpoint rejection and revocation. Ordinary-workflow child audits reject all implicit filesystem writes except selected HTML; earlier file-export host exercises were historical acceptance of the preceding transport. The tracked public-CLI game generator creates incrementally authored sanitized data; a 1000-extra-character purpose proposal retained complete affected evidence and refinable ownership. Count-change QA selects John/Darrell, excludes Tod, supplies full character lineage and exposes a missing-link limitation through search. Extracted standalone/plugin packages and Codex Desktop fresh question, branch and synthesis workers passed controlled block/repair/stale-binding/allow/write/reopen/follow-up and EOF-discard workflows. A missing delivered page caused a real worker needs-context result and blocked write; complete re-export under the identical binding let the continuing reviewer resolve its question. Four branches delivered 10, 13, 20 and 23 items; synthesis reconciled 13 items without reloading all bodies into the parent. Other hosts, actual model context exhaustion recovery and arbitrary enterprise-scale utility remain unverified; instructions fail closed for concrete failures. No machine runtime or active plugin reinstall was required.",
       "kind": "planned-work",
       "tags": [
         "phase:t34",
@@ -2562,7 +2562,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t34-evidence-transport",
-      "text": "change.review-export exclusively creates a unique temporary directory. Omitting destinationPath selects a generated vw-review-* child under tmp/validated-world in the session's selected project-file parent, independently of CWD and OS Temp. The shared parent is safely created when needed and remains after cleanup. An explicit absolute destinationPath remains supported under an existing authorized parent. It exports every exact packet page with generated filenames and SHA-256 manifest entries, returning compact paths and bindings rather than page bodies to the parent. Parent traversal, links/junctions, overwrite and partial output are rejected or cleaned. Graph identifiers and text remain serialized data. Exports are evidence, never restorable drafts or a second authority. Successful writes, discard and graceful EOF clean engine-owned directories; explicit change.review-cleanup is available. Cleanup preserves replaced directories and unknown files with actionable warnings. The host removes known temporary exports after a crash. Session/proposal/plan/packet bindings prevent old files from approving a new revision.",
+      "text": "change.review-export serializes every exact packet page and SHA-256 manifest entry into process memory, returning a compact manifestUrl, binding and pageCount. A random read-only capability URL on 127.0.0.1 serves the manifest and generated page URLs without controller commands, graph-selected paths or disk files. Fresh workers fetch and verify all page hashes/bindings directly in RAM. Manifest creation or retrieval does not present pages; each delivered page records exact existing presentation coverage. Session/proposal/plan/packet changes reject stale endpoints and results. Native paged change.review-packet with host message relay remains available without loopback. Cleanup, success, discard and exit revoke endpoints; loss of the process discards bytes. Evidence cannot restore a draft or authorize another session. Finish required worker dialogue before revocation.",
       "kind": "planned-work",
       "tags": [
         "phase:t34",
@@ -2592,7 +2592,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t34-html-export",
-      "text": "Deliver canonical single-file HTML documentation in T37. Public import-html and export-html convert between a .html document and the current verified SQLite engine. Default project/read/change paths name HTML files; export atomically replaces the selected file and leaves neighboring files untouched. The skill quietly imports, performs guarded review/write, publishes and cleans its owned working DB. Explicit trusted DB authority and caller-owned DB retention remain supported. One readable passive JSON block contains metadata and inline node/edge arrays; the derived inline JavaScript viewer places purpose first and links sections using stable anchors, with breadcrumbs and indexes but no instructional prose or remote resource; browser JavaScript is required. Version data and viewer separately. Preserve exact values, timestamps, graph/rule validity and review bindings. Retain a committed unpublished DB for exact retry. Convert tracked foundations, documentation and both skill packages together without a folder compatibility reader.",
+      "text": "Deliver canonical single-file HTML documentation in T37. Public import-html and export-html convert between a .html document and the current verified SQLite engine. Default project/read/change paths name HTML files; export renders in RAM and writes directly to the selected file and leaves neighboring files untouched. The skill quietly imports, performs guarded review/write, saves directly and releases in-memory SQLite. Explicit trusted DB authority and caller-owned conversion outputs remain supported. One readable passive JSON block contains metadata and inline node/edge arrays; the derived inline JavaScript viewer places purpose first and links sections using stable anchors, with breadcrumbs and indexes but no instructional prose or remote resource; browser JavaScript is required. Version data and viewer separately. Preserve exact values, timestamps, graph/rule validity and review bindings. Discard WIP on failed saving and verify or restore potentially partial HTML before fresh work. Convert tracked foundations, documentation and both skill packages together without a folder compatibility reader.",
       "kind": "requirement",
       "tags": [
         "phase:t37",
@@ -2674,7 +2674,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t37-html-implementation-order",
-      "text": "Core remains independent of JSON, filesystem, storage and UI. One passive graph JSON block, stable section anchors, separately versioned inline JavaScript presentation and exact timestamps/scalars support lossless byte-identical conversions. Atomic file replacement and owned SQLite workspaces preserve guarded review across direct and NDJSON surfaces. Canonical/sample files, instructions, package copies, bootstrap and developer tools share the same current representation. Acceptance includes branch-covered offline tests, blueprint/developer/package checks, browser/source-diff smoke and the existing separate fresh-host review contract. Developer methods remain outside installed skill usage; no runtime dependency is added.",
+      "text": "Core remains independent of JSON, files, SQLite and UI. The same passive graph block, stable anchors, inline viewer and exact timestamps/scalars preserve the accepted 1.x format and byte-identical no-op conversion. Verified in-memory SQLite and direct HTML saving preserve review gates without work files. Source/plugin skills, docs and developer checks share this contract. Acceptance includes branch-covered regressions, restricted-write package audits, bounded semantic/source diff, browser smoke and fresh host-subagent review. Developer trials and explicit backups are intentional outputs outside ordinary installed-skill work.",
       "kind": "requirement",
       "tags": [
         "area:html-storage",
@@ -2696,7 +2696,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t37-html-publication",
-      "text": "Publish only to an explicitly selected .html file. Reject directories, links/reparse points, application internals and source/destination identity. Write and fsync a unique sibling staging file, parse it and prove graph/timestamp parity, then atomically os.replace the destination. Initial creation and backups use non-overwriting installation. Neighboring files remain untouched. A prepublication failure leaves the old file complete and cleans owned staging; successful replacement is success with separate cleanup warnings. Interrupted replacement leaves the old or new complete file; no old-folder rename, publication sidecar or recover-html route is needed. Preserve existing session locks and within-session source byte checks without supporting simultaneous edits. Persist the working DB retry record before SQLite commit. A committed publication failure retains that DB, consumes the session and reports exact retry paths; retry refuses changed source. Fault tests cover staging, replacement and cleanup outcomes.",
+      "text": "Publish only to a caller-selected .html file; reject directories, links/junctions, application internals and overlapping conversion paths. Render, parse and prove graph/timestamp parity entirely in RAM before opening the destination. New projects and explicit backups use exclusive creation and preserve a competing occupied file. Existing saves check expected source bytes and write/flush/fsync directly to the selected file, then verify it. There are no lock or stage files, rename operations, implicit backup or retry record. Failure before writing leaves existing bytes intact; interruption during writing may leave partial HTML. Post-commit save failure discards the consumed session's RAM state; verify or restore before a fresh proposal. Source checks are optimistic and do not serialize simultaneous writers. Fault tests cover rendering, stale checks, competing creation, RAM rollback and failed direct saving.",
       "kind": "requirement",
       "tags": [
         "area:html-storage",
@@ -2707,7 +2707,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t37-html-repository-migration",
-      "text": "Tracked authorities and smoke foundations are docs-vw.html and samples/TechnicalProject/semantic-review-foundation.html. Public conversion and verified engine mapping preserve all graph identities, rules, values and timestamps, without a durable DB mirror. Repository bootstrap, CI, roadmap tools, tests, developer guides and both skill copies use the file contract. Engine unit tests still create temporary SQLite; scenario DTOs remain deterministic fixtures. Canonical HTML is tracked source, with staging/lock/retry files treated as runtime outputs. README stays a compact user introduction linking installation, skill usage, CLI, format and developer checks. Self-hosting uses checkout ordinary change.write, verified OS-temp baselines and bounded semantic diff. Old documentation folders are no longer authorities and are left for the human to delete after verification.",
+      "text": "Tracked authorities and smoke foundations are docs-vw.html and samples/TechnicalProject/semantic-review-foundation.html. Public conversion and verified engine mapping preserve all graph identities, rules, values and timestamps, without a durable DB mirror. Repository bootstrap, CI, roadmap tools, tests, developer guides and both skill copies use the file contract. Engine unit tests still create temporary SQLite; scenario DTOs remain deterministic fixtures. Canonical HTML is tracked source; ordinary skill work has no staging/lock/retry files or persistent WIP. README stays a compact user introduction linking installation, skill usage, CLI, format and developer checks. Self-hosting uses checkout ordinary change.write, verified OS-temp baselines and bounded semantic diff. Old documentation folders are no longer authorities and are left for the human to delete after verification.",
       "kind": "requirement",
       "tags": [
         "area:html-storage",
@@ -2729,7 +2729,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t37-html-surfaces",
-      "text": "Use one document-oriented boundary across direct CLI, strict NDJSON, source skill and both packages. import-html/export-html use sourcePath and destinationPath; default project, read, artifact, sample/template, backup/diff/merge/bulk-plan and change.begin/write paths identify .html files. Read-only operations never rewrite HTML; backups and initial creation do not overwrite. Existing explicitly instructed .vw.db authority remains available. Strict keepWorkingDb and direct --keep-working-db retain managed DBs only when instructed, without changing authority. Central named constants hold authority/cleanup defaults. Preserve logical project paths for artifact checking, exact review bindings and bounded public output. Remove obsolete recover-html directory recovery. The skill prefers docs-vw.html under the project root and chooses another filename only on explicit request, occupation by unrelated content, or explicitly multiple projects/databases; reuse authorized existing custom names. Check project ID, title and purpose and ask for the target only when ambiguous. File naming is a convention, not an inferred project ID. Document conversion and unpublished retry in the manual guide, not routine storage-choice questions. No public usage instruction includes development-phase IDs; Python 3.11+ remains standard-library-only.",
+      "text": "One document boundary serves direct CLI, strict NDJSON, source skill and both packages. Default project/read/change paths name HTML files; all implicit working state stays in RAM. Read-only operations never rewrite HTML, while initial creation and explicit backups refuse overwrite. import-html/export-html still use caller-selected sourcePath/destinationPath; explicit .vw.db authority remains supported. Remove managed keepWorkingDb/--keep-working-db and project.retry-export. Native pipes are the default persistent transport; optional serve/request and read-only packet URLs use local RAM when permitted. Preserve logical artifact namespaces, exact bindings and bounded output. docs-vw.html is a naming convention; reuse custom names and check project identity rather than asking routine storage questions. Document direct-save failure and lost WIP without in-product history or permission workarounds. Python 3.11+ remains standard-library-only.",
       "kind": "requirement",
       "tags": [
         "area:html-storage",
@@ -2740,7 +2740,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t37-html-verification",
-      "text": "Verify exact graph metadata/scalars, null/blank/control/Unicode distinctions, hostile markup/IDs, unique resolvable anchors, one passive JSON block, strict envelope/record failures, graph/rule gates, nonpartial import and byte-identical no-op conversion. Cover file reads/backup/diff/merge, sample/template output, artifact namespace, direct/NDJSON shape, ordinary/manual/skip/host review gates, stale source, atomic replacement failure, DB cleanup/retention and committed-unpublished retry. Inspect browser purpose-first navigation, breadcrumbs, relationships, back history, long data, narrow layout and realistic large-graph readability. Inspect localized Git source diffs beside bounded semantic diff. Run full branch-covered units, canonical verify, developer/blueprint and extracted packages. Host-subagent acceptance remains separate from offline tests. Exploratory smoke includes broken JSON, compatible data edits, occupied destinations and unchanged neighbors. Document methods only for developers and preserve bounded repair rules. Verify exact inline-script policy hashes, safe DOM text, viewer-independent shell bytes and a two-line JSON-only claim diff. Import must never execute viewer code; browser smoke verifies real script execution, all generated anchors and initial deep-link reload.",
+      "text": "Verify exact graph/scalar/null/control/Unicode preservation, hostile markup/IDs, one passive JSON block, safe viewer anchors/policy, strict record failures, graph/rule and review gates, nonpartial import and byte-identical no-op conversion. Cover RAM initialization/read/SQL export/backup/diff/merge, read-only parent access, ordinary/manual/skip/host review, stale source, transaction rollback and direct-save failure with discarded WIP. Audited isolated hosts must deny every implicit filesystem write except the selected HTML and complete native-pipe and optional controller workflows. Test hashed bounded packet delivery, stale/revoked endpoints, partial coverage, supplements, refinement and synthesis without evidence files. Explicit disk DB tests remain separate. Run full branch coverage, canonical/developer/blueprint/package/alias checks. Fresh host review and browser navigation remain separate from synthetic offline approvals. Review localized source and all bounded semantic diff pages before accepting the blueprint.",
       "kind": "requirement",
       "tags": [
         "area:html-storage",
@@ -2751,7 +2751,7 @@ section { margin-block: 2rem; }
     },
     {
       "id": "t37-html-workspace",
-      "text": "Introduce a small owned workspace/lifecycle adapter around the existing ProjectStore and Application rather than moving filesystem knowledge into Core. A normal project path names the durable HTML file. Read commands import into a unique OS temporary workspace, perform bounded existing DB queries and close/delete that owned working DB on success or ordinary failure because the durable source remains intact. A persistent change session imports once, binds project ID and source identity, and retains the temporary DB while the proposal/review stays in process memory. Ordinary change.agent-write still requires the exact cited allow decision and complete evidence, and change.write remains the explicit manual/self-hosting route. After the reviewed SQLite transaction succeeds, publish the transformed document and only then close/delete the working DB and its owned SQLite sidecars. A public document write is not successful merely because SQLite committed. Keep a written-but-unpublished committed result as recoverable runtime output after export failure; allow retry of publication without pretending that the consumed proposal is still uncommitted, and never silently rebase it over a changed durable document. Distinguish validation/review failure, temporary DB commit failure, publication failure, successful publication and cleanup failure in structured results. Invalidate/close the consumed session on successful publication and return durable document identity, not a deleted DB path; a later update starts by importing again. EOF/discard removes ordinary unpublished in-memory proposals and unchanged working copies; committed unpublished copies are retained with explicit diagnostic paths until recovered or knowingly discarded. Crash leftovers are recovery artifacts, not durable drafts or a second planned project authority. Clean normally owned temporary files robustly, and teach recovery/cleanup to avoid deleting unknown user data. Named default policy constants select HTML authority and managed DB cleanup. An explicit keep-working-db option retains an owned working DB after publication and returns its path; retained workspaces are disposable/recovery outputs and do not silently become the authority. Explicit DB-authoritative paths preserve the current DB workflow without an HTML export requirement or deletion. The skill selects that exception only from human or trusted project instructions, never merely from finding an old DB file. Public explicit export-html is a conversion and leaves its caller-owned DB untouched; automatic deletion applies to the DB created by the managed workflow. Manual import-transform-export callers own deletion of their explicit DB after export success. Preserve existing independent review, complete context/affected evidence, one logical batch and stale-base semantics; HTML parsing must not create an alternate bypass write path.",
+      "text": "ProjectFiles wraps ProjectStore and Application without moving IO into Core. HTML reads parse and verify the fixed SQLite mapping in RAM, needing no temporary directory or writable parent. A persistent session owns one RAM connection bound to project ID, fingerprints and selected source bytes. Proposals/reviews remain process-local; ordinary agent-write requires exact independent approval and complete evidence, while explicit manual/self-hosting change.write remains available. One reviewed SQLite transaction commits in RAM before direct HTML saving. A RAM commit alone is not a saved document update. Transaction failure rolls back; successful save consumes the session and closes RAM state. A post-commit save failure also consumes the session, discards WIP and reports possible partial HTML for verification/restoration before fresh work. No retry-export record, managed retention option, lock, work directory or cleanup deletion is created. Discard/EOF/process loss release WIP. Explicit instructed disk DB authority and caller-owned conversion destinations retain their existing contracts. Preserve complete review, coherent batching, stale checks and artifact paths; parsing is not a bypass write path.",
       "kind": "requirement",
       "tags": [
         "area:html-storage",

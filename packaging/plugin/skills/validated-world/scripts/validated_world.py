@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import sys
+sys.dont_write_bytecode = True
 
 
 def _engine_root() -> Path:

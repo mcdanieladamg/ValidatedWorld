@@ -44,3 +44,17 @@ archives passed the isolated Python 3.11 package workflows, live response-log
 author/review/save sequence, Windows hard-link restriction and temporary-path
 alias checks. All five package-metadata tests passed. Archive hashes, staged
 source and packaged engine bytes were checked against the current checkout.
+
+The in-memory 1.0.2 candidate was exercised on 2026-10-07 with Python 3.11.
+Both archives passed isolated author/review/save workflows through native pipes
+and the optional local controller, under an audit hook denying every filesystem
+write except the selected HTML. A separate live garden trial used two fresh
+no-history branch reviewers and one fresh synthesis reviewer. Each retrieved
+bounded, hashed packets through read-only in-memory endpoints; their unchanged
+allow results enabled the exact reviewed save. Verification and read-back passed,
+and the trial contained only its selected `garden.html`. Browser inspection passed
+purpose-first display, child and relationship navigation, endpoint links and
+deep-link reload with no console or CSP errors. Full units passed 166 tests with
+90% branch coverage. These local checks are separate from the earlier external
+machine reports. Direct HTML saving can leave a partial file when interrupted;
+unsaved work and approvals are intentionally discarded with the process.

@@ -313,8 +313,37 @@ class ProjectStore:
 
     def write(self, path: str, project_id: str, base_fingerprint: str, proposed_fingerprint: str, operations: Iterable[Operation]) -> StoredProject:
         full = str(Path(path).expanduser().resolve())
+        if not Path(full).is_file(): raise FileNotFoundError(full)
+        connection = _connect(full)
+        try:
+            return self.write_connection(connection, full, project_id, base_fingerprint, proposed_fingerprint, operations)
+        finally:
+            connection.close()
+
+    def initialize_memory(self, path, graph, *, created_utc=None, updated_utc=None):
+        """Verify the same fixed SQLite mapping without allocating a filesystem DB."""
+        validation = validate_graph(graph)
+        if not validation.is_valid:
+            raise ValueError(validation.diagnostics[0].message)
+        connection = sqlite3.connect(":memory:")
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("pragma foreign_keys = ON")
+            connection.execute("pragma temp_store = MEMORY")
+            connection.execute("pragma journal_mode = MEMORY")
+            connection.execute("pragma recursive_triggers = OFF")
+            self._apply_schema(connection)
+            now = utc_now()
+            self._insert_graph(connection, graph, now if created_utc is None else created_utc, now if updated_utc is None else updated_utc)
+            connection.commit()
+            return connection, self._load_connection(connection, str(path))
+        except BaseException:
+            connection.close()
+            raise
+
+    def write_connection(self, connection, full, project_id, base_fingerprint, proposed_fingerprint, operations):
         operations = tuple(operations)
-        preflight = self.load(full)
+        preflight = self._load_connection(connection, full)
         if preflight.graph.project_id != project_id or preflight.state_fingerprint != base_fingerprint:
             raise RuntimeError("stale-base-fingerprint")
         proposed, _ = project_graph(preflight.graph, operations)
@@ -327,7 +356,6 @@ class ProjectStore:
         expected = state_fingerprint(proposed)
         if expected != proposed_fingerprint:
             raise RuntimeError("proposed-fingerprint-mismatch")
-        connection = _connect(full)
         try:
             connection.execute("BEGIN IMMEDIATE")
             self._fault("transaction-begun")
@@ -361,12 +389,10 @@ class ProjectStore:
                 raise ValueError("SQLite foreign-key check failed before commit")
             self._fault("before-commit")
             connection.commit()
-            return self.load(full)
+            return self._load_connection(connection, full)
         except Exception:
             connection.rollback()
             raise
-        finally:
-            connection.close()
 
     @staticmethod
     def _apply_schema(connection: sqlite3.Connection) -> None:

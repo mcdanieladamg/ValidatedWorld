@@ -51,8 +51,8 @@ template to inspect working examples.
 The normal path names one browsable `.html` file. A passive JSON block contains
 the complete graph; the inline JavaScript viewer builds the view from it. [The format](document_format.md)
 separates data from presentation. Reads leave the file unchanged. Managed changes
-import once into temporary SQLite, use the guarded workflow, atomically replace
-the HTML file, then delete the working DB after success.
+import into in-memory SQLite, use the guarded workflow, and save directly to
+the HTML file. No temporary work files are created.
 
 Prefer `docs-vw.html` for a new project. Choose another name only when explicitly
 requested, occupied by unrelated content, or needed for an explicitly multi-project
@@ -62,18 +62,13 @@ path; check project identity before an update. Filenames are not project IDs.
 Explicit import creates a new caller-owned DB; explicit export leaves that DB
 untouched. A trusted project or human requirement may select a `.vw.db` path as
 the authority, using the same existing commands without a required export.
-Set strict Boolean `keepWorkingDb: true` on `change.begin`, or use
-`--keep-working-db` with the exceptional direct write, only when instructed to
-retain the managed working DB. Retention does not change the document's authority.
-
-An `unpublished` write result means the reviewed DB committed but publication
-failed; the session is consumed. Preserve `workingDbPath`, resolve the reported
-cause, then use `project retry-export`. Retry refuses an intervening source change.
-Cleanup warnings mean the complete new file was published, with remaining paths
-reported separately. The publisher writes and verifies a sibling temporary file,
-then atomically replaces the destination. An interrupted replacement leaves the
-old or new complete file; no directory recovery command is needed. Simultaneous
-edits are unsupported. A managed update checks source bytes before publication.
+Work in progress, approvals and packets exist only in the live process. A save
+renders and validates in memory, checks source bytes, then writes directly to the
+selected HTML. Saving is not atomic and can leave partial HTML if interrupted.
+A `failed` result with `html-publication-failure` consumes the session and discards
+RAM state. Verify or restore the document before starting fresh. There is no
+working-DB retention option or publication retry command. Use one writer per
+selected HTML; stale checks do not serialize concurrent writes.
 
 ## Project commands
 
@@ -85,7 +80,6 @@ project verify <path>
 project backup <source> <destination>
 project import-html <html> <new-db>
 project export-html <db> <html>
-project retry-export <working-db>
 project export-sql <path>
 project diff <base> <target> [--limit N] [--cursor TOKEN]
 project merge <base> <ours> <theirs>
@@ -147,8 +141,9 @@ Run one process for a complete change session:
 
 The host flushes each result line immediately. When using terminal tools,
 follow [persistent input/output](../skills/validated-world/references/persistent-io.md)
-to read responses while keeping the process alive. The optional bundled log
-launcher writes raw UTF-8 responses directly to a new temporary file.
+to read responses while keeping the process alive. Native pipes are the default;
+`serve` / `request <controller-url>` provide an optional in-memory transport for
+hosts that buffer terminal output and permit loopback access.
 
 Authoring, consequence review, your review acknowledgments and saving all happen
 sequentially in this same terminal and process. No second window or reviewer is
@@ -238,7 +233,7 @@ remove multiple nodes and edges. The preview contains only those edits with
 their exact before/after values. No upstream scope context, dependent-node
 traversal, dispositions, unrelated rule evidence, or independent reviewer is
 required. Page `change.preview` completely, then call `change.write` to save
-the batch atomically.
+the SQLite batch atomically in RAM before saving the HTML directly.
 
 Skipping dependencies is highly discouraged for routine updates: connected
 claims can become stale without being reviewed. Use it only when there are no
@@ -253,7 +248,7 @@ The immediate direct command accepts the same strict operation-batch JSON
 (`{"operations":[...]}`) used inside an NDJSON `operations` payload:
 
 ```text
-change write <project-html> <operation-batch.json> --skip-dependencies [--keep-working-db]
+change write <project-html> <operation-batch.json> --skip-dependencies
 ```
 
 Review that file before invoking the command. It prints paged before/after edits

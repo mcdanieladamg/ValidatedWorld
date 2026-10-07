@@ -4,8 +4,8 @@ Use this reference for ordinary skill-led changes. Start the selected Python
 executable with this skill's `scripts/validated_world.py ndjson` and keep that
 process alive through the write. Send one JSON object per line and read its
 result before the next request. Serialize JSON rather than hand-escaping paths.
-Use [persistent input/output](persistent-io.md) for a live terminal session and
-direct response log, or retained Python pipes. Reading responses must not
+Use [persistent input/output](persistent-io.md) for retained Python pipes, a live
+terminal session or the optional in-memory controller. Reading responses must not
 require closing the session.
 Top-level launcher `--help` describes one-shot syntax; `read --help` is not a
 payload-schema command. `host.help` supplies names, not schemas:
@@ -170,9 +170,8 @@ previous evidence and approval; refresh them before trying to save.
 ```
 
 Inspect `payload.status`: `written` means published; `agentReviewBlocked` means
-unsaved. `unpublished` means SQLite committed but HTML publication failed: retain
-`workingDbPath` and follow the skill's publication recovery instructions without
-repeating the semantic mutation. Do not substitute manual `change.write` to
+unsaved. `failed` with `html-publication-failure` means direct saving failed and
+unsaved state was discarded: verify or restore the HTML before a fresh session. Do not substitute manual `change.write` to
 bypass the skill's host review. Verify the file and read back changed IDs with
 the earlier `project.verify` / `read.node` payloads; report its absolute path.
 To abandon a draft, use `change.discard` with `reference: $REF`.
