@@ -47,27 +47,26 @@ of the application version. Version 1.0.0 includes no legacy reader or automatic
 format upgrade, and does not promise compatibility with earlier development
 formats.
 
-HTML initialization, reads, SQL export and reviewed changes use the fixed
-four-table SQLite mapping entirely in RAM. Ordinary skill use creates no working
-DB, temporary directory, response log, evidence file, lock sidecar or save stage.
-Reads do not require a writable project directory. Unfinished proposals, review
-results and packet transport bytes disappear with the process.
+## Saving and project authority
 
-Saving renders and verifies the document in RAM, checks the selected source's
-bytes for staleness, and writes directly to that file. New projects and backups
+The HTML file holds saved project knowledge. Reads do not require a writable
+project directory. Finish reviewed changes before ending their session;
+unfinished proposals and approvals do not survive a restart.
+
+Saving validates the document, checks the selected source's bytes for staleness,
+and writes to that file. New projects and backups
 use exclusive creation and refuse an occupied destination. Neighbors remain
 untouched. Saving is not atomic: interruption or a write failure can leave partial
-HTML. A post-transaction publication failure consumes the session and discards
-RAM state; verify or restore the HTML and repeat the work in a fresh session.
-No temporary DB or retry-export recovery record is produced. Concurrent writers
+HTML. A publication failure ends the proposal; verify or restore the HTML and
+repeat the work in a fresh session. Concurrent writers
 are not serialized; stale checks do not guarantee protection against a write
 racing the final check. Use one writer per selected document.
 
 Explicit `.vw.db` authority and caller-requested import/export destinations
 remain supported. Disk DB transactions still commit atomically; disk DB creation
 and backup use their existing no-overwrite publication contract. Caller-owned
-DBs are never automatically deleted. Their intentional files do not change the
-ordinary HTML skill's in-memory behavior.
+DBs are never automatically deleted. Selecting DB authority is an explicit
+alternative to the ordinary HTML document workflow.
 
 ## JSON fields
 

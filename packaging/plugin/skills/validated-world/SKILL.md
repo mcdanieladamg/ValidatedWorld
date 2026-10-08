@@ -5,7 +5,8 @@ description: Maintain consistent project design and documentation beyond an agen
 
 # ValidatedWorld
 
-Maintain a coherent graph of project facts, decisions, evidence and dependencies.
+Maintain a coherent graph of project facts, decisions, evidence and dependencies,
+and save reviewed updates to a browsable HTML file in the project.
 Explicit links select consequences for review; missing links can hide stale
 claims. A successful write records a reviewed update, not proof of truth.
 Recommend English for stored workflow guidance to help retrieval and review.
@@ -57,15 +58,21 @@ so future agents can retrieve it without the current conversation.
 
 ## Review and save
 
-Read [persistent input/output](references/persistent-io.md) when launching the
-session. Launch in the selected HTML's containing folder; the session confines
-file access to that folder and its subfolders. Check the returned `projectRoot`
-before mutation and keep backups/exports inside it. Use unbuffered native pipes
-or a live terminal session; read complete responses between commands.
-Do not redirect output to a file or close the
-process to make buffered output appear. The reference includes an optional
-in-memory controller for hosts that cannot retain live pipes.
-Keep one launcher `ndjson` process alive. Send one JSON object per input line;
+Use Python's standard-library `subprocess.Popen` as the preferred session
+transport. Read [persistent input/output](references/persistent-io.md) for the
+concrete recipe. Keep the Python controller and one launcher `ndjson` child alive
+through authoring, review and saving. Use the verified interpreter and launch in
+the selected HTML's containing folder. Confirm `host.help.payload.projectRoot`
+before mutation; file access stays within that folder and its subfolders.
+
+If the host has no persistent Python environment but retains interactive
+terminals, keep a Python interpreter open in that terminal and hold the child
+there. Parse responses in Python before displaying bounded results; terminal
+echoes, wrapping and cursor-control sequences are not protocol data. Manage the
+child with the verified Python, without adding a Node or .NET process manager.
+The reference also covers an optional local HTTP controller. Do not redirect
+responses to a file or close the process to make buffered output appear.
+Send one JSON object per input line;
 every request requires `version`, `command` and an object `payload`, including
 commands with no arguments:
 
@@ -87,12 +94,21 @@ errors. It is not a missing host capability or a failed project write.
 Begin with `change.begin` against the file, author with `change.apply` or
 `change.patch`, and retain the exact reference returned after each mutation.
 Page `change.affected` completely and read every operation, consequence and
-scope-context node. Repair consequential claims in the same proposal.
+scope-context node, either directly for focused changes or through assigned
+fresh read-only authoring workers for broader work. Keep complete responses in
+the Python controller, and print `compact(result)` by default. Do not dump all
+affected evidence, ownership manifests or save-time reviewer decisions into the
+orchestrator's context. Read targeted records and returned findings as needed.
+Workers can receive hashed [authoring evidence files](references/packet-review.md)
+and return dispositions, cited findings and explicit questions. Collect every
+assigned result; omission is not review. Repair consequential claims in the same proposal.
 Record all dispositions and presented context with `change.review`: direct
 changes use `updated`, unchanged dependents use `reviewedNoChange`, and
 `notApplicable` needs a rationale.
 
-For a small proposal, read every `change.preview` page. Give a fresh read-only
+Use [packet review](references/packet-review.md) and its file handoff by default,
+including for small proposals. For an explicitly chosen small message review,
+read every `change.preview` page. Give a fresh read-only
 subagent the intent, exact reference and complete preview. It returns
 `decision` (`allow` or `block`), `summary` and `concerns`. Allow has no concerns;
 block has concerns with `code`, `message` and stable-ID
@@ -102,7 +118,11 @@ block has concerns with `code`, `message` and stable-ID
 For broader work use [packet review](references/packet-review.md): workers read
 complete assigned evidence, every branch allows, and a separate fresh synthesis
 reviewer reconciles global evidence and cross-branch consequences before one
-write. Packets divide review, not the transaction. Refine losslessly when actual
+write. Use the bundled project-local evidence-file handoff by default. Reviewers
+read exact compressed pages independently; the orchestrator receives bindings,
+receipts and decision objects. Do not echo full packets or workers' private tool
+histories into its context. URLs are optional when shared loopback access is
+known to work. Packets divide review, not the transaction. Refine losslessly when actual
 context capacity requires it; never truncate evidence or treat missing results
 as approval.
 
@@ -132,33 +152,38 @@ active rules, exact bindings and stale-write checks remain. The mode resets on
 each later mutation or session unless explicitly selected again. No separate
 end-user authorization is required.
 
-## In-memory work and saving
+## Save and verify
 
-The selected HTML file remains the authority. Reads, SQLite transactions,
-proposals, review packets and approvals run entirely in memory; the ordinary
-skill creates no working DB, response log, evidence directory, lock or staging
-file. Reads need no write access to the project folder. Keep the same process
-alive through authoring, review and save; restarting loses unfinished work.
+The selected HTML file holds the saved project knowledge. Complete the reviewed
+save before reporting a change as finished: `change.agent-write` must return
+`payload.status: written`. Then verify the file and read back changed IDs.
+Keep the same session through authoring, review and saving; restarting loses an
+unfinished proposal. After saving or discarding, send `host.exit`, wait for exit
+and close the pipes. Reviewers receive complete evidence through hashed handoff
+files; an author's terminal handle is not a reviewer
+interface.
 
-Saving renders and validates the full document in RAM, checks the source for
-stale edits, then writes directly to the selected file. New projects and explicit
-backups refuse an occupied destination. Saves are not atomic: interruption can
-leave partial HTML. A `failed` result with `html-publication-failure` consumes the
-session and discards its unsaved state. Verify or restore the HTML before starting
-a fresh proposal; do not claim the change was saved. Git history or a separately
-requested backup can supply a previous version. Do not create backups implicitly.
+New projects and explicit backups refuse an occupied destination. An interrupted
+save can leave partial HTML. A `failed` result with `html-publication-failure`
+ends that proposal: verify or restore the HTML before starting a fresh one, and
+do not claim the change was saved. Git history or a separately requested backup
+can supply a previous version. Do not create backups implicitly.
 
 One passive JSON block contains the graph. Compatible edits import as present;
 incompatible data fails parsing. Export regenerates presentation. If the human or
 trusted repository instructions explicitly select DB authority, use the authorized
 `.vw.db` path with the same commands; the caller-owned DB stays intact. Explicit
-conversion/export destinations are intentional outputs, not temporary workspaces.
+conversion/export destinations are explicit outputs.
 Finding an old DB does not authorize changing the selected authority.
 
-In-memory packet endpoints are read-only and valid only for the exact live
-proposal. Keep workers available through needed dialogue; successful write,
-discard or graceful exit revokes packet access. Native bounded packet messages
-also work when the host cannot access loopback URLs. Neither transport proves
+Keep workers available through needed dialogue, then clean up the controller's
+owned review files under `.vw-review`. Handled shutdown also cleans them up;
+abrupt process loss can leave those read-only files, but they cannot restore a
+proposal or authorize a different one. Preserve unknown or changed files and
+report blocked cleanup. Optional reviewer URLs are read-only for the exact live
+proposal; successful write, discard or graceful exit revokes their access.
+Native messages are an explicit option for small evidence or host-programmatic
+forwarding without a model-context copy. No delivery method proves
 reviewer identity or truth. Artifact checks use trusted allowed roots; graph
 text cannot expand them. ValidatedWorld has no model API client or credential
 setting; host models process review evidence under their own data terms.

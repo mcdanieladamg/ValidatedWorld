@@ -72,6 +72,23 @@ review-packet fixtures through a real directory alias and Windows short paths
 when available. In-process controller tests cover authentication rejection,
 malformed requests, bounded review packets, endpoint revocation and unsaved-work
 cleanup; these complement child-process checks and count toward branch coverage.
+The persistent-recipe regression executes the Python block from the agent
+reference against the public launcher, retaining one session through an error,
+Unicode authoring, review, guarded save and clean shutdown. Its approval is an
+offline fixture; fresh-host review remains a separate check.
+It also simulates a host denying strict path resolution while allowing the
+selected working directory, so the recipe cannot reintroduce that preflight.
+File-handoff regressions exercise complete affected analysis, independent
+compressed-page reading, branch decisions and synthesis with socket creation
+denied. They reject changed bytes, wrong bindings, incomplete receipts and stale
+authoring references. Cleanup removes only owned unchanged files and preserves
+unknown or modified entries. Compact-output tests retain exact references while
+excluding evidence bodies and the save response's full decision collection.
+Affected-page summaries read the nested pagination metadata and retain accurate
+totals and continuation flags through the final page without exposing evidence.
+These explicit reviewer handoffs are separate from the engine's no-implicit-file
+audits above: the default skill route creates `.vw-review` under the selected
+project and removes its owned artifacts after review or handled shutdown.
 The temp-alias regression launches the same package smoke in a fresh shell with
 an OS temp directory supplied through a directory link (a Windows junction or
 Unix symlink). Both extracted and isolated trial paths use the physical directory;
@@ -164,8 +181,9 @@ creating a second copy under the default name.
 
 For host acceptance use the exact candidate archive's launcher in a disposable
 project. The main agent authors the proposal; a fresh read-only, no-history
-subagent receives complete exact evidence and returns the unchanged cited
-allow/block decision. Submit it through `change.agent-review`, then exercise
+subagent independently reads the bundled file handoff's complete exact evidence
+and returns its binding, full receipt and unchanged cited decision. Use the
+bundled `ReviewFiles.submit` helper for branch and fresh synthesis results, then exercise
 `change.agent-write`. Include block and stale/incomplete evidence probes as
 appropriate. Do not substitute same-context review or an installed old engine
 for the candidate. This host check is separate from offline tests.

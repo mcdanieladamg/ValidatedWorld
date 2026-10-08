@@ -14,7 +14,7 @@ managed by your AI agent.
 The graph is stored in your project as a human-friendly HTML file that you can open in a browser
 to read and explore.
 
-Work in progress stays in memory. Saving updates the HTML file in your project.
+Saving updates the HTML file in your project.
 Agent authoring sessions keep file access within the document's folder and its
 subfolders.
 

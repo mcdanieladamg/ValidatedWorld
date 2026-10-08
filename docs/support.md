@@ -18,7 +18,8 @@ Your agent host handles account, billing, permission and platform problems;
 ValidatedWorld has no publisher account or separate model API key.
 
 Before updating or uninstalling a package, finish or discard active proposals
-and verify or restore the HTML after any failed save. Unsaved work exists only
-in memory and is lost when the process ends. Keep project documents outside installation directories. See
+and verify or restore the HTML after any failed save. Ending a session loses
+unfinished proposals; saved HTML remains in the project. Keep project documents
+outside installation directories. See
 [installation and packages](https://github.com/mcdanieladamg/ValidatedWorld/blob/main/docs/release_distribution.md) and
 [privacy](privacy.md).

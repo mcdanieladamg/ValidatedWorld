@@ -51,8 +51,7 @@ template to inspect working examples.
 The normal path names one browsable `.html` file. A passive JSON block contains
 the complete graph; the inline JavaScript viewer builds the view from it. [The format](document_format.md)
 separates data from presentation. Reads leave the file unchanged. Managed changes
-import into in-memory SQLite, use the guarded workflow, and save directly to
-the HTML file. No temporary work files are created.
+use the guarded workflow and save reviewed knowledge to the HTML file.
 
 Prefer `docs-vw.html` for a new project. Choose another name only when explicitly
 requested, occupied by unrelated content, or needed for an explicitly multi-project
@@ -62,13 +61,12 @@ path; check project identity before an update. Filenames are not project IDs.
 Explicit import creates a new caller-owned DB; explicit export leaves that DB
 untouched. A trusted project or human requirement may select a `.vw.db` path as
 the authority, using the same existing commands without a required export.
-Work in progress, approvals and packets exist only in the live process. A save
-renders and validates in memory, checks source bytes, then writes directly to the
-selected HTML. Saving is not atomic and can leave partial HTML if interrupted.
-A `failed` result with `html-publication-failure` consumes the session and discards
-RAM state. Verify or restore the document before starting fresh. There is no
-working-DB retention option or publication retry command. Use one writer per
-selected HTML; stale checks do not serialize concurrent writes.
+Keep one session through authoring, review and saving. A save validates the
+document, checks source bytes and updates the selected HTML. Saving is not atomic
+and can leave partial HTML if interrupted. A `failed` result with
+`html-publication-failure` ends the proposal. Verify or restore the document
+before starting fresh. Use one writer per selected HTML; stale checks do not
+serialize concurrent writes.
 
 ## Project commands
 
@@ -141,9 +139,9 @@ Run one process for a complete change session:
 
 The host flushes each result line immediately. When using terminal tools,
 follow [persistent input/output](../skills/validated-world/references/persistent-io.md)
-to read responses while keeping the process alive. Native pipes are the default;
-`serve` / `request <controller-url>` provide an optional in-memory transport for
-hosts that buffer terminal output and permit loopback access.
+to read responses while keeping the process alive. The preferred agent recipe
+uses Python subprocess pipes; `serve` / `request <controller-url>` provide an
+optional local HTTP controller when the host permits loopback access.
 
 Persistent sessions confine reads and writes to one existing project folder,
 selected at startup. Launch in the HTML file's containing folder, or pass that
@@ -201,7 +199,7 @@ one-shot surface. Change commands are stateful:
 6. Call `change.write` to save the completely reviewed and previewed proposal
    through the guarded transaction and document publication. This manual route
    requires no agent decision and launches no agent.
-7. Use `change.discard` to abandon the in-memory proposal.
+7. Use `change.discard` to abandon the proposal.
 
 Keep the returned reference from each response and pass it to the next mutating
 request. Any proposal or review change makes an earlier reference stale.
@@ -243,7 +241,7 @@ remove multiple nodes and edges. The preview contains only those edits with
 their exact before/after values. No upstream scope context, dependent-node
 traversal, dispositions, unrelated rule evidence, or independent reviewer is
 required. Page `change.preview` completely, then call `change.write` to save
-the SQLite batch atomically in RAM before saving the HTML directly.
+the reviewed batch to the selected document.
 
 Skipping dependencies is highly discouraged for routine updates: connected
 claims can become stale without being reviewed. Use it only when there are no

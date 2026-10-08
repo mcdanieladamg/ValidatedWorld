@@ -6,9 +6,15 @@ process alive through the write. Launch in the HTML file's containing folder
 and confirm `host.help.payload.projectRoot`; every file path must remain inside
 that fixed folder or its subfolders. Send one JSON object per line and read its
 result before the next request. Serialize JSON rather than hand-escaping paths.
-Use [persistent input/output](persistent-io.md) for retained Python pipes, a live
-terminal session or the optional in-memory controller. Reading responses must not
-require closing the session.
+Use the preferred Python subprocess recipe in
+[persistent input/output](persistent-io.md), retaining its controller across
+requests. The reference also covers a retained Python terminal and an optional
+local HTTP controller. Reading responses must not
+require closing the session. Retain full replies in Python and print
+`compact(result)` for routine output. These payloads illustrate commands;
+the default reviewer delivery is the bundled file handoff in
+[packet review](packet-review.md), without printing full packets or save-time
+reviewer collections into the author's context.
 Top-level launcher `--help` describes one-shot syntax; `read --help` is not a
 payload-schema command. `host.help` supplies names, not schemas:
 

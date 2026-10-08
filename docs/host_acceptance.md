@@ -61,7 +61,7 @@ unsaved work and approvals are intentionally discarded with the process.
 
 Version 1.0.3 removes reverse-DNS resolution from both optional loopback servers.
 DNS-denied regressions failed before the correction and passed afterward. Local
-verification passed 178 units with 90.68% branch coverage, both rebuilt archive
+verification passed 179 units with 90.68% branch coverage, both rebuilt archive
 workflows and temporary-path alias checks. Persistent sessions now confine file
 access to one launch-selected project folder and its subfolders. Regressions
 reject outside reads/writes, root expansion, links/junctions and Windows aliases;
@@ -72,3 +72,40 @@ the change, and left only the selected HTML after shutdown. Browser inspection
 confirmed readable saved text, record navigation and deep-link reload with no
 console or CSP errors. The startup tests retain their 30-second budget and report
 child exit status/stderr. CodeQL alert clearance requires the next CI analysis.
+
+An additional maintainer-reported trial on a plain Windows computer successfully
+used retained Python subprocess pipes after an unsuccessful attempt to introduce
+a separate process manager. The skill now makes that Python recipe the preferred
+method. An executable-documentation regression runs the actual published recipe
+through Unicode authoring, review, guarded saving, verification and shutdown;
+it passed locally with Python 3.11 and 3.12. This regression uses an offline
+approval fixture, distinct from the fresh host-review trials above.
+
+A follow-up report from that computer found strict path resolution denied even
+though launching in the selected folder succeeded. The recipe now uses ordinary
+non-strict resolution. The reported startup, root confirmation and clean shutdown
+passed with that change; document creation was not exercised in that follow-up.
+The executable-recipe regression reproduces strict-preflight denial and verifies
+the complete author/review/save workflow locally. Application confinement checks
+are unchanged.
+
+A subsequent maintainer report from that plain Windows computer described
+reviewer loopback failures (socket access denied, then connection timeout) and a
+successful compressed-file handoff. The exact isolation or permission cause
+was not established. Reviewers independently read complete packets; the author
+received progress and decisions rather than their private tool histories.
+The author nevertheless printed overly large controller responses. The skill
+now defaults to a bundled project-local file handoff and compact controller
+output, with URLs optional when shared loopback access is known to work.
+
+The bundled file route also passed a local extracted-candidate trial with Python
+3.11: one fresh no-history branch reviewer and a separate fresh synthesis
+reviewer independently read all compressed pages and returned exact bindings,
+complete fixed-size hash receipts and cited decisions. A discrepancy in copied handoff
+metadata was caught and clarified before approval; corrected delivery
+metadata did not change the proposal. The guarded save, verification and record
+read-back passed. Normal shutdown closed both pipes and removed owned handoffs,
+leaving only the selected garden HTML. The full suite passed 185 tests with
+90.68% branch coverage, including socket-denied file delivery and compact-output
+regressions. Both final archives passed isolated engine workflows and temp-alias
+checks. These local checks are distinct from the external-machine report.
