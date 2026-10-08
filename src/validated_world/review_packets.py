@@ -1,13 +1,10 @@
 """Process-local packet review services; serialization and files stay outside Core."""
 
 from copy import deepcopy
-from pathlib import Path
 import hashlib
 import json
-import shutil
 
 from .planning import ALGORITHM, partition, refine
-from .path_safety import is_junction
 from .protocol import node_dto, edge_dto
 from .queries import _page
 from .validation import GraphIndex
@@ -209,38 +206,3 @@ def validate_result(result, items):
         raise ValueError("block requires cited concerns")
     if result["decision"] == "needs-context" and not result["questions"]:
         raise ValueError("needs-context requires explicit questions")
-
-
-def export_packet(review, packet_id, destination, limit):
-    """Create an optional evidence directory exclusively; remove partial output on failure."""
-    if ".." in Path(destination).parts:
-        raise ValueError("review export path cannot contain parent traversal")
-    target = Path(destination).absolute()
-    for path in (target, *target.parents):
-        if path.is_symlink() or is_junction(path):
-            raise ValueError("review export path must not traverse a link or junction")
-    if not target.parent.is_dir():
-        raise ValueError("review export requires an existing parent directory")
-    # Validate before creating output. File names never use graph IDs or supplied packet IDs.
-    saved_seen = deepcopy(review.seen)
-    created = False
-    try:
-        first = review.packet(packet_id, limit, None)
-        target.mkdir(exist_ok=False)
-        created = True
-        pages = []; page = first; number = 0
-        while True:
-            name = f"page-{number:06d}.json"
-            raw = (json.dumps(page, ensure_ascii=True, sort_keys=True) + "\n").encode()
-            with (target / name).open("xb") as stream: stream.write(raw)
-            pages.append({"path": str(target / name), "sha256": hashlib.sha256(raw).hexdigest()})
-            if page["nextCursor"] is None: break
-            number += 1; page = review.packet(packet_id, limit, page["nextCursor"])
-        manifest = {"binding": first["binding"], "pages": pages, "role": first["role"], "intent": review.intent}
-        with (target / "manifest.json").open("x", encoding="utf-8") as stream:
-            json.dump(manifest, stream, ensure_ascii=True)
-        return {"binding": first["binding"], "manifestPath": str(target / "manifest.json"), "pageCount": len(pages)}
-    except BaseException:
-        review.seen = saved_seen
-        if created: shutil.rmtree(target)
-        raise

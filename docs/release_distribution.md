@@ -64,8 +64,8 @@ workflow. Browse the saved graph by opening its HTML file in a browser.
 Keep project documents outside package/installation directories so replacing a
 package preserves project knowledge. Updates replace the skill and shared
 engine together. Unfinished proposals live in one process; finish or discard
-them before restarting. A committed result awaiting publication has its own
-reported recovery path.
+them before restarting. Unsaved work disappears with the process. A failed save
+can leave partial HTML; restore or verify it before starting fresh.
 
 Archives include source, instructions, metadata, license and the documentation
 format. Project data, credentials, settings and compiled runtimes are excluded.

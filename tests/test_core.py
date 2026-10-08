@@ -82,11 +82,12 @@ class PythonProductTests(unittest.TestCase):
 
     def test_ndjson_exact_preview_gate_and_persistent_session(self):
         with tempfile.TemporaryDirectory() as temp:
+            temp = Path(temp).resolve()
             path = Path(temp) / "ndjson project.vw.db"
             ProjectStore().initialize(str(path), sample_graph())
             environment = os.environ.copy()
             environment["PYTHONPATH"] = str(Path(__file__).parents[1] / "src")
-            process = subprocess.Popen([sys.executable, "-m", "validated_world", "ndjson"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=environment)
+            process = subprocess.Popen([sys.executable, "-m", "validated_world", "ndjson", str(temp)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=environment)
 
             def send(command, payload):
                 process.stdin.write(json.dumps({"version": 1, "command": command, "payload": payload}) + "\n")

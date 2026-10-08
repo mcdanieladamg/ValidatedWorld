@@ -21,7 +21,7 @@ class SkipDependenciesTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.path = Path(self.temporary.name) / "cleanup project.vw.db"
+        self.path = Path(self.temporary.name).resolve() / "cleanup project.vw.db"
         base = sample_graph()
         rule = Node("unrelated-rule", "Purpose must exist", "validation-rule", ("rule:active",), (
             Attribute("rule:version", GraphValue.integer(1)),
@@ -230,7 +230,7 @@ class SkipDependenciesTests(unittest.TestCase):
     def test_ndjson_boolean_flag_is_explicit_and_reset_on_patch(self):
         environment = os.environ.copy()
         environment["PYTHONPATH"] = str(Path(__file__).parents[1] / "src")
-        with subprocess.Popen([sys.executable, "-m", "validated_world", "ndjson"], stdin=subprocess.PIPE,
+        with subprocess.Popen([sys.executable, "-m", "validated_world", "ndjson", str(self.path.parent)], stdin=subprocess.PIPE,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment) as process:
             def send(command, **payload):
                 process.stdin.write(json.dumps({"version": 1, "command": command, "payload": payload}) + "\n")

@@ -17,6 +17,7 @@ from .merge import merge_projects
 from .models import Operation, ordinal_key
 from .protocol import json_loads_strict, operation_from_dto
 from .queries import Queries
+from .project_paths import ProjectPaths
 from .document_store import ProjectFiles as ProjectStore
 from .templates import descriptor, dto, instantiate, resolve
 
@@ -112,18 +113,24 @@ def direct_command(arguments: list[str], out, err) -> int:
         _print_help(out); return SUCCESS
     if len(arguments) == 1 and arguments[0] in {"version", "--version", "-v"}:
         out.write(f"ValidatedWorld {__version__}\n"); return SUCCESS
+    if arguments[0] == "serve" and len(arguments) in {1, 2}:
+        from .memory_transport import serve
+        return serve(out, err, project_root=arguments[1] if len(arguments) == 2 else None)
+    if len(arguments) == 2 and arguments[0] == "request":
+        from .memory_transport import request
+        return request(arguments[1], sys.stdin, out)
     store = ProjectStore(); group = arguments[0]
     try:
         if group == "change":
             if len(arguments) < 2 or arguments[1] in {"help", "--help", "-h"}:
-                out.write("change write <project-html> <operation-batch.json> --skip-dependencies\nReview the operation file before invoking this immediate atomic write. Prints only its before/after edits. Highly discouraged for routine changes. Use rare cleanup only for absent downstream consequences or specific known consequential edits contained in the batch. Uncertain impact needs ordinary review. Structural validity, active graph rules and stale-write protection remain. For preview before a separate save, use NDJSON change.apply with skipDependencies:true, change.preview, then change.write.\n")
+                out.write("change write <project-html> <operation-batch.json> --skip-dependencies\nReview the operation file before invoking this immediate save. Prints only its before/after edits. Highly discouraged for routine changes. Use rare cleanup only for absent downstream consequences or specific known consequential edits contained in the batch. Uncertain impact needs ordinary review. Structural validity, active graph rules and stale-write protection remain. For preview before a separate save, use NDJSON change.apply with skipDependencies:true, change.preview, then change.write.\n")
                 return SUCCESS
-            if len(arguments) not in (5, 6) or arguments[1] != "write" or arguments[4] != "--skip-dependencies" or (len(arguments) == 6 and arguments[5] != "--keep-working-db"):
+            if len(arguments) != 5 or arguments[1] != "write" or arguments[4] != "--skip-dependencies":
                 raise ValueError("use change write <project-html> <operation-batch.json> --skip-dependencies; ordinary changes use the NDJSON review workflow")
             operations = _ops({"operations": json_loads_strict(Path(arguments[3]).read_text(encoding="utf-8"))})
             app = Application(store)
             project = store.load(arguments[2])
-            session = app.begin(arguments[2], project.graph.project_id, "direct-command", "Explicit dependency-skip batch write", keep_working_db="--keep-working-db" in arguments)
+            session = app.begin(arguments[2], project.graph.project_id, "direct-command", "Explicit dependency-skip batch write")
             session = app.apply(session.reference(), operations, skip_dependencies=True)
             cursor = None
             while True:
@@ -137,7 +144,7 @@ def direct_command(arguments: list[str], out, err) -> int:
             return SUCCESS if result["status"] == "written" else DOMAIN
         if group == "project":
             if len(arguments) < 2 or arguments[1] in {"help", "--help", "-h"}:
-                out.write("project init <path> <projectId> <title> <purposeNodeId> <purposeText>\nproject status|open|verify <path>\nproject backup <source> <destination>\nproject import-html <html> <new-db>\nproject export-html <db> <html> (replaces the entire document)\nproject retry-export <working-db>\nproject export-sql <path>\nproject diff <base> <target> [--limit N] [--cursor TOKEN]\nproject merge <base> <ours> <theirs>\nproject bulk-plan <path> <manifest> [--chunk-size N] [--cursor TOKEN]\n"); return SUCCESS
+                out.write("project init <path> <projectId> <title> <purposeNodeId> <purposeText>\nproject status|open|verify <path>\nproject backup <source> <destination>\nproject import-html <html> <new-db>\nproject export-html <db> <html> (replaces the entire document)\nproject export-sql <path>\nproject diff <base> <target> [--limit N] [--cursor TOKEN]\nproject merge <base> <ours> <theirs>\nproject bulk-plan <path> <manifest> [--chunk-size N] [--cursor TOKEN]\n"); return SUCCESS
             command = arguments[1]
             if command == "init" and len(arguments) == 7:
                 out.write(_json(_stored(Application(store).initialize(arguments[2], arguments[3], arguments[4], arguments[5], arguments[6]))) + "\n"); return SUCCESS
@@ -148,8 +155,6 @@ def direct_command(arguments: list[str], out, err) -> int:
             if command in {"import-html", "export-html"} and len(arguments) == 4:
                 result = getattr(store, command.replace("-", "_"))(arguments[2], arguments[3])
                 out.write(_json({**_stored(result), "warnings": store.last_warnings}) + "\n"); return SUCCESS
-            if command == "retry-export" and len(arguments) == 3:
-                out.write(_json({**_stored(store.retry_export(arguments[2])), "warnings": store.last_warnings}) + "\n"); return SUCCESS
             if command == "backup" and len(arguments) == 4: out.write(_json(_stored(store.backup(arguments[2], arguments[3]))) + "\n"); return SUCCESS
             if command == "export-sql" and len(arguments) == 3: out.write(store.export_sql(arguments[2])); return SUCCESS
             if command == "diff" and len(arguments) >= 4:
@@ -216,7 +221,9 @@ def direct_command(arguments: list[str], out, err) -> int:
             raise ValueError("incorrect template arguments")
         if group == "shell":
             return ndjson_loop(sys.stdin, out, err)
-        if group == "ndjson": return ndjson_loop(sys.stdin, out, err)
+        if group == "ndjson":
+            if len(arguments) not in {1, 2}: raise ValueError("use ndjson [project-folder]")
+            return ndjson_loop(sys.stdin, out, err, project_root=arguments[1] if len(arguments) == 2 else None)
         raise ValueError(f"unknown command group '{group}'")
     except (ValueError, KeyError, FileExistsError, FileNotFoundError) as exc:
         err.write(f"error[invalid-argument]: {exc}\n"); return DOMAIN if isinstance(exc, (FileExistsError, FileNotFoundError)) else USAGE
@@ -266,7 +273,6 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "project.backup": ({"sourcePath", "destinationPath"}, set()),
         "project.import-html": ({"sourcePath", "destinationPath"}, set()),
         "project.export-html": ({"sourcePath", "destinationPath"}, set()),
-        "project.retry-export": ({"path"}, set()),
         "project.diff": ({"basePath", "targetPath"}, {"limit", "cursor"}),
         "project.merge": ({"basePath", "oursPath", "theirsPath"}, set()),
         "project.bulk_plan": ({"path", "manifestPath"}, {"chunkSize", "cursor"}),
@@ -289,7 +295,7 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "read.context": ({"path", "nodeIds"}, {"maxDepth", "expectedProjectId"}),
         "read.health": ({"path"}, {"limit", "expectedProjectId"}),
         "read.report": ({"path"}, {"limit", "expectedProjectId"}),
-        "change.begin": ({"path", "projectId", "author", "intent"}, {"includeOperations", "includeProposedGraph", "keepWorkingDb"}),
+        "change.begin": ({"path", "projectId", "author", "intent"}, {"includeOperations", "includeProposedGraph"}),
         "change.show": ({"session"}, {"includeOperations", "includeProposedGraph"}),
         "change.affected": ({"session"}, {"limit", "cursor"}),
         "change.omission-details": ({"reference", "fingerprint"}, {"limit", "cursor"}),
@@ -302,7 +308,7 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "change.review-packet": ({"reference", "planFingerprint", "packetId"}, {"limit", "cursor"}),
         "change.review-context": ({"reference", "entityIds"}, set()),
         "change.review-result": ({"reference", "binding", "result"}, set()),
-        "change.review-export": ({"reference", "planFingerprint", "packetId", "destinationPath"}, {"limit"}),
+        "change.review-export": ({"reference", "planFingerprint", "packetId"}, {"limit"}),
         "change.review-cleanup": ({"reference"}, set()),
         "change.review": ({"reference", "dispositions", "presentedContextNodeIds"}, {"includeOperations", "includeProposedGraph"}),
         "change.validate": ({"reference"}, {"includeOperations", "includeProposedGraph"}),
@@ -332,7 +338,7 @@ def _validate_payload(command: str, payload: Any) -> dict:
     for name in positive_fields & set(payload):
         if not isinstance(payload[name], int) or isinstance(payload[name], bool) or payload[name] < 1:
             raise ValueError(f"{name} must be a positive integer")
-    for name in {"includeOperations", "includeProposedGraph", "skipDependencies", "keepWorkingDb"} & set(payload):
+    for name in {"includeOperations", "includeProposedGraph", "skipDependencies"} & set(payload):
         if not isinstance(payload[name], bool):
             raise ValueError(f"{name} must be Boolean")
     if "cursor" in payload and (not isinstance(payload["cursor"], str) or not payload["cursor"]):
@@ -375,8 +381,9 @@ def _validate_payload(command: str, payload: Any) -> dict:
     return payload
 
 
-def ndjson_loop(inp, out, err) -> int:
-    app = Application()
+def ndjson_loop(inp, out, err, *, app=None, close_on_eof=True, project_root=None) -> int:
+    paths = ProjectPaths(Path.cwd() if project_root is None else project_root)
+    app = app if app is not None else Application()
     for line in inp:
         if not line.strip(): continue
         command = "unknown"
@@ -387,48 +394,49 @@ def ndjson_loop(inp, out, err) -> int:
             if not isinstance(request["version"], int) or isinstance(request["version"], bool) or request["version"] != 1 or not isinstance(command, str) or not command:
                 raise ValueError("protocol version 1 and a text command are required")
             payload = _validate_payload(command, request["payload"])
+            if command not in {"host.help", "host.exit"}:
+                for session in app.sessions.values(): paths.file(session.base.path)
             if command == "host.help":
-                value = {"protocolVersion": 1, "framing": "One request and one result JSON object per line. Unknown fields are rejected.", "supportedProductLanguage": "English recommended for stored workflow guidance; other languages permitted", "graphTextSupport": "Unicode project text is preserved without language interpretation.", "commands": ["host.help", "host.exit", "project.init", "project.status", "project.open", "project.verify", "project.backup", "project.export-sql", "project.import-html", "project.export-html", "project.retry-export", "project.diff", "project.merge", "project.bulk_plan", "artifact.check", "sample.list", "sample.create", "template.list", "template.describe", "template.export", "template.instantiate", "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope", "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report", "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand", "change.affected", "change.omission-details", "change.preview", "change.review-plan", "change.review-packet", "change.review-context", "change.review-result", "change.review-export", "change.review-cleanup", "change.review", "change.validate", "change.agent-review", "change.agent-write", "change.write", "change.discard"]}
+                value = {"projectRoot": paths.root, "protocolVersion": 1, "framing": "One request and one result JSON object per line. Unknown fields are rejected.", "supportedProductLanguage": "English recommended for stored workflow guidance; other languages permitted", "graphTextSupport": "Unicode project text is preserved without language interpretation.", "commands": ["host.help", "host.exit", "project.init", "project.status", "project.open", "project.verify", "project.backup", "project.export-sql", "project.import-html", "project.export-html", "project.diff", "project.merge", "project.bulk_plan", "artifact.check", "sample.list", "sample.create", "template.list", "template.describe", "template.export", "template.instantiate", "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope", "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report", "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand", "change.affected", "change.omission-details", "change.preview", "change.review-plan", "change.review-packet", "change.review-context", "change.review-result", "change.review-export", "change.review-cleanup", "change.review", "change.validate", "change.agent-review", "change.agent-write", "change.write", "change.discard"]}
             elif command == "host.exit":
                 app.close()
                 out.write(_json(_result(command, {"warnings": []})) + "\n"); out.flush(); return SUCCESS
             elif command.startswith("project."):
-                if command == "project.init": value = _stored(app.initialize(payload["path"], payload["projectId"], payload["title"], payload["purposeNodeId"], payload["purposeText"]))
-                elif command == "project.status": value = app.store.status(payload["path"])
-                elif command == "project.open": project = app.store.load(payload["path"]); from .protocol import graph_dto; value = {"project": _stored(project), "graph": graph_dto(project.graph)}
-                elif command == "project.verify": value = app.store.verify(payload["path"])
-                elif command == "project.backup": value = _stored(app.store.backup(payload["sourcePath"], payload["destinationPath"]))
-                elif command == "project.export-sql": value = {"sql": app.store.export_sql(payload["path"])}
+                if command == "project.init": value = _stored(app.initialize(paths.file(payload["path"]), payload["projectId"], payload["title"], payload["purposeNodeId"], payload["purposeText"]))
+                elif command == "project.status": value = app.store.status(paths.file(payload["path"]))
+                elif command == "project.open": project = app.store.load(paths.file(payload["path"])); from .protocol import graph_dto; value = {"project": _stored(project), "graph": graph_dto(project.graph)}
+                elif command == "project.verify": value = app.store.verify(paths.file(payload["path"]))
+                elif command == "project.backup": value = _stored(app.store.backup(paths.file(payload["sourcePath"]), paths.file(payload["destinationPath"])))
+                elif command == "project.export-sql": value = {"sql": app.store.export_sql(paths.file(payload["path"]))}
                 elif command in {"project.import-html", "project.export-html"}:
-                    result = getattr(app.store, command[8:].replace("-", "_"))(payload["sourcePath"], payload["destinationPath"])
+                    result = getattr(app.store, command[8:].replace("-", "_"))(paths.file(payload["sourcePath"]), paths.file(payload["destinationPath"]))
                     value = {**_stored(result), "warnings": app.store.last_warnings}
-                elif command == "project.retry-export": value = {**_stored(app.store.retry_export(payload["path"])), "warnings": app.store.last_warnings}
-                elif command == "project.diff": value = _diff(payload["basePath"], payload["targetPath"], payload.get("limit", 100), payload.get("cursor"))
-                elif command == "project.merge": value = merge_projects(payload["basePath"], payload["oursPath"], payload["theirsPath"])
-                elif command == "project.bulk_plan": value = plan_bulk(payload["path"], payload["manifestPath"], payload.get("chunkSize", 100), payload.get("cursor"))
+                elif command == "project.diff": value = _diff(paths.file(payload["basePath"]), paths.file(payload["targetPath"]), payload.get("limit", 100), payload.get("cursor"))
+                elif command == "project.merge": value = merge_projects(paths.file(payload["basePath"]), paths.file(payload["oursPath"]), paths.file(payload["theirsPath"]))
+                elif command == "project.bulk_plan": value = plan_bulk(paths.file(payload["path"]), paths.file(payload["manifestPath"]), payload.get("chunkSize", 100), payload.get("cursor"))
                 else: raise ValueError(f"unknown project command '{command}'")
             elif command == "template.list":
                 value = [{"id": name, "description": descriptor(resolve(name))["description"], "version": 1} for name in ("code-development", "research-notebook")]
             elif command == "template.describe":
-                value = descriptor(resolve(payload["name"]))
+                value = descriptor(resolve(paths.template(payload["name"])))
             elif command == "template.export":
-                template = resolve(payload["name"]); Path(payload["destinationPath"]).write_text(_json(dto(template)) + "\n", encoding="utf-8", newline="\n"); value = {"path": str(Path(payload["destinationPath"]).resolve()), "template": descriptor(template)}
+                template = resolve(paths.template(payload["name"])); Path(paths.file(payload["destinationPath"])).write_text(_json(dto(template)) + "\n", encoding="utf-8", newline="\n"); value = {"path": str(Path(paths.file(payload["destinationPath"])).resolve()), "template": descriptor(template)}
             elif command == "template.instantiate":
-                template = resolve(payload["name"]); value = _stored(app.store.initialize(payload["path"], instantiate(template, payload["projectId"], payload["title"], payload["purposeText"])))
+                template = resolve(paths.template(payload["name"])); value = _stored(app.store.initialize(paths.file(payload["path"]), instantiate(template, payload["projectId"], payload["title"], payload["purposeText"])))
             elif command == "sample.list":
                 value = ["technical-project"]
             elif command == "sample.create":
                 if payload["sampleName"] != "technical-project": raise ValueError(f"unknown sample '{payload['sampleName']}'")
-                value = _stored(app.store.initialize(payload["path"], sample_graph()))
+                value = _stored(app.store.initialize(paths.file(payload["path"]), sample_graph()))
             elif command == "artifact.check":
-                value = _artifact_check(payload["path"], payload.get("nodeId"), payload.get("allowedRoots", []), payload.get("maxAnchors", 2**31 - 1), payload.get("maxSampleBytes", 4096))
+                value = _artifact_check(paths.file(payload["path"]), payload.get("nodeId"), [paths.file(root) for root in payload.get("allowedRoots", [])], payload.get("maxAnchors", 2**31 - 1), payload.get("maxSampleBytes", 4096))
             elif command.startswith("read."):
-                project = app.store.load(payload["path"])
+                project = app.store.load(paths.file(payload["path"]))
                 if payload.get("expectedProjectId") is not None and payload["expectedProjectId"] != project.graph.project_id:
                     raise ValueError("project mismatch")
                 query = Queries(project); name = command[5:]; limit = payload.get("limit", 100); cursor = payload.get("cursor")
                 value = {"node": lambda: query.node(payload["entityId"]), "edge": lambda: query.edge(payload["entityId"]), "nodes": lambda: query.nodes(limit, cursor), "edges": lambda: query.edges(limit, cursor), "search": lambda: query.search(payload["text"], limit, cursor), "ranked_search": lambda: query.ranked_search(payload["text"], limit, cursor), "tag": lambda: query.tag(payload["tag"], limit, cursor), "scope": lambda: query.scope(payload["nodeId"], limit, cursor, payload.get("maxDepth")), "neighbors": lambda: query.neighbors(payload["entityId"], limit, cursor), "dependencies": lambda: query.dependencies(payload["entityId"], limit, cursor), "path": lambda: query.path(payload["sourceNodeId"], payload["targetNodeId"], payload.get("maxDepth")), "context": lambda: query.context(payload["nodeIds"], payload.get("maxDepth")), "health": lambda: query.health(limit), "report": lambda: query.health(limit)}[name]()
-            elif command == "change.begin": value = app.begin(payload["path"], payload["projectId"], payload["author"], payload["intent"], keep_working_db=payload.get("keepWorkingDb", False)).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
+            elif command == "change.begin": value = app.begin(paths.file(payload["path"]), payload["projectId"], payload["author"], payload["intent"]).snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command in {"change.apply", "change.patch"}:
                 session = app.apply(payload["reference"], _ops(payload), command.endswith("patch"), skip_dependencies=payload.get("skipDependencies", False)); value = session.snapshot(payload.get("includeOperations", False), payload.get("includeProposedGraph", False))
             elif command == "change.expand":
@@ -446,7 +454,7 @@ def ndjson_loop(inp, out, err) -> int:
             elif command == "change.review-result":
                 value = app.review_result(payload["reference"], payload["binding"], payload["result"])
             elif command == "change.review-export":
-                value = app.review_export(payload["reference"], payload["planFingerprint"], payload["packetId"], payload["destinationPath"], payload.get("limit", 100))
+                value = app.review_export(payload["reference"], payload["planFingerprint"], payload["packetId"], payload.get("limit", 100))
             elif command == "change.review-cleanup":
                 app.session(payload["reference"])
                 value = app.cleanup_review_exports(payload["reference"]["sessionId"])
@@ -463,7 +471,7 @@ def ndjson_loop(inp, out, err) -> int:
             out.write(_json(_result(command, value)) + "\n"); out.flush()
         except Exception as exc:
             out.write(_json(_error(command, "invalid-request", str(exc))) + "\n"); out.flush()
-    app.close()
+    if close_on_eof: app.close()
     return SUCCESS
 
 
