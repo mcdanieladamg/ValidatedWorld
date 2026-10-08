@@ -21,7 +21,7 @@ class SkipDependenciesTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.path = Path(self.temporary.name) / "cleanup project.vw.db"
+        self.path = Path(self.temporary.name).resolve() / "cleanup project.vw.db"
         base = sample_graph()
         rule = Node("unrelated-rule", "Purpose must exist", "validation-rule", ("rule:active",), (
             Attribute("rule:version", GraphValue.integer(1)),

@@ -82,6 +82,7 @@ class PythonProductTests(unittest.TestCase):
 
     def test_ndjson_exact_preview_gate_and_persistent_session(self):
         with tempfile.TemporaryDirectory() as temp:
+            temp = Path(temp).resolve()
             path = Path(temp) / "ndjson project.vw.db"
             ProjectStore().initialize(str(path), sample_graph())
             environment = os.environ.copy()

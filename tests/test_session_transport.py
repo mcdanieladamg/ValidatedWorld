@@ -1,5 +1,6 @@
 import io
 import json
+from hashlib import sha256
 from pathlib import Path
 from queue import Empty, Queue
 import subprocess
@@ -13,7 +14,123 @@ from urllib.request import Request, ProxyHandler, build_opener
 
 sys.path.insert(0, str(Path(__file__).parents[1] / 'src'))
 from validated_world.memory_transport import PacketTransport, request
+from validated_world.cli import direct_command
 from eng.verify_skill_workflow import verify
+
+
+class InProcessControllerTests(unittest.TestCase):
+    def test_authenticated_controller_rejects_bad_requests_and_discards_unsaved_work(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            ready = Queue(); finished = Queue()
+            diagnostics = io.StringIO()
+
+            class Announcement(io.StringIO):
+                def flush(self): ready.put(self.getvalue())
+
+            def run():
+                try: finished.put(direct_command(['serve', str(root)], Announcement(), diagnostics))
+                except Exception as exc: finished.put(exc)
+
+            thread = Thread(target=run, daemon=True); thread.start()
+            url = json.loads(ready.get(timeout=30))['controllerUrl']
+            client = build_opener(ProxyHandler({}))
+
+            def send(command, payload=None):
+                out = io.StringIO()
+                request(url, io.StringIO(json.dumps({'version': 1, 'command': command,
+                                                    'payload': payload or {}})), out)
+                return json.loads(out.getvalue())
+
+            exited = False
+            try:
+                with self.assertRaises(HTTPError) as denied:
+                    request(url + '-wrong', io.StringIO('{}'), io.StringIO())
+                self.assertEqual(denied.exception.code, 404)
+                denied.exception.close()
+                for raw, headers in ((b'{broken', {}), (b'\xff', {}),
+                                     (b'{}', {'Content-Length': '-1'}),
+                                     (b'{}', {'Content-Length': 'invalid'})):
+                    with self.subTest(raw=raw, headers=headers):
+                        with self.assertRaises(HTTPError) as invalid:
+                            client.open(Request(url, data=raw, headers=headers), timeout=30)
+                        self.assertEqual(invalid.exception.code, 400)
+                        self.assertIn('error', json.loads(invalid.exception.read()))
+                        invalid.exception.close()
+                help_result = send('host.help')
+                self.assertEqual(Path(help_result['payload']['projectRoot']), root)
+                outside = send('project.open', {'path': '../outside.html'})
+                self.assertEqual(outside['status'], 'error')
+                self.assertIn('outside the session project folder', outside['payload']['message'])
+                document = root / '日本語.html'
+                initialized = send('project.init', {'path': str(document), 'projectId': 'p',
+                                                   'title': 'Café', 'purposeNodeId': 'purpose',
+                                                   'purposeText': '日本語 baseline'})
+                self.assertEqual(initialized['status'], 'ok', initialized)
+                before = document.read_bytes()
+                begun = send('change.begin', {'path': str(document), 'projectId': 'p',
+                                              'author': 'test', 'intent': 'Unsaved edit'})
+                self.assertEqual(begun['status'], 'ok', begun)
+                applied = send('change.apply', {'reference': begun['payload']['reference'],
+                    'operations': {'operations': [{'kind': 'replace', 'entityKind': 'node',
+                        'entityId': 'purpose', 'node': {'id': 'purpose', 'text': 'Unsaved change',
+                        'kind': None, 'tags': [], 'attributes': []}, 'edge': None}]}})
+                self.assertEqual(applied['status'], 'ok', applied)
+                read_back = send('read.node', {'path': str(document), 'entityId': 'purpose'})
+                self.assertEqual(read_back['payload']['text'], '日本語 baseline')
+                reference = applied['payload']['reference']
+                affected = send('change.affected', {'session': {key: reference[key]
+                                                              for key in ('projectId', 'sessionId')}})
+                self.assertEqual(affected['payload']['affectedNodeCount'], 1)
+                reviewed = send('change.review', {'reference': reference,
+                    'dispositions': [{'nodeId': 'purpose', 'kind': 'updated'}],
+                    'presentedContextNodeIds': []})
+                self.assertEqual(reviewed['status'], 'ok', reviewed)
+                reference = reviewed['payload']['reference']
+                context = send('change.review-context', {'reference': reference, 'entityIds': ['purpose']})
+                self.assertEqual(context['status'], 'ok', context)
+                reference = context['payload']['reference']
+                preview = send('change.preview', {'reference': reference, 'limit': 100})
+                self.assertTrue(preview['payload']['reviewPage']['allEvidencePresented'])
+                blocked = send('change.agent-write', {'reference': reference})
+                self.assertEqual(blocked['payload']['status'], 'agentReviewBlocked')
+                plan = send('change.review-plan', {'reference': reference, 'limit': 100})
+                self.assertEqual(plan['status'], 'ok', plan)
+                packet_args = {'reference': reference, 'planFingerprint': plan['payload']['planFingerprint'],
+                               'packetId': plan['payload']['synthesisPacketId'], 'limit': 100}
+                packet = send('change.review-packet', packet_args)
+                self.assertEqual(packet['status'], 'ok', packet)
+                export = send('change.review-export', packet_args)
+                self.assertEqual(export['status'], 'ok', export)
+                manifest_url = export['payload']['manifestUrl']
+                with client.open(manifest_url, timeout=30) as response:
+                    manifest = json.loads(response.read())
+                for page in manifest['pages']:
+                    with client.open(page['url'], timeout=30) as response: raw = response.read()
+                    self.assertEqual(sha256(raw).hexdigest(), page['sha256'])
+                    self.assertEqual(json.loads(raw)['binding'], export['payload']['binding'])
+                # Synthetic protocol fixture only, not a fresh human/agent
+                # semantic review. Exercise exact result bindings without saving.
+                result = send('change.review-result', {'reference': reference,
+                    'binding': packet['payload']['binding'], 'result': {'decision': 'allow',
+                    'summary': 'Offline transport fixture only.', 'citations': [{'entityId': 'purpose'}],
+                    'concerns': [], 'questions': []}})
+                self.assertEqual(result['status'], 'ok', result)
+                cleaned = send('change.review-cleanup', {'reference': reference})
+                self.assertGreater(cleaned['payload']['revokedEndpoints'], 0)
+                with self.assertRaises(HTTPError) as revoked: client.open(manifest_url, timeout=30)
+                self.assertEqual(revoked.exception.code, 404)
+                revoked.exception.close()
+                self.assertEqual(send('host.exit')['status'], 'ok')
+                exited = True
+            finally:
+                if not exited and thread.is_alive(): send('host.exit')
+                thread.join(timeout=30)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(finished.get(timeout=30), 0)
+            self.assertEqual(diagnostics.getvalue(), '')
+            self.assertEqual(document.read_bytes(), before)
+            self.assertEqual(list(root.iterdir()), [document])
 
 
 class SessionTransportTests(unittest.TestCase):

@@ -64,6 +64,12 @@ and preserve Unicode graph IDs as data. Existing batching, refinement,
 supplemental context, dialogue and synthesis gates continue to be exercised.
 Windows disk-DB tests separately deny hard links for intentional initialization
 and backup files. No test changes machine permissions.
+CLI fixtures resolve OS temporary directories before selecting a persistent
+project root and constructing file arguments. A regression exercises all four
+CLI fixture families through a real directory alias and Windows short paths
+when available. In-process controller tests cover authentication rejection,
+malformed requests, bounded review packets, endpoint revocation and unsaved-work
+cleanup; these complement child-process checks and count toward branch coverage.
 The temp-alias regression launches the same package smoke in a fresh shell with
 an OS temp directory supplied through a directory link (a Windows junction or
 Unix symlink). Both extracted and isolated trial paths use the physical directory;

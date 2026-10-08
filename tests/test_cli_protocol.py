@@ -20,7 +20,7 @@ class CliProtocolTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.path = self.root / "cli project.vw.db"
         ProjectStore().initialize(self.path, sample_graph())
 

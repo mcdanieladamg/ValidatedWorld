@@ -61,7 +61,7 @@ unsaved work and approvals are intentionally discarded with the process.
 
 Version 1.0.3 removes reverse-DNS resolution from both optional loopback servers.
 DNS-denied regressions failed before the correction and passed afterward. Local
-verification passed 176 units with 90% branch coverage, both rebuilt archive
+verification passed 178 units with 90.68% branch coverage, both rebuilt archive
 workflows and temporary-path alias checks. Persistent sessions now confine file
 access to one launch-selected project folder and its subfolders. Regressions
 reject outside reads/writes, root expansion, links/junctions and Windows aliases;
