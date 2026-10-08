@@ -1,4 +1,4 @@
-"""In-memory HTML project sessions and direct publication to the selected file."""
+"""In-memory HTML project sessions with one companion file and atomic replacement."""
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -46,20 +46,40 @@ class Publisher:
             raise ValueError('export round-trip verification failed')
         raw = text.encode('utf-8')
         self._fault('prepared')
-        # Optimistic stale checking; no lock or staging sidecars. Exclusive
-        # creation protects a new destination that appears concurrently.
+        # Existing documents are replaced only after a complete candidate is
+        # flushed and verified in the single allowed companion HTML.
         root = self.destination(root, source)
         if expected_bytes is not None and byte_identity(root) != expected_bytes:
             raise RuntimeError('stale-document-bytes')
         if not root.parent.exists(): root.parent.mkdir(parents=True, exist_ok=True)
-        mode = 'xb' if require_absent or not root.exists() else 'r+b'
-        with root.open(mode) as stream:
-            if expected_bytes is not None:
-                if sha256(stream.read()).hexdigest() != expected_bytes:
+        if require_absent or not root.exists():
+            with root.open('xb') as stream:
+                self._fault('writing')
+                stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+        else:
+            from .review_workspace import companion, hidden, work_path
+            staging = work_path(companion(root))
+            if staging.exists():
+                raise ValueError('temporary HTML already exists; preserve this file')
+            try:
+                with staging.open('xb') as stream:
+                    stream.seek(0)
+                    self._fault('writing')
+                    stream.write(raw); stream.truncate(); stream.flush(); os.fsync(stream.fileno())
+                hidden(staging)
+                staged = html.parse(staging)
+                if (staged.graph, staged.created_utc, staged.updated_utc) != (project.graph, project.created_utc, project.updated_utc):
+                    raise ValueError('save candidate verification failed')
+                self._fault('staged')
+                if expected_bytes is not None and byte_identity(root) != expected_bytes:
                     raise RuntimeError('stale-document-bytes')
-                stream.seek(0)
-            self._fault('writing')
-            stream.write(raw); stream.truncate(); stream.flush(); os.fsync(stream.fileno())
+                hidden(staging, False)
+                os.replace(staging, root)
+            except Exception:
+                # Remove only our unchanged complete candidate. Unknown/changed
+                # content is preserved; the selected document remains untouched.
+                if staging.exists() and staging.read_bytes() == raw: staging.unlink()
+                raise
         self._fault('published')
         check = html.parse(root)
         if (check.graph, check.created_utc, check.updated_utc) != (project.graph, project.created_utc, project.updated_utc):
@@ -75,7 +95,7 @@ class Workspace:
 
 
 class PublicationError(RuntimeError):
-    """The RAM transaction committed but direct HTML saving failed."""
+    """The RAM transaction committed but publishing the HTML failed."""
 
 
 class ProjectFiles(ProjectStore):
@@ -149,7 +169,7 @@ class ProjectFiles(ProjectStore):
             result, self.last_warnings = self.publisher.publish(project, workspace.source, expected_bytes=workspace.baseline)
             return result
         except Exception as exc:
-            raise PublicationError(f'HTML save failed: {exc}. Unsaved work was discarded. Verify or restore the selected HTML file before starting a fresh session.') from exc
+            raise PublicationError(f'HTML save failed: {exc}. Unsaved work was discarded. Verify the selected HTML before starting a fresh session; a staged candidate may remain.') from exc
         finally:
             self.close_workspace(path)
 

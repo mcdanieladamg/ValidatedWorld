@@ -1,4 +1,4 @@
-"""Execute the agent's documented Python recipe against the public launcher."""
+"""Execute the short bundled session recipe and complete file-based reviews."""
 import json
 from pathlib import Path
 import re
@@ -6,135 +6,52 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 
 class PersistentRecipeTests(unittest.TestCase):
-    def test_controller_and_memory_helper_deny_all_writes_except_selected_html(self):
-        checkout = Path(__file__).resolve().parents[1]
-        skill = checkout / 'skills/validated-world'
+    def test_documented_helper_manages_references_complete_responses_and_save(self):
+        root_repo=Path(__file__).resolve().parents[1];skill=root_repo/'skills/validated-world'
+        sys.path.insert(0,str(skill/'scripts'))
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve()
-            code = r'''
-import json, os, pathlib, re, sys
-from queue import Empty, Queue
-import subprocess
-from threading import Thread
-python_executable = sys.executable
-launcher_path = str(pathlib.Path(sys.argv[1]) / 'scripts/validated_world.py')
-project_folder = sys.argv[2]
-document = str(pathlib.Path(project_folder) / 'only.html')
-recipe = re.search(r'```python\n(.*?)\n```', (pathlib.Path(sys.argv[1]) / 'references/persistent-io.md').read_text(encoding='utf-8'), re.S).group(1)
-def audit(event, arguments):
-    if event == 'open':
-        path, mode, flags = arguments
-        writes = (isinstance(mode, str) and any(c in mode for c in 'wax+')) or flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND)
-        if writes and not isinstance(path, int) and os.path.abspath(path) != document:
-            raise PermissionError('unexpected controller write: ' + str(path))
-    if event in {'os.mkdir', 'os.remove', 'os.rmdir', 'os.rename', 'os.link', 'os.symlink', 'tempfile.mkstemp', 'tempfile.mkdtemp'}:
-        raise PermissionError('unexpected controller filesystem operation: ' + event)
-sys.addaudithook(audit)
-exec(compile(recipe, '<retained-controller>', 'exec'))
-try:
-    request('host.help', {})
-    request('project.init', {'path': document, 'projectId': 'garden', 'title': 'Garden', 'purposeNodeId': 'purpose', 'purposeText': 'Grow plants.'})
-    ref = request('change.begin', {'path': document, 'projectId': 'garden', 'author': 'audit', 'intent': 'Clarify plants'})['payload']['reference']
-    node = request('read.node', {'path': document, 'entityId': 'purpose'})['payload']
-    node['text'] = 'Grow native plants.'
-    ref = request('change.apply', {'reference': ref, 'operations': {'operations': [{'kind': 'replace', 'entityKind': 'node', 'entityId': 'purpose', 'node': node, 'edge': None}]}})['payload']['reference']
-    descriptor = review_memory.affected(request, ref, limit=1)
-    assert review_memory.message(descriptor)['responses']
-    assert len(protocol_responses) > 5
-    request('change.discard', {'reference': ref})
-finally:
-    close_session()
-assert not review_memory.messages and not protocol_responses
-assert list(pathlib.Path(project_folder).iterdir()) == [pathlib.Path(document)]
-print('controller memory audit passed')
-'''
-            result = subprocess.run([sys.executable, '-B', '-X', 'utf8', '-c', code, str(skill), str(root)],
-                                    capture_output=True, text=True, encoding='utf-8', timeout=30)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn('controller memory audit passed', result.stdout)
-
-    def test_documented_recipe_retains_review_saves_unicode_and_closes_cleanly(self):
-        checkout = Path(__file__).resolve().parents[1]
-        skill = checkout / 'skills/validated-world'
-        reference = skill / 'references/persistent-io.md'
-        recipe = re.search(r'```python\n(.*?)\n```', reference.read_text(encoding='utf-8'), re.S).group(1)
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve()
-            document = root / 'garden.html'
-            namespace = {
-                'python_executable': sys.executable,
-                'launcher_path': str(skill / 'scripts/validated_world.py'),
-                'project_folder': str(root),
-            }
-            resolve_path = Path.resolve
-
-            def restricted_resolve(path, strict=False):
-                # Reproduce hosts that permit cwd but deny strict path preflight.
-                if strict:
-                    raise PermissionError(5, 'Access is denied', str(path))
-                return resolve_path(path, strict=strict)
-
-            with patch.object(Path, 'resolve', autospec=True, side_effect=restricted_resolve):
-                exec(compile(recipe, str(reference), 'exec'), namespace)
-            process = namespace['process']
-            request = namespace['request']
-
-            def send(command, payload):
-                return request(command, payload)['payload']
-
+            root=Path(temporary).resolve();path=root/'docs-vw.html'
+            namespace={'skill_directory':str(skill),'python_executable':sys.executable,'project_folder':str(root)}
+            text=(skill/'references/persistent-io.md').read_text(encoding='utf-8')
+            recipe=re.search(r'```python\n(.*?)\n```',text,re.S).group(1)
+            exec(recipe,namespace);session=namespace['session']
             try:
-                self.assertEqual(Path(send('host.help', {})['projectRoot']), root)
-                self.assertEqual(send('sample.list', {}), ['technical-project'])
-                with self.assertRaisesRegex(RuntimeError, 'unknown member'):
-                    request('host.help', {'unexpected': True})
-                send('project.init', {'path': str(document), 'projectId': 'garden', 'title': 'Jardín 日本語',
-                                     'purposeNodeId': 'purpose', 'purposeText': 'Plan three garden beds.'})
-                reference = send('change.begin', {'path': str(document), 'projectId': 'garden',
-                                                 'author': 'recipe-test', 'intent': 'Plan four garden beds.'})['reference']
-                node = send('read.node', {'path': str(document), 'entityId': 'purpose'})
-                node['text'] = 'Plan four garden beds — Jardín 日本語.'
-                reference = send('change.apply', {'reference': reference, 'operations': {'operations': [
-                    {'kind': 'replace', 'entityKind': 'node', 'entityId': 'purpose', 'node': node, 'edge': None}
-                ]}})['reference']
-                evidence = []; cursor = None
-                while True:
-                    page = send('change.affected', {'session': {k: reference[k] for k in ('projectId', 'sessionId')},
-                                                   'limit': 2, **({'cursor': cursor} if cursor else {})})
-                    evidence.extend(page['items']); cursor = page['page']['nextCursor']
-                    if cursor is None: break
-                reference = send('change.review', {
-                    'reference': reference,
-                    'dispositions': [{'nodeId': item['value']['nodeId'],
-                                      'kind': 'updated' if item['value']['isDirectChange'] else 'reviewedNoChange'}
-                                     for item in evidence if item['kind'] == 'affectedNode'],
-                    'presentedContextNodeIds': [item['value']['nodeId'] for item in evidence if item['kind'] == 'scopeContext'],
-                })['reference']
-                cursor = None
-                while True:
-                    page = send('change.preview', {'reference': reference, 'limit': 2,
-                                                  **({'cursor': cursor} if cursor else {})})
-                    cursor = page['reviewPage']['nextCursor']
-                    if cursor is None: break
-                self.assertEqual(send('change.agent-write', {'reference': reference})['status'], 'agentReviewBlocked')
-                # Offline transport fixture only; actual fresh-host review is checked separately.
-                reference = send('change.agent-review', {'reference': reference, 'decision': {
-                    'decision': 'allow', 'summary': 'Synthetic offline recipe acceptance fixture.', 'concerns': [],
-                }})['reference']
-                self.assertEqual(send('change.agent-write', {'reference': reference})['status'], 'written')
-                self.assertTrue(send('project.verify', {'path': str(document)})['isValid'])
-                self.assertEqual(send('read.node', {'path': str(document), 'entityId': 'purpose'})['text'], node['text'])
-            finally:
-                namespace['close_session']()
-            self.assertEqual(process.returncode, 0)
-            self.assertTrue(process.stdin.closed)
-            self.assertTrue(process.stdout.closed)
-            self.assertEqual(list(root.iterdir()), [document])
-            self.assertIn('Jardín 日本語', document.read_text(encoding='utf-8'))
+                with self.assertRaisesRegex(RuntimeError,'unknown member'):session.request('host.help',{'unexpected':True})
+                self.assertEqual(session.responses[-1]['status'],'error')
+                session.call('project.init',path=str(path),projectId='garden',title='JardÃ­n æ—¥æœ¬èªž',purposeNodeId='purpose',purposeText='Plan three beds.')
+                session.begin(str(path),'Plan four beds.')
+                node=session.request('read.node',{'path':str(path),'entityId':'purpose'})['payload'];node['text']='Plan four beds â€” JardÃ­n æ—¥æœ¬èªž.'
+                session.call('change.apply',operations={'operations':[{'kind':'replace','entityKind':'node','entityId':'purpose','node':node,'edge':None}]})
+                old=session.reference.copy()
+                evidence=session.request('change.affected',{'limit':1})['payload']
+                from session import compact,response
+                summary=compact(session.responses[-1]);self.assertEqual(summary['totalCount'],1);self.assertFalse(summary['hasMore'])
+                with self.assertRaisesRegex(ValueError,'complete NDJSON'):response(evidence,'change.affected')
+                session.call('change.review',dispositions=[{'nodeId':'purpose','kind':'updated'}],presentedContextNodeIds=[])
+                self.assertNotEqual(session.reference,old)
+                with self.assertRaisesRegex(RuntimeError,'stale'):session.request('change.patch',{'reference':old,'operations':{'operations':[]}})
+                self.assertEqual(session.call('change.agent-write')['status'],'agentReviewBlocked')
+                exports=session.export_batch(limit=1)
+                # A purpose-only proposal has global synthesis evidence and no branches.
+                self.assertEqual(exports,[])
+                for descriptor in exports+[None]:
+                    if descriptor is None:descriptor=session.export('synthesis',limit=1)
+                    assignment=descriptor['assignment']
+                    code="import sys,json;sys.path.insert(0,sys.argv[1]);from reviewer import ReviewReader;r=ReviewReader(sys.argv[2],sys.argv[3]);[r.page(i) for i in range(len(r.pages))];print(json.dumps(r.reply({'decision':'allow','summary':'Offline helper fixture only.','citations':[{'entityId':'purpose'}],'concerns':[],'questions':[]})))"
+                    reply=json.loads(subprocess.check_output([sys.executable,'-B','-X','utf8','-I','-S','-c',code,str(skill/'scripts'),descriptor['workspacePath'],assignment],timeout=30))
+                    session.submit(reply)
+                self.assertEqual(session.call('change.agent-write')['status'],'written')
+                self.assertTrue(session.request('project.verify',{'path':str(path)})['payload']['isValid'])
+                self.assertEqual(session.request('read.node',{'path':str(path),'entityId':'purpose'})['payload'],node)
+            finally:session.close()
+            self.assertEqual(session.process.returncode,0);self.assertEqual(session.responses,[])
+            self.assertEqual(list(root.iterdir()),[path])
 
-
-if __name__ == '__main__':
-    unittest.main()
+    def test_audited_public_workflow_denies_sockets_and_all_other_files(self):
+        import importlib.util
+        path=Path(__file__).resolve().parents[1]/'eng/verify_skill_workflow.py'
+        spec=importlib.util.spec_from_file_location('workspace_fixture',path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        module.verify(path.parent.parent/'skills/validated-world',packet_workspace=True)

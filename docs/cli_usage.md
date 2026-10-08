@@ -62,10 +62,10 @@ Explicit import creates a new caller-owned DB; explicit export leaves that DB
 untouched. A trusted project or human requirement may select a `.vw.db` path as
 the authority, using the same existing commands without a required export.
 Keep one session through authoring, review and saving. A save validates the
-document, checks source bytes and updates the selected HTML. Saving is not atomic
-and can leave partial HTML if interrupted. A `failed` result with
-`html-publication-failure` ends the proposal. Verify or restore the document
-before starting fresh. Use one writer per selected HTML; stale checks do not
+document, checks source bytes and atomically replaces the selected HTML using
+one verified companion candidate. A `failed` result with
+`html-publication-failure` ends the proposal. Verify the document before starting
+fresh; unrecognized companion content is preserved. Use one writer per selected HTML; stale checks do not
 serialize concurrent writes.
 
 ## Project commands
@@ -140,8 +140,11 @@ Run one process for a complete change session:
 The host flushes each result line immediately. When using terminal tools,
 follow [persistent input/output](../skills/validated-world/references/persistent-io.md)
 to read responses while keeping the process alive. The preferred agent recipe
-uses retained Python subprocess pipes. Fresh reviewers use read-only native
-packet channels or complete exact host messages; no HTTP controller is supplied.
+uses the bundled `Session` helper and retained Python subprocess pipes. Fresh
+reviewers use `ReviewReader` to read bounded pages from one companion HTML; no
+reviewer network or IPC transport is supplied. The helper retains complete
+responses and updates session references automatically. The manual examples below
+show the underlying protocol, rather than the ordinary skill recipe.
 
 Persistent sessions confine reads and writes to one existing project folder,
 selected at startup. Launch in the HTML file's containing folder, or pass that

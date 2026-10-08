@@ -415,7 +415,7 @@ class Application:
     def __init__(self, store: ProjectStore | None = None):
         self.store = store or ProjectFiles()
         self.sessions: dict[str, Session] = {}
-        self.packet_transport = None
+        self.review_workspace = None
 
     def review_plan(self, reference, limit=100, cursor=None, refinements=None):
         from .review_packets import PacketReview
@@ -430,6 +430,7 @@ class Application:
         if refinements is not None:
             if cursor is not None: raise ValueError("refinement cannot use a cursor")
             session.packet_review.refine(refinements)
+            self.cleanup_review_exports(session.session_id)
             session.agent_decision = None
         return session.packet_review.manifest(limit, cursor)
 
@@ -443,8 +444,11 @@ class Application:
     def review_packet(self, reference, plan_fingerprint, packet_id, limit=100, cursor=None):
         return self.packet_review(reference, plan_fingerprint).packet(packet_id, limit, cursor)
 
-    def review_result(self, reference, binding, result):
+    def review_result(self, reference, binding, result, receipt=None):
         review = self.packet_review(reference, binding.get("planFingerprint") if isinstance(binding, dict) else None)
+        if receipt is not None:
+            if self.review_workspace is None: raise ValueError("no review workspace")
+            self.review_workspace.accept(self, reference, binding, receipt)
         review.record(binding, result)
         return {"planFingerprint": review.plan_fingerprint, "packetId": binding["packetId"],
                 "decision": result["decision"], "allAllowed": review.complete()}
@@ -466,6 +470,7 @@ class Application:
                 evidence.append({"entityId": eid, "currentEdge": edge_dto(old) if old else None,
                                  "proposedEdge": edge_dto(new) if new else None})
             else: raise ValueError("supplemental entity is absent from both exact graph states")
+        self.cleanup_review_exports(session.session_id)
         session.supplemental = evidence
         session.packet_review = None
         session.agent_decision = None
@@ -474,26 +479,29 @@ class Application:
                 "entityIds": [v["entityId"] for v in evidence], "requiresNewPlan": True}
 
     def review_export(self, reference, plan_fingerprint, packet_id, limit=100):
-        from .review_transport import PacketTransport
+        from .review_workspace import ReviewWorkspace
         self.packet_review(reference, plan_fingerprint)
-        if self.packet_transport is None: self.packet_transport = PacketTransport()
-        return self.packet_transport.export(self, reference, plan_fingerprint, packet_id, limit)
+        if self.review_workspace is None: self.review_workspace = ReviewWorkspace()
+        return self.review_workspace.export(self, reference, plan_fingerprint, packet_id, limit)
 
     def cleanup_review_exports(self, session_id=None):
-        if self.packet_transport is None: return {"revokedEndpoints": 0}
-        return self.packet_transport.revoke(session_id)
+        if self.review_workspace is None: return {"removedWorkspaces": 0}
+        return self.review_workspace.revoke(session_id)
 
     def affected_export(self, reference, limit=100):
-        from .review_transport import PacketTransport
+        from .review_workspace import ReviewWorkspace
         self.session(reference)
-        if self.packet_transport is None: self.packet_transport = PacketTransport()
-        return self.packet_transport.export_affected(self, reference, limit)
+        if self.review_workspace is None: self.review_workspace = ReviewWorkspace()
+        return self.review_workspace.export_affected(self, reference, limit)
 
     def initialize(self, path: str, project_id: str, title: str, purpose_node_id: str, purpose_text: str) -> StoredProject:
         return self.store.initialize(path, Graph(project_id, title, purpose_node_id, (Node(purpose_node_id, purpose_text),), ()))
 
     def begin(self, path: str, project_id: str, author: str, intent: str) -> Session:
         if project_id in self.sessions: raise ValueError("project already has an active session")
+        if str(path).lower().endswith(".html"):
+            from .review_workspace import reset_stale
+            reset_stale(path)
         if isinstance(self.store, ProjectFiles):
             project = self.store.begin_workspace(path)
         else:
@@ -537,6 +545,7 @@ class Application:
             session.dispositions.clear()
             session.presented_context.clear()
         session.skip_dependencies = skip_dependencies
+        self.cleanup_review_exports(session.session_id)
         session.operations = operations
         session.preview_signature = None; session.preview_limit = None; session.preview_seen.clear()
         session.agent_decision = None; session.packet_review = None; session.supplemental.clear()
@@ -579,6 +588,7 @@ class Application:
         if not set(context).issubset(allowed): raise ValueError("presented context contains a non-context node")
         session.presented_context.update(context)
         if session.review_fingerprint != previous_review_fingerprint:
+            self.cleanup_review_exports(session.session_id)
             session.preview_signature = None
             session.preview_limit = None
             session.preview_seen.clear()
@@ -653,6 +663,7 @@ class Application:
         if not session.review_items() or len(session.preview_seen) != len(session.review_items()):
             return {"status": "reviewNotReady", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": None, "message": "The exact proposal review evidence has not been fully presented. Call change.preview and follow every reviewPage.nextCursor before change.write."}
         try:
+            self.cleanup_review_exports(session.session_id)
             project = self.store.write(session.base.path, session.base.graph.project_id, session.base.state_fingerprint, session.proposed_fingerprint, session.operations)
         except PublicationError as exc:
             self.sessions.pop(session.base.graph.project_id, None)
@@ -692,8 +703,8 @@ class Application:
         finally:
             if isinstance(self.store, ProjectFiles): self.store.close()
             self.sessions.clear()
-            if self.packet_transport is not None:
-                self.packet_transport.close(); self.packet_transport = None
+            if self.review_workspace is not None:
+                self.review_workspace.close(); self.review_workspace = None
 
 
 def _operations_between(base: Graph, target: Graph) -> tuple[Operation, ...]:

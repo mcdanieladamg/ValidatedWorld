@@ -14,9 +14,10 @@ managed by your AI agent.
 The graph is stored in your project as a human-friendly HTML file that you can open in a browser
 to read and explore.
 
-Ordinary skill use keeps drafts and review evidence in memory.
-Saving updates the HTML file in your project; explicitly requested backups and
-conversions remain supported.
+The agent keeps drafts and controller state in memory. Fresh sub-agents read
+complete, bounded review packets from one hidden companion HTML file beside the
+project document. Saving atomically updates the HTML file in your project; explicitly requested
+backups and conversions remain supported.
 Agent authoring sessions keep file access within the document's folder and its
 subfolders.
 

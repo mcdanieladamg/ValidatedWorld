@@ -46,7 +46,7 @@ def trial_directory():
             shutil.rmtree(root)
 
 
-def verify(skill: Path, *, packet_channel: bool = False, deny_hard_links: bool = False) -> None:
+def verify(skill: Path, *, packet_workspace: bool = False, deny_hard_links: bool = False) -> None:
     if deny_hard_links and os.name != 'nt':
         raise ValueError('Hard-link denial exercises the Windows publication contract.')
     reference_text = (skill / "references" / "command-workflow.md").read_text(encoding="utf-8")
@@ -63,12 +63,16 @@ def verify(skill: Path, *, packet_channel: bool = False, deny_hard_links: bool =
         # Only the human-selected HTML destination is writable by the product.
         bootstrap = '''import os, pathlib, runpy, sys
 selected = pathlib.Path(sys.argv[1]).resolve()
+companion = selected.with_name('.' + selected.stem + '.tmp.html')
 def audit(event, arguments):
     if event == "open":
         path, mode, flags = arguments
         writing = (isinstance(mode, str) and any(c in mode for c in "wax+")) or (flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT))
-        if writing and (not isinstance(path, (str, bytes, os.PathLike)) or pathlib.Path(path).resolve() != selected):
+        if writing and (not isinstance(path, (str, bytes, os.PathLike)) or pathlib.Path(path).resolve() not in {selected, companion}):
             raise PermissionError("fixture rejects implicit file writes: " + str(path))
+    if event == "os.rename" and tuple(pathlib.Path(p).resolve() for p in arguments[:2]) == (companion, selected): return
+    if event == "os.remove" and pathlib.Path(arguments[0]).resolve() == companion: return
+    if event == "socket.__new__": raise PermissionError("fixture rejects all socket routes")
     if event in {"os.mkdir", "os.rename", "os.link", "os.remove", "os.rmdir", "tempfile.mkdtemp"}:
         raise PermissionError("fixture rejects temporary filesystem operations: " + event)
 sys.addaudithook(audit)
@@ -134,7 +138,7 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                 raise AssertionError(f"Walkthrough review lists drifted: {affected}, {context}")
             send("change.review")
             before_write = document.read_bytes()
-            if packet_channel:
+            if packet_workspace:
                 def packet_send(command, payload):
                     return send_envelope({'version': 1, 'command': command, 'payload': payload})
                 reference = bindings['$REF']
@@ -146,20 +150,14 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                 packet_ids = sorted({entry['packetId'] for entry in entries} - {'synthesis'}) + ['synthesis']
                 for packet_id in packet_ids:
                     export = packet_send('change.review-export', {'reference': reference, 'planFingerprint': plan['planFingerprint'], 'packetId': packet_id, 'limit': 2})
-                    def fetch(key):
-                        raw = subprocess.check_output([sys.executable, '-B', '-X', 'utf8', '-I', '-S', str(launcher), 'review-read', json.dumps(export['channel']), key], timeout=30)
-                        return raw
-                    manifest = json.loads(fetch(export['manifestKey']))
-                    from hashlib import sha256
-                    for entry in manifest['pages']:
-                        raw = fetch(entry['key'])
-                        assert sha256(raw).hexdigest() == entry['sha256']
-                        assert json.loads(raw)['binding'] == export['binding']
+                    reader_code = "import sys,json;sys.path.insert(0,sys.argv[1]);from reviewer import ReviewReader;r=ReviewReader(sys.argv[2],sys.argv[3]);[r.page(i) for i in range(len(r.pages))];print(json.dumps({'binding':r.manifest['binding'],'receipt':r.receipt()}))"
+                    reply = json.loads(subprocess.check_output([sys.executable,'-B','-X','utf8','-I','-S','-c',reader_code,str(launcher.parent),export['workspacePath'],export['assignment']],timeout=30))
+                    assert reply['binding'] == export['binding']
                     blocked = send('change.agent-write')
                     if blocked['status'] != 'agentReviewBlocked':
-                        raise AssertionError('Missing native branch/synthesis decision did not block')
-                    packet_send('change.review-result', {'reference': reference, 'binding': export['binding'], 'result': {
-                        'decision': 'allow', 'summary': 'Offline native transport fixture only.',
+                        raise AssertionError('Missing workspace branch/synthesis decision did not block')
+                    packet_send('change.review-result', {'reference': reference, 'binding': reply['binding'], 'receipt': reply['receipt'], 'result': {
+                        'decision': 'allow', 'summary': 'Offline single-workspace fixture only.',
                         'citations': [{'entityId': 'water-budget'}], 'concerns': [], 'questions': []}})
             else:
                 page = send("change.preview")
@@ -200,11 +198,11 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                     process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
             for stream in (process.stdin, process.stdout, process.stderr):
                 stream.close()
-    transport = "native reviewer channel" if packet_channel else "pipes"
+    transport = "single temporary HTML workspace" if packet_workspace else "pipes"
     restriction = "; hard links denied" if deny_hard_links else ""
-    print(f"Bundled author/review/save examples passed via {transport} (offline review fixture; only selected HTML writable{restriction}).")
+    print(f"Bundled author/review/save examples passed via {transport} (offline review fixture; only selected HTML and its one companion writable{restriction}).")
 
 
 if __name__ == "__main__":
-    verify(Path(sys.argv[1]).resolve(), packet_channel="--packet-channel" in sys.argv[2:],
+    verify(Path(sys.argv[1]).resolve(), packet_workspace="--packet-workspace" in sys.argv[2:],
            deny_hard_links="--deny-hard-links" in sys.argv[2:])

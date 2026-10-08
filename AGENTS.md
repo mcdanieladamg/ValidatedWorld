@@ -46,9 +46,10 @@ For changes to product meaning, contracts or delivery state:
 
 Never edit SQLite or authoritative HTML records directly to update the blueprint.
 If the checkout cannot safely update or diff its own project, report the blocker.
-The document adapter uses in-memory SQLite and direct HTML saving. A successful
-RAM commit alone is not a saved document update. Failed saves discard WIP and
-may leave partial HTML; verify or restore the document before a fresh session.
+The document adapter uses in-memory SQLite and one companion HTML for reviewer
+evidence and atomic replacement of the selected document. A successful RAM
+commit alone is not a saved update. Failed publication discards WIP; verify the
+selected document before a fresh session. Preserve unrecognized companion data.
 Preserve any pre-existing recovery files or unknown user data.
 
 Meaningful artifact changes normally include the matching graph delta. Record
@@ -99,14 +100,17 @@ as documented regenerable outputs.
   JSON, UI and providers. The SQLite engine keeps the fixed four-table schema,
   parameterized writes, foreign keys, verified mappings and no extensions.
 - The default authority is a tracked HTML file: one passive typed JSON graph
-  with a versioned inline JavaScript browser view. Ordinary HTML work stays in
-  memory without temporary files. Explicit trusted DB-authority instructions and
+  with a versioned inline JavaScript browser view. Ordinary drafts and controller
+  state stay in memory. One hidden companion HTML may hold bounded reviewer evidence and the
+  verified save candidate; no other implicit working files or folders. Explicit
+  trusted DB-authority instructions and
   caller-requested conversion outputs remain supported. Keep one selected authority.
 - Use stable node/edge IDs, directed review dependencies and one purpose-rooted
   `scope-parent` tree. Ordinary review includes full upstream scope lineage;
   direct scope edits select descendants, and purpose edits select the project.
 - Proposals/reviews remain process-local. Complete reviewed SQLite transactions
-  commit atomically in RAM; HTML saves write directly and can be partial on failure.
+  commit atomically in RAM; HTML saves verify one companion candidate before
+  atomic replacement.
   The skill's ordinary write requires a fresh host-subagent allow bound to the
   exact evidence. The engine checks bindings/coverage, not identity or truth.
   Rare dependency-skip cleanup is for absent or specific known consequences
@@ -117,6 +121,15 @@ as documented regenerable outputs.
 - Before a public compatibility baseline is established, support one current
   schema and document format. Convert all tracked foundations/tests for breaking
   changes; do not add legacy readers or in-product upgrades.
+
+## Public listing description
+
+Preserve the OpenAI plugin's public-facing `longDescription` exactly as follows
+in both plugin manifests and release archives. Change it only with the human's
+explicit authorization. Implementation work does not authorize rewriting this
+description. Keep this preservation instruction out of public-facing content.
+
+ValidatedWorld helps AI agents maintain a graph of project knowledge and reason consistently across projects larger than their context window. It tracks decisions and dependencies, retrieves targeted context, and can fan out reviews to batches of fresh, zero-context sub-agents so proposed changes receive focused, independent scrutiny before they propagate through the project. The objective is graph-wide conceptual consistency: not an absolute guarantee, but a systematic attempt to detect and resolve inconsistencies throughout the connected knowledge base, managed by your AI agent. The graph is stored in your project as a human-friendly HTML file that you can open in a browser to read and explore.
 
 ## Git boundary
 

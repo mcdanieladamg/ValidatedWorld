@@ -1,135 +1,60 @@
-# Persistent authoring sessions
+# One retained authoring session
 
-Keep one ValidatedWorld session alive through authoring, review and saving. Use
-the verified Python executable and this skill's absolute launcher path. Launch
-in the selected HTML's containing folder, or its intended folder for a new
-project. The folder must exist. Resolve that selected folder's physical path
-before launching so OS directory aliases use one consistent spelling.
-
-The session fixes this folder as `projectRoot`. File arguments, custom templates,
-manifests, backups, exports and artifact allowed roots must stay within it or its
-subfolders. Use root-relative paths or absolute paths with the same physical
-spelling. Requests cannot enlarge the root; do not select a broader parent to
-work around a rejected path.
-
-## Preferred: Python subprocess pipes
-
-Run this recipe once in the host's persistent Python environment. Supply
-`python_executable`, `launcher_path` and `project_folder` from the verified
-runtime and selected project. It uses Python's standard library only.
-Execute it in the retained interpreter; no generated controller script,
-proposal file, response log, evidence file or working folder is permitted.
-The memory helper is initialized before authoring; keep this controller alive.
+Use the existing Python 3.11+ executable, this skill's absolute directory and the
+selected HTML's containing folder. Run the following once in the host's retained
+Python environment. When only a retained terminal is available, start Python
+with `-B -X utf8 -u -i -q`, then execute this block there. Send all later calls to
+that same actual terminal handle. Do not generate a script file.
 
 ```python
-import json
-from pathlib import Path
-from queue import Empty, Queue
-import subprocess
 import sys
-from threading import Thread
-
-project_folder = str(Path(project_folder).resolve())
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(launcher_path).parent))
-from review_memory import ReviewMemory, compact, response
-review_memory = ReviewMemory()
-protocol_responses = []
-process = subprocess.Popen(
-    [python_executable, "-B", "-X", "utf8", "-u", launcher_path, "ndjson"],
-    cwd=project_folder,
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    text=True,
-    encoding="utf-8",
-)
-responses = Queue()
-
-def read_responses():
-    for line in process.stdout:
-        responses.put(line)
-    responses.put(None)
-
-Thread(target=read_responses, daemon=True).start()
-
-def request(command, payload):
-    envelope = {"version": 1, "command": command, "payload": payload}
-    process.stdin.write(json.dumps(envelope) + "\n")
-    process.stdin.flush()
-    try:
-        line = responses.get(timeout=30)
-    except Empty:
-        process.terminate()
-        raise TimeoutError("ValidatedWorld did not reply within 30 seconds")
-    if line is None:
-        raise RuntimeError("ValidatedWorld exited before replying; check host stderr")
-    result = json.loads(line)
-    protocol_responses.append(result)
-    return response(result, command)
-
-def close_session():
-    try:
-        if process.poll() is None:
-            request("host.exit", {})
-    finally:
-        try:
-            process.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            process.terminate()
-            try:
-                process.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=30)
-        process.stdin.close()
-        process.stdout.close()
-        review_memory.close()
-        protocol_responses.clear()
+sys.path.insert(0, skill_directory + "/scripts")
+from session import Session
+session = Session(python_executable, project_folder)
 ```
 
-Call `request("host.help", {})` first. Verify its `payload.projectRoot` matches
-the selected folder before mutation. Use [command payloads](command-workflow.md)
-for later requests. A `status: error` exception contains the returned diagnostic;
-a rejected request can be corrected in the same live session unless the human
-requested stopping on errors. After EOF, timeout or an unexpected response, close
-the session and start a fresh proposal against the verified saved document.
+`Session` starts the public launcher, confirms its project root, retains complete
+NDJSON responses in `session.responses`, updates references after every mutation,
+and closes its child on request. No sockets, URLs or provider API are involved.
+`session.call(command, **payload)` returns a compact summary.
+`session.request(command, payload)` returns the complete response for targeted
+inspection; unwrap `['payload']` only at use sites. The helper supplies current
+`reference`, session locator and review-plan fingerprint; do not copy stale ones
+from earlier outputs. Explicit wrong bindings still reject, never auto-approve.
 
-Retain this same process and `request` function across tool calls. Starting a
-new interpreter for each request loses the session. Keep complete response
-objects in Python, display bounded portions for inspection, and preserve exact
-`payload.reference` objects after mutations. A successful request is not proof
-of saving: check the write's `payload.status`, verify the HTML and read back
-changed IDs. After saving or discarding, call `close_session()`.
+Use `session.begin(path, intent)` after creation/verification. The path is relative
+to the selected folder or absolute inside it; requests cannot expand access.
+Use the manual command reference for ordinary queries/operations; its illustrative
+`$REF`/`$SESSION` fields are omitted when using this helper. No manual unwrap or
+alternative response wrapper is needed. A command error can be corrected in the
+same live session. EOF or process loss requires a fresh proposal; the companion
+file is not a checkpoint. Timeout closes the child and reports failure.
 
-Use `result = request(...)` followed by `print(compact(result))` for routine
-output. Keep `result` unchanged for later commands. Do not print full snapshots,
-affected pages, ownership manifests, packet pages or a save's collection of
-reviewer decisions into the orchestrator's context. Inspect only the records,
-diagnostics or questions needed for its current decision. Use the bundled
-`review_memory` helper to retain complete evidence in RAM. Its methods take this
-exact `request` function returning the full protocol envelope. Do not pass a
-payload-only or compact wrapper. Unwrap `result["payload"]` only at individual
-use sites. `review_memory.message(descriptor)` is an explicit delivery object,
-not routine output. Follow [packet review](packet-review.md) to assess a real
-host route before exporting it. Clear memory after save/discard and dialogue.
+For example, read `node = session.request("read.node", {"path": path,
+"entityId": "purpose"})["payload"]`, modify the intended DTO, then send its
+operation with `session.call("change.patch", operations={"operations": [...]})`.
+Page `change.affected` with the same limit and `payload.page.nextCursor` until
+null. Record complete dispositions with `change.review`. `session.assignments()`
+pages the ownership plan internally and returns branch IDs. `session.export_batch()`
+exports all branches serially before workers start; descriptors share one companion
+path with distinct assignment IDs. Freeze that file while read-only workers run.
+`session.export(id)` returns a companion path and assignment descriptor for
+affected authoring or synthesis. `session.export("affected")`
+provides authoring evidence before terminal review. No evidence bodies cross the
+author's context through these methods.
 
-## Hosts with retained interactive terminals
+After every fresh branch reply, `session.submit(reply)` preserves its complete
+binding, receipt and result. Export `synthesis` only after branches allow, then
+submit its separate fresh review. A mutation requires fresh evidence and reviews.
+For refinement pass `refinements` to `session.assignments`; use current owned
+ordinals from bounded plan queries and cover each exactly once.
 
-If no persistent Python environment is exposed, start the verified Python with
-`-B -X utf8 -u -i -q` in a retained interactive terminal. Execute the recipe once
-there, using `exec(complete_recipe_string)` when the terminal sends individual
-lines. Retain the actual terminal session ID and submit later `request(...)`
-calls to that same interpreter. A tool call that launches and closes a new Python
-process cannot serve this purpose.
-
-Parse the child's stdout inside Python before displaying results. Terminal
-echoes, prompts, wrapping and cursor-control sequences are not protocol data.
-Do not add a separate Node or .NET runtime to manage the session. Give fresh
-reviewers complete evidence through [packet review](packet-review.md); do not
-assume another agent can use the author's terminal handle.
-
-If the host cannot set a working directory, pass the selected folder as the
-sole positional argument to `ndjson`. If the host cannot retain an authoring
-process, report that limitation and leave the change unsaved. Do not create a
-controller script or install another runtime. Native reviewer channels are
-read-only and described in [packet review](packet-review.md).
+Save with `session.call("change.agent-write")`, check written status, verify and
+read back. To abandon, `session.call("change.discard")`. Finally use
+`session.close()`. This clears RAM and removes the owned companion. Recognized
+abandoned companion files are removed by a fresh `begin`; live owners, unknown
+files, links and changed contents are preserved/rejected with a diagnostic.
+The existing process handle must remain alive through writing. If the host
+cannot retain a Python environment/terminal or read project files, report that
+actual capability failure; do not create controller files or alternate transports.

@@ -53,14 +53,18 @@ The HTML file holds saved project knowledge. Reads do not require a writable
 project directory. Finish reviewed changes before ending their session;
 unfinished proposals and approvals do not survive a restart.
 
-Saving validates the document, checks the selected source's bytes for staleness,
-and writes to that file. New projects and backups
-use exclusive creation and refuse an occupied destination. Neighbors remain
-untouched. Saving is not atomic: interruption or a write failure can leave partial
-HTML. A publication failure ends the proposal; verify or restore the HTML and
-repeat the work in a fresh session. Concurrent writers
-are not serialized; stale checks do not guarantee protection against a write
-racing the final check. Use one writer per selected document.
+Saving validates the document and checks the selected source's bytes for
+staleness. The one hidden companion HTML (`.docs-vw.tmp.html` for `docs-vw.html`)
+first carries bounded reviewer packets, then a complete, flushed and verified
+save candidate. Atomic replacement updates the selected HTML only after the
+candidate passes verification. Failed publication discards the proposal; verify
+the selected document before starting fresh. New projects and explicit backups
+use exclusive creation and refuse an occupied destination. Interrupted initial
+creation can leave an incomplete new file. Existing documents remain intact if
+candidate preparation or replacement fails. Unknown or changed companion files
+are preserved; recognized abandoned work is removed on a fresh session.
+Concurrent writers are not serialized; stale checks do not guarantee protection
+against a write racing the final check. Use one writer per selected document.
 
 Explicit `.vw.db` authority and caller-requested import/export destinations
 remain supported. Disk DB transactions still commit atomically; disk DB creation

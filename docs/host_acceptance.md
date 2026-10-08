@@ -6,6 +6,44 @@ these capabilities rather than an operating-system or host allowlist.
 The same bundled standard-library engine ships in the
 standalone skill and skills-only plugin.
 
+## Current replacement workflow
+
+Version 1.0.3 now uses bundled `Session` and `ReviewReader` helpers, ordinary
+reviewer file reads and a single hidden companion HTML. URL/native/message
+handoffs and earlier no-companion claims below describe superseded builds.
+Current Windows verification covers complete responses, automatic references,
+full receipt/binding validation, one-companion write audits, cleanup and atomic
+replacement failures. Local replacement verification passed 180 unit tests with 90.04% branch coverage,
+developer/blueprint checks, both isolated candidate archive workflows and Windows
+temporary-path alias checks. An exact standalone candidate trial authored 45 nodes
+and 81 edges, read all 126 affected/context items across 26 pages, and blocked
+saving before independent review. Three simultaneous fresh no-history read-only
+subagents read 19, 18 and 18 bounded pages from the same frozen companion; its
+bytes stayed unchanged throughout their reads. A separate fresh synthesis read
+both complete global pages and all branch results. Their unchanged bound replies
+and verified receipts enabled saving, verification and read-back. Graceful close
+left only `docs-vw.html`. The companion was generated in code from RAM (227,322
+bytes for the branch evidence); packet bodies and private reviewer histories did
+not pass through the author's context.
+
+Browser-only preview could not complete on this host: sandbox sockets were
+denied, and the supported local preview still timed out after the diagnostic
+retry outside the sandbox. No security settings were changed. This limits the
+interactive browser smoke result; the reviewer workflow used ordinary file reads
+and passed without network access. Browser/viewer unit regressions passed, and
+the canonical update preserved the exact HTML shell/viewer bytes. Linux and macOS
+execution remains CI work.
+
+A maintainer-reported external Windows trial initially failed shell startup for
+all skills, including built-in skills. Rebooting reportedly restored startup.
+A subsequent run initialized/verified HTML and discovered impact, but a separate
+reviewer rejected a native channel name and the message alternative failed to
+deliver evidence. The proposal was discarded and the saved HTML remained purpose
+only. The exact cause is unavailable; this replacement removes both mechanisms.
+Free-tier status alone does not establish the reported failure's cause.
+
+## Historical verification
+
 | Evidence | Host | Result |
 | --- | --- | --- |
 | Maintainer-reported external computer A | Codex desktop on Windows, ChatGPT Plus account | Skill installation and project workflow reported successful. |

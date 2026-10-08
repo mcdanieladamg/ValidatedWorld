@@ -1,5 +1,10 @@
 # Command payloads: create, author, review and save
 
+This is the manual protocol reference. Ordinary skill use follows `SKILL.md` and
+the bundled `Session`/`ReviewReader` recipe; it uses branch and synthesis review
+and manages references automatically. These literal JSON examples require the
+caller to retain the latest full response and replace placeholders.
+
 Use this reference for ordinary skill-led changes. Start the selected Python
 executable with this skill's `scripts/validated_world.py ndjson` and keep that
 process alive through the write. Launch in the HTML file's containing folder
@@ -177,8 +182,8 @@ previous evidence and approval; refresh them before trying to save.
 ```
 
 Inspect `payload.status`: `written` means published; `agentReviewBlocked` means
-unsaved. `failed` with `html-publication-failure` means direct saving failed and
-unsaved state was discarded: verify or restore the HTML before a fresh session. Do not substitute manual `change.write` to
+unsaved. `failed` with `html-publication-failure` means publication failed and
+unsaved state was discarded: verify the HTML before a fresh session. Do not substitute manual `change.write` to
 bypass the skill's host review. Verify the file and read back changed IDs with
 the earlier `project.verify` / `read.node` payloads; report its absolute path.
 To abandon a draft, use `change.discard` with `reference: $REF`.

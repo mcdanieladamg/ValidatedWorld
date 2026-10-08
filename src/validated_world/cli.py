@@ -38,7 +38,7 @@ def _print_help(out) -> None:
     out.write("ValidatedWorld - local semantic graph change control\n")
     out.write(f"Version {__version__}\n")
     out.write("English is recommended for stored workflow guidance. Other languages are permitted; Unicode project text is preserved.\n\n")
-    out.write("Commands:\n  project   Initialize, inspect, compare, verify, back up, or export a project\n  artifact  Check opt-in external artifact anchors\n  read      Run bounded graph queries\n  change    Explicit dependency-skip batch write (highly discouraged for routine changes)\n  sample    List or create built-in disposable samples\n  template  List, export, describe, or instantiate graph templates\n  shell     Run the stateful NDJSON workflow until EOF\n  ndjson    Run the structured automation interface\n")
+    out.write("Commands:\n  project   Initialize, inspect, compare, verify, back up, or export a project\n  artifact  Check opt-in external artifact anchors\n  read      Run bounded graph queries\n  change    Explicit dependency-skip batch write (highly discouraged for routine changes)\n  sample    List or create built-in disposable samples\n  template  List, export, describe, or instantiate graph templates\n  shell     Run the stateful NDJSON workflow until EOF\n  ndjson    Run the structured automation interface\n  review-read <temporary-html> <assignment> [page-index]  Read exact subagent evidence\n")
 
 
 def _stored(project):
@@ -115,13 +115,12 @@ def direct_command(arguments: list[str], out, err) -> int:
         out.write(f"ValidatedWorld {__version__}\n"); return SUCCESS
     store = ProjectStore(); group = arguments[0]
     try:
-        if group == "review-read" and len(arguments) == 3:
-            from .review_transport import fetch
-            raw = fetch(json_loads_strict(arguments[1]), arguments[2])
-            if hasattr(out, 'buffer'):
-                out.buffer.write(raw); out.buffer.flush()
-            else:
-                out.write(raw.decode("utf-8"))
+        if group == "review-read":
+            if len(arguments) not in (3, 4): raise ValueError('use review-read <temporary-html> <assignment> [page-index]')
+            from .review_workspace import ReviewReader
+            reader = ReviewReader(arguments[1], arguments[2])
+            value = reader.manifest if len(arguments) == 3 else reader.page(int(arguments[3]))
+            out.write(_json(value) + '\n')
             return SUCCESS
         if group == "change":
             if len(arguments) < 2 or arguments[1] in {"help", "--help", "-h"}:
@@ -309,7 +308,7 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "change.review-plan": ({"reference"}, {"limit", "cursor", "refinements"}),
         "change.review-packet": ({"reference", "planFingerprint", "packetId"}, {"limit", "cursor"}),
         "change.review-context": ({"reference", "entityIds"}, set()),
-        "change.review-result": ({"reference", "binding", "result"}, set()),
+        "change.review-result": ({"reference", "binding", "result"}, {"receipt"}),
         "change.review-export": ({"reference", "planFingerprint", "packetId"}, {"limit"}),
         "change.affected-export": ({"reference"}, {"limit"}),
         "change.review-cleanup": ({"reference"}, set()),
@@ -455,7 +454,7 @@ def ndjson_loop(inp, out, err, *, app=None, close_on_eof=True, project_root=None
             elif command == "change.review-context":
                 value = app.review_context(payload["reference"], payload["entityIds"])
             elif command == "change.review-result":
-                value = app.review_result(payload["reference"], payload["binding"], payload["result"])
+                value = app.review_result(payload["reference"], payload["binding"], payload["result"], payload.get("receipt"))
             elif command == "change.review-export":
                 value = app.review_export(payload["reference"], payload["planFingerprint"], payload["packetId"], payload.get("limit", 100))
             elif command == "change.affected-export":

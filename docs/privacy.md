@@ -12,21 +12,23 @@ titles, claims, decisions, evidence, relationships, tags and typed attributes.
 These records may contain personal information if you put it in your project.
 Their purpose is documentation, retrieval and review of proposed changes.
 
-The selected HTML document holds saved project data.
-Ordinary skill use retains drafts, controller state, proposals and review
-evidence in process memory, without temporary scripts, evidence files, response
-logs or working folders. Fresh reviewers receive complete assigned evidence
-through host messages or supported read-only native IPC channels.
+The selected HTML document holds saved project data. Drafts, controller state,
+proposals and complete protocol responses remain in process memory. For fresh
+subagent review, the application writes exact evidence pages into one hidden
+companion HTML beside the selected document, for example `.docs-vw.tmp.html`.
+Reviewers read that file using ordinary host file access; the author receives
+bounded findings and exact hash receipts. The application uses no reviewer
+server, URL, native IPC channel or built-in messaging connection.
 
-Native reviewer channels retain packet bytes in RAM and use random capabilities.
-Windows uses local named pipes, Linux uses abstract sockets without filesystem
-entries, and macOS uses a numeric local byte socket. No HTTP, URL forwarding or
-publisher connection is involved. Ending a session loses unfinished proposals
-and revokes reviewer access. Saving updates the selected HTML and can leave
-partial data if interrupted.
-Explicit backups, conversion exports, DB authority and host-captured command
-output may create additional copies. User-created documents and copies remain
-until you delete or replace them.
+Saving replaces the companion's review contents with a verified candidate and
+atomically replaces the selected HTML. Save, discard and graceful exit remove
+owned review state. After a stopped process, a fresh session removes only
+recognized abandoned companion data. Unrecognized or externally changed data is
+preserved for inspection. Ending a process loses unfinished proposals and reviews.
+No temporary scripts, response logs, working folders or automatic backups are
+created. Explicit backups, conversion exports, optional DB authority and
+host-captured command output may create additional copies. User-created documents
+and copies remain until you delete or replace them.
 
 ## Agent hosts and recipients
 
