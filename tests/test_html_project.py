@@ -11,7 +11,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).parents[1] / 'src'))
 from validated_world.application import Application, sample_graph
 from validated_world.cli import direct_command, _diff, ndjson_loop
-from validated_world.document_store import ProjectFiles, Publisher, byte_identity
+from validated_world.document_store import ProjectFiles, DocumentLock, Publisher, byte_identity
 from validated_world.document_format import HtmlParseError, parse, render
 from validated_world.models import Attribute, Edge, EntityKind, Graph, GraphValue, Node, Operation, OperationKind, ReviewDirection
 from validated_world.storage import ProjectStore
@@ -43,10 +43,10 @@ class HtmlProjectTests(unittest.TestCase):
             cursor = page['reviewPage']['nextCursor']
             if cursor is None: return items
 
-    def proposal(self, app=None, ordinary=False):
+    def proposal(self, app=None, keep=False, ordinary=False):
         app = app or Application(self.store)
         self.addCleanup(app.close)
-        session = app.begin(str(self.folder), self.project.graph.project_id, 'tester', 'Change the battery assumption')
+        session = app.begin(str(self.folder), self.project.graph.project_id, 'tester', 'Change the battery assumption', keep_working_db=keep)
         old = next(n for n in self.project.graph.nodes if n.id == 'battery-assumption')
         op = Operation(OperationKind.REPLACE, EntityKind.NODE, old.id, node=dataclasses.replace(old, text='The battery lasts two duty cycles'))
         session = app.apply(session.reference(), (op,), skip_dependencies=not ordinary)
@@ -101,8 +101,9 @@ class HtmlProjectTests(unittest.TestCase):
         self.assertNotIn('lowercase project', view + tail)
         self.assertEqual(next(n['text'] for n in json.loads(data)['nodes'] if n['id'] == 'purpose'), claim)
         self.assertEqual(document.count('lowercase project'), 1)
+        from validated_world.document_format import write_stage
         destination = self.root / 'capitalized.html'
-        Publisher().publish(project, destination, require_absent=True)
+        write_stage(project, destination)
         actual = parse(destination)
         self.assertEqual((actual.graph, actual.created_utc, actual.updated_utc), (project.graph, project.created_utc, project.updated_utc))
 
@@ -158,7 +159,8 @@ class HtmlProjectTests(unittest.TestCase):
         self.assertIn("default-src 'none'", links.policy)
         self.assertNotIn("script-src 'unsafe-inline'", links.policy)
         destination = self.root / 'markup.html'
-        Publisher().publish(project, destination, require_absent=True)
+        from validated_world.document_format import write_stage
+        write_stage(project, destination)
         self.assertEqual(parse(destination).graph, graph)
 
     def test_broken_markup_missing_record_duplicate_field_and_invalid_scalar_fail(self):
@@ -185,6 +187,29 @@ class HtmlProjectTests(unittest.TestCase):
         self.assertIn('operations', merged)
         with self.assertRaises(FileExistsError): self.store.backup(self.folder, base)
 
+    def test_managed_write_default_cleanup_keep_option_and_small_diff(self):
+        before = self.files(); app, session = self.proposal(ordinary=True)
+        workspace = self.store.workspaces[str(self.folder)]
+        result = app.write(session.reference())
+        self.assertEqual(result['status'], 'written', result); self.assertEqual(result['project']['path'], str(self.folder))
+        self.assertNotIn(str(self.folder), self.store.memory.snapshots); self.assertEqual(app.sessions, {})
+        self.assertNotIn(workspace.lock.key, DocumentLock.active)
+        after = self.files(); changed = {name for name in before if before[name] != after[name]}
+        self.assertEqual(changed, {'document.html'})
+        import difflib
+        lines = list(difflib.ndiff(before['document.html'].decode().splitlines(), after['document.html'].decode().splitlines()))
+        removed = [line[2:] for line in lines if line.startswith('- ')]
+        added = [line[2:] for line in lines if line.startswith('+ ')]
+        self.assertEqual(sum('The battery lasts for the target duty cycle' in line for line in removed), 1)
+        self.assertEqual(sum('The battery lasts two duty cycles' in line for line in added), 1)
+        self.assertEqual(len(removed), 2)  # Only the JSON claim and update timestamp.
+        self.assertEqual(len(added), 2)
+        self.project = self.store.load(self.folder)
+        app, session = self.proposal(keep=True); workspace = self.store.workspaces[str(self.folder)]
+        result = app.write(session.reference()); retained = Path(result['workingDbPath']); self.assertTrue(retained.exists())
+        self.assertEqual(ProjectStore().load(str(retained)).graph, parse(self.folder).graph)
+        self.assertNotIn(workspace.lock.key, DocumentLock.active)
+        retained.unlink()
 
     def test_explicit_db_workflow_retains_authority(self):
         db = self.root / 'authoritative.vw.db'; self.store.import_html(self.folder, db)
@@ -226,7 +251,25 @@ class HtmlProjectTests(unittest.TestCase):
         self.assertEqual(direct_command(['artifact', 'check', str(folder), '--allow-root', str(self.root)], out, err), 0, err.getvalue())
         self.assertEqual(json.loads(out.getvalue())['matchedCount'], 1)
 
+    def test_preview_gate_source_conflict_and_lock(self):
+        app, session = self.proposal(); workspace = self.store.workspaces[str(self.folder)]
+        with self.assertRaises(RuntimeError): DocumentLock(self.folder).acquire()
+        self.assertIn(workspace.lock.key, DocumentLock.active)
+        self.edit(new='Changed by an outside editor')
+        self.assertEqual(app.write(session.reference())['status'], 'stale')
+        app.close(); self.assertNotIn(str(self.folder), self.store.memory.snapshots)
+        self.assertNotIn(workspace.lock.key, DocumentLock.active)
 
+    def test_creation_export_backup_and_repeated_export_remove_lock_files(self):
+        lock_path = self.folder.with_name('.' + self.folder.name + '.vw-lock')
+        self.assertFalse(lock_path.exists())  # Creation in setUp has already released it.
+        db = self.root / 'export.vw.db'; self.store.import_html(self.folder, db)
+        for _ in range(2):
+            self.store.export_html(db, self.folder)
+            self.assertFalse(lock_path.exists())
+        backup = self.root / 'backup.html'; self.store.backup(self.folder, backup)
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
+        self.assertEqual(parse(backup).graph, self.project.graph)
 
     @unittest.skipUnless(os.name == 'nt', 'Windows publication avoids hard-link creation')
     def test_windows_html_workflow_with_hard_link_permission_denied(self):
@@ -257,21 +300,112 @@ class HtmlProjectTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             Publisher(competing_writer).publish(parse(self.folder), destination, require_absent=True)
         self.assertEqual(destination.read_bytes(), b'human file created during publication')
-        self.assertFalse(list(self.root.glob('.*.vw-stage-*')))
+        self.assertFalse(list(self.root.glob('.*.tmp.html')))
         self.assertFalse(list(self.root.glob('.*.vw-lock')))
 
+    def test_denied_new_html_rename_removes_stage_and_preserves_neighbors(self):
+        from unittest.mock import patch
+        before = self.files()
+        destination = self.root / 'denied-create.html'
+        with patch('validated_world.document_store.publish_new_file',
+                   side_effect=PermissionError('publication denied')):
+            with self.assertRaisesRegex(PermissionError, 'publication denied'):
+                Publisher().publish(parse(self.folder), destination, require_absent=True)
+        self.assertFalse(destination.exists())
+        self.assertFalse(list(self.root.glob('.*.tmp.html')))
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
+        self.assertEqual(self.files(), before)
 
+    def test_managed_operations_use_no_filesystem_sqlite_or_temp_allocation(self):
+        from unittest.mock import patch
+        original = __import__('sqlite3').connect
+        opened = []
+        def memory_only(path, *args, **kwargs):
+            self.assertEqual(path, ':memory:')
+            opened.append(path)
+            return original(path, *args, **kwargs)
+        before = set(self.root.iterdir())
+        with patch('sqlite3.connect', memory_only), patch('tempfile.mkdtemp', side_effect=PermissionError('no OS temp')):
+            destination = self.root / 'new.html'
+            self.store.initialize(destination, self.project.graph)
+            self.assertEqual(self.store.load(destination).graph, self.project.graph)
+            self.assertTrue(self.store.verify(destination)['isValid'])
+            self.assertIn('CREATE TABLE', self.store.export_sql(destination))
+            self.store.backup(destination, self.root / 'backup.html')
+            app, session = self.proposal(ordinary=True)
+            self.assertEqual(app.write(session.reference())['status'], 'written')
+            app.begin(str(self.folder), self.project.graph.project_id, 'tester', 'Discard trial')
+            app.close()
+        self.assertTrue(opened)
+        self.assertEqual(set(self.root.iterdir()), before | {destination, self.root / 'backup.html'})
 
+    def test_session_close_removes_lock_and_working_db_without_changing_document(self):
+        before = self.folder.read_bytes()
+        app = Application(self.store); self.addCleanup(app.close)
+        app.begin(str(self.folder), self.project.graph.project_id, 'tester', 'Inspect then close')
+        workspace = self.store.workspaces[str(self.folder)]
+        self.assertIn(workspace.lock.key, DocumentLock.active)
+        app.close(); app.close()  # Closing is idempotent.
+        self.assertNotIn(workspace.lock.key, DocumentLock.active)
+        self.assertNotIn(str(self.folder), self.store.memory.snapshots)
+        self.assertEqual(self.folder.read_bytes(), before)
 
+    def test_preexisting_temporary_neighbor_is_preserved(self):
+        from validated_world.scratch import scratch_path
+        temporary = scratch_path(self.folder)
+        temporary.write_bytes(b'human data')
+        with self.assertRaises(ValueError):
+            self.store.publisher.publish(parse(self.folder), self.folder)
+        self.assertEqual(temporary.read_bytes(), b'human data')
+        temporary.unlink()
 
+    def test_committed_unpublished_result_retained_and_retried(self):
+        def fault(stage):
+            if stage == 'prepared': raise RuntimeError('injected publication failure')
+        failing = ProjectFiles(publication_fault=fault); self.addCleanup(failing.close)
+        app, session = self.proposal(Application(failing)); before = self.files()
+        result = app.write(session.reference()); self.assertEqual(result['status'], 'unpublished', result)
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
+        db = Path(result['workingDbPath']); self.assertTrue(db.exists()); self.assertEqual(before, self.files()); self.assertFalse(app.sessions)
+        recovered = ProjectFiles().retry_export(db); self.assertEqual(recovered.path, str(self.folder)); self.assertFalse(db.exists())
+        self.assertFalse(list(self.root.glob('.*.vw-lock')))
+        self.assertIn('two duty cycles', next(n.text for n in recovered.graph.nodes if n.id == 'battery-assumption'))
 
+    def test_retry_rejects_intervening_source_changes(self):
+        def fault(stage):
+            if stage == 'staged': raise RuntimeError('export failed')
+        app, session = self.proposal(Application(ProjectFiles(publication_fault=fault)))
+        result = app.write(session.reference()); db = Path(result['workingDbPath'])
+        self.edit(new='Outside edit after failed export')
+        with self.assertRaisesRegex(RuntimeError, 'stale-document-bytes'): ProjectFiles().retry_export(db)
+        self.assertTrue(db.exists()); db.unlink()
 
+    def test_publisher_rollback_at_every_prepublication_stage(self):
+        for stage in ('staged', 'prepared'):
+            with self.subTest(stage=stage):
+                before = self.files(); project = parse(self.folder)
+                def fault(s):
+                    if s == stage: raise RuntimeError(stage)
+                with self.assertRaises(RuntimeError): Publisher(fault).publish(project, self.folder)
+                self.assertEqual(before, self.files()); self.assertFalse(list(self.root.glob('.*.tmp.html')))
+                self.assertFalse(list(self.root.glob('.*.vw-lock')))
 
+    def test_published_cleanup_failure_is_success_with_warning(self):
+        def fault(stage):
+            if stage == 'published': raise RuntimeError('cleanup failed')
+        result, warnings = Publisher(fault).publish(parse(self.folder), self.folder)
+        self.assertEqual(result.graph, self.project.graph); self.assertTrue(warnings)
+        self.assertFalse(list(self.root.glob('.*.tmp.html')))
+        self.assertEqual(parse(self.folder).graph, self.project.graph)
 
-
-
-
-
+    def test_atomic_replace_failure_preserves_original_document(self):
+        from unittest.mock import patch
+        before = self.files()
+        with patch('validated_world.document_store.os.replace', side_effect=OSError('replace failed')):
+            with self.assertRaisesRegex(OSError, 'replace failed'):
+                Publisher().publish(parse(self.folder), self.folder)
+        self.assertEqual(self.files(), before)
+        self.assertFalse(list(self.root.glob('.*.tmp.html')))
 
     def test_replace_is_one_file_and_preserves_unrelated_neighbor(self):
         neighbor = self.root / 'notes.html'; neighbor.write_text('Unrelated documentation')
@@ -302,7 +436,7 @@ class HtmlProjectTests(unittest.TestCase):
             {'version': 1, 'command': 'project.import-html', 'payload': {'sourcePath': str(self.folder), 'destinationPath': str(self.root / 'ndjson.vw.db')}},
             {'version': 1, 'command': 'project.export-html', 'payload': {'sourcePath': str(self.root / 'ndjson.vw.db'), 'destinationPath': str(self.root / 'ndjson-folder.html')}},
         ]
-        out = io.StringIO(); ndjson_loop(io.StringIO('\n'.join(json.dumps(r) for r in requests)), out, io.StringIO(), project_root=self.root)
+        out = io.StringIO(); ndjson_loop(io.StringIO('\n'.join(json.dumps(r) for r in requests)), out, io.StringIO())
         results = [json.loads(line) for line in out.getvalue().splitlines()]
         self.assertEqual(results[0]['payload'], self.store.status(self.folder)); self.assertEqual(results[1]['status'], 'error')
         self.assertEqual(results[2]['status'], 'ok'); self.assertEqual(results[3]['status'], 'ok'); self.assertEqual(self.files(), self.files(self.root / 'ndjson-folder.html'))

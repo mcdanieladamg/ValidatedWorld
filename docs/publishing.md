@@ -33,7 +33,7 @@ overwrite existing output.
 .\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/1.0.3 -PythonExecutable .\.venv\Scripts\python.exe
 ```
 
-The ZIPs and `SHA256SUMS.txt` are regenerable outputs under
+The ZIPs, `RELEASE_NOTES-1.0.3.md` and `SHA256SUMS.txt` are regenerable outputs under
 `artifacts/release/1.0.3`. The archives can be built and tested before the
 human commits the release preparation. Before publication, merge exactly those
 reviewed sources and target that commit with the release tag. If packaged sources
@@ -51,7 +51,7 @@ these source archives. Keep the test project outside installation directories.
 Exercise a technical project and a non-code project: create and browse HTML,
 retrieve bounded context, propose a change, obtain a fresh reviewer allow or
 block, and save only an allowed exact proposal. Cover stale reviewer bindings,
-batched branch review and synthesis, question workers, direct-save failure,
+batched branch review and synthesis, question workers, publication recovery,
 package replacement and the strongly discouraged dependency-skip workflow.
 Use the methods in developer verification and preserve sanitized reusable
 findings rather than real project data. A host without persistent process access
@@ -69,7 +69,7 @@ the remaining publication and directory conditions are met.
    policy URLs target the `main` branch's privacy, terms and support documents;
    confirm those exact pages are publicly accessible after publication.
 2. Draft a GitHub release targeting the tested commit and a matching tag, such
-   as `v1.0.3`. Attach the generated plugin ZIP, standalone skill ZIP and checksum
+   as `v1.0.3`. Attach the generated plugin ZIP, standalone skill ZIP, release notes and checksum
    file. Use concise release notes describing requirements and tested clients.
    The automatic repository source ZIP is not the built installable skill.
 3. Download and check the attached files before publishing the release. Keep the

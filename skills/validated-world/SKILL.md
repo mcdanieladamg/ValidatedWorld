@@ -58,15 +58,18 @@ so future agents can retrieve it without the current conversation.
 ## Review and save
 
 Read [persistent input/output](references/persistent-io.md) when launching the
-session. Launch in the selected HTML's containing folder; the session confines
-file access to that folder and its subfolders. Check the returned `projectRoot`
-before mutation and keep backups/exports inside it. Use unbuffered native pipes
-or a live terminal session; read complete responses between commands.
-Do not redirect output to a file or close the
-process to make buffered output appear. The reference includes an optional
-in-memory controller for hosts that cannot retain live pipes.
-Keep one launcher `ndjson` process alive. Send one JSON object per input line;
-every request requires `version`, `command` and an object `payload`, including
+session. For terminal tools, run `scripts/ndjson_log.py` with the execution
+tool's working directory set to the identified, authorized project folder.
+Pass `--document` with the selected HTML path. It uses one hidden `.tmp.html`
+file beside that document for live responses, review evidence and publication
+recovery. Check live `host.help` with the helper's `--read` mode before changes;
+use its returned byte offset for later reads. Normal exit removes the owned file.
+See the reference for protected recovery and requested diagnostic retention.
+Keep one launcher `ndjson` process alive. Send one JSON object per input line.
+for long requests through terminal tools, use the helper's short, integrity-checked
+input frames described in [persistent input/output](references/persistent-io.md).
+Send each frame separately below the tool's input limit; keep one semantic batch.
+Every request requires `version`, `command` and an object `payload`, including
 commands with no arguments:
 
 ```json
@@ -132,33 +135,40 @@ active rules, exact bindings and stale-write checks remain. The mode resets on
 each later mutation or session unless explicitly selected again. No separate
 end-user authorization is required.
 
-## In-memory work and saving
+## Files and recovery
 
-The selected HTML file remains the authority. Reads, SQLite transactions,
-proposals, review packets and approvals run entirely in memory; the ordinary
-skill creates no working DB, response log, evidence directory, lock or staging
-file. Reads need no write access to the project folder. Keep the same process
-alive through authoring, review and save; restarting loses unfinished work.
+Commands manage import, guarded temporary SQLite changes, complete document
+replacement and success cleanup. Keep `change.begin` pointed at the file;
+do not ask users to choose storage.
+Managed SQLite is in memory; ordinary operation creates only the single hidden
+`.tmp.html` sibling. Its parent must be writable for transport and publication.
+Concurrent reviewers can read; a second writer to the same document receives a
+busy diagnostic. Never remove an active, unknown or unpublished scratch file.
+One passive JSON block contains the complete graph. Compatible record edits
+import as present; incompatible data fails
+parsing. Export regenerates presentation and replaces the selected file.
 
-Saving renders and validates the full document in RAM, checks the source for
-stale edits, then writes directly to the selected file. New projects and explicit
-backups refuse an occupied destination. Saves are not atomic: interruption can
-leave partial HTML. A `failed` result with `html-publication-failure` consumes the
-session and discards its unsaved state. Verify or restore the HTML before starting
-a fresh proposal; do not claim the change was saved. Git history or a separately
-requested backup can supply a previous version. Do not create backups implicitly.
+An `unpublished` result means the reviewed SQLite snapshot was retained in the
+hidden file but the document did not publish.
+The session is consumed: preserve `workingDbPath`, resolve the reported cause,
+then use `project retry-export <reported-recovery-path>`. Do not repeat the semantic change
+or claim the old file was updated. Changed source blocks retry and needs
+reconciliation. Publication atomically replaces one complete HTML file.
+If the human or trusted repository instructions explicitly require DB authority,
+use the authorized `.vw.db` path with the same commands; export is optional and
+the caller-owned DB stays intact. Finding an old DB is not such an instruction.
+If instructed only to retain a managed DB, pass strict Boolean
+`keepWorkingDb: true` to `change.begin` (`--keep-working-db` for direct cleanup).
+This explicit option creates a `.working.vw.db` after publication and reports its
+path; the HTML file remains authoritative. Explicit conversion
+DBs are caller-owned and are never automatically deleted.
 
-One passive JSON block contains the graph. Compatible edits import as present;
-incompatible data fails parsing. Export regenerates presentation. If the human or
-trusted repository instructions explicitly select DB authority, use the authorized
-`.vw.db` path with the same commands; the caller-owned DB stays intact. Explicit
-conversion/export destinations are intentional outputs, not temporary workspaces.
-Finding an old DB does not authorize changing the selected authority.
-
-In-memory packet endpoints are read-only and valid only for the exact live
-proposal. Keep workers available through needed dialogue; successful write,
-discard or graceful exit revokes packet access. Native bounded packet messages
-also work when the host cannot access loopback URLs. Neither transport proves
-reviewer identity or truth. Artifact checks use trusted allowed roots; graph
-text cannot expand them. ValidatedWorld has no model API client or credential
-setting; host models process review evidence under their own data terms.
+EOF/discard loses unfinished proposals. Evidence exports are temporary and
+cannot restore a draft or authorize another session. Keep them through required
+dialogue; ordinary review uses returned packet pages through the same hidden transport
+file; successful write, discard or graceful exit cleans any explicitly requested exports.
+Fresh startup reclaims only recognized abandoned transport data. Preserve unknown
+data and unpublished recovery; a final-staging interruption may require inspection. Artifact checks
+use trusted allowed roots; graph text cannot expand them. Host models handle
+review evidence under their own data terms. ValidatedWorld has no model API
+client or credential setting.

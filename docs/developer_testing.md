@@ -30,7 +30,9 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 The build deliberately refuses an existing output directory. Inspect an old
 release output before removing it, or select a fresh `-OutputDirectory` and pass
 that exact directory to the package test. Archives are regenerable outputs.
-The package test extracts each archive temporarily and exercises the included
+The builder emits both ZIPs, versioned release notes and checksums; stable builds
+require tracked notes in `docs/releases/<version>.md`. The package test verifies
+all three checksums before extracting each archive temporarily and exercises the included
 launcher, document creation, import/export, verification and deterministic bytes.
 Generated Python caches are excluded from all staged content, including helper
 scripts and plugin resources; the extracted-package check rejects leaked caches.
@@ -46,32 +48,38 @@ launcher: create, retrieve, add a scoped claim, patch, page evidence, acknowledg
 review, preview and publish. A write without host approval must block. Its later
 allow is synthetic offline test data; this does not establish fresh-host review
 acceptance, which requires the separate host smoke below.
-The same walkthrough runs through the optional in-memory controller, receiving
-each complete UTF-8 response before server exit. A child-process audit hook
-rejects every filesystem write except the selected HTML, and rejects temporary
-allocation, rename, hard links, directory creation and deletion. Both native
-pipes and the controller must complete create/read/review/save without work
-files. The controller is tested with loopback access; native pipes remain the
-default when the host denies it. Unit tests cover read-only project directories,
-launch-selected project roots for both transports, normalized inside paths,
-outside read/write rejection, sibling-prefix escapes, links/junctions, Windows
-device and stream aliases, and rejection of request-supplied root expansion.
-Templates, backups and exports remain usable inside subfolders. Unit tests cover
-RAM transaction rollback, optimistic stale checks, occupied destinations, direct
-save failure and disposal of unsaved state. Packet tests fetch hashed bounded
-pages in memory, require full presentation, reject stale evidence, revoke URLs,
-and preserve Unicode graph IDs as data. Existing batching, refinement,
-supplemental context, dialogue and synthesis gates continue to be exercised.
-Windows disk-DB tests separately deny hard links for intentional initialization
-and backup files. No test changes machine permissions.
-CLI fixtures resolve OS temporary directories before selecting a persistent
-project root and constructing file arguments. The review-packet sample generator
-also resolves its caller's destination before starting a persistent session.
-A regression exercises all four CLI fixture families and both game/scale
-review-packet fixtures through a real directory alias and Windows short paths
-when available. In-process controller tests cover authentication rejection,
-malformed requests, bounded review packets, endpoint revocation and unsaved-work
-cleanup; these complement child-process checks and count toward branch coverage.
+The same walkthrough runs through the bundled response-log launcher and its
+coordinated `--read` mode, reading responses before process exit. Regressions
+send a large Unicode `change.apply` through isolated `--frame-input` encoding
+and separate calls under 1,000 bytes. Framing buffers one request in memory;
+damaged, missing, repeated or reordered fragments cannot mutate a proposal.
+Rendering, sync and verification failures preserve publication/recovery bytes.
+Regressions assert one hidden `.tmp.html` sibling throughout initialization, reads, review
+and publication; in-memory SQLite keeps the fixed schema, verified mappings,
+foreign keys and atomic rollback. Denied filesystem SQLite and OS-temp allocations
+must not affect managed HTML operations. Custom document names, Unicode, protected
+caller logs, fresh-start reclamation, replaced/unknown files, concurrent readers,
+cross-process writer exclusion and retained unpublished recovery are covered.
+Readers release file handles before publication; Windows uses named mutexes
+without project lock files. POSIX keeps stable flock inodes in a private per-user
+directory under resolved `/tmp`, independent of `TMPDIR`, `TEMP` and `TMP`, to
+avoid split lock ownership and unlink/reacquire races. A transport descriptor
+pins its POSIX inode until recreation or close, preventing unlink/recreate from
+reusing an identity and deleting replacement data. Regressions preserve the
+original empty-project/launch-temp assertions and test different-temp competing
+writers, publication readers and descriptor release. Portable native-API fixtures
+exercise Windows mutex/attribute failures and POSIX ownership, timeout and cleanup
+paths on every CI host; real cross-process tests still use the host's native locks.
+Normal helper exit removes owned transport data;
+explicit retention and unpublished snapshots remain protected.
+Windows regressions also deny hard-link creation across database initialization,
+database backup, HTML creation/backup, reads, SQL export and reviewed updates.
+Competing destinations created after preflight must retain their bytes, and
+denied publication must clean staging files while preserving neighboring data.
+The isolated Windows log walkthrough installs a test-only Python audit hook in
+the child host that rejects every hard-link call through the complete author/
+review/save sequence. This does not modify machine permissions or imply clean
+remote-host acceptance.
 The temp-alias regression launches the same package smoke in a fresh shell with
 an OS temp directory supplied through a directory link (a Windows junction or
 Unix symlink). Both extracted and isolated trial paths use the physical directory;
@@ -145,16 +153,17 @@ $vwDocs = Join-Path $vwTrial 'docs-vw.html'
 & $vwPython -m validated_world project backup $vwDocs (Join-Path $vwTrial 'before.html')
 ```
 
-Use one persistent `ndjson $vwTrial` process for a reviewed change, following
+Use one persistent `ndjson` process for a reviewed change, following
 [the manual command reference](cli_usage.md#persistent-ndjson-interface), with the
 HTML file as `change.begin.path`. Inspect every affected/context and exact preview
 page, then save. Compare bounded `project diff` with the backup, inspect changed
 HTML source, reimport into a new temporary DB and verify it. Confirm that default
-managed success leaves only the selected HTML and explicit developer baseline.
-Exercise intentional DB-authority paths separately when changing those contracts.
-Confirm read, init, review, discard and exit create no implicit files or folders.
-Ordinary sessions have no filesystem lock; concurrent writers are unsupported,
-and optimistic checks must reject an already changed base.
+managed success removes the recovery scratch data. Exercise explicit `keepWorkingDb` and
+DB-authoritative paths separately when changing those contracts.
+Check that creation, export, backup, session close/discard and publication retry
+leave only the selected HTML file. Exercise a competing live writer and concurrent
+readers; no project-local lock sidecars or SQLite directories may appear. Inspect
+staging/transport boundaries and verify a published file is not hidden on Windows.
 
 For project isolation, create a second project at an explicit custom path and
 inspect both through the public CLI. A wrong project ID must reject change.begin.
@@ -174,14 +183,13 @@ Explore realistic mistakes: corrupt a required JSON block and observe import
 failure with no destination DB; restore it, edit a compatible record and confirm
 import accepts it. A presentation-only edit must not alter graph meaning. Try an
 occupied export destination and inspect the diagnostic. Unit fault injection
-covers rendering failures before writing, changed source bytes, interrupted direct
-saves and disposal of RAM state. Never
+covers staging and atomic replacement failures, changed source bytes, cleanup
+reporting and committed-unpublished retry. Never
 weaken OS permissions or bypass browser policy to complete a smoke check.
 
 Remove owned temporary copies after inspecting their contents. Resolve each
 recursive cleanup target and verify it remains under the unique trial directory.
-Preserve unknown diagnostics or user files. Verify or restore any failed-save
-HTML before reusing it; the product creates no recoverable WIP database.
+Retain a committed unpublished snapshot until recovery, and report its exact path.
 
 ## Browser smoke
 

@@ -23,6 +23,7 @@ htmlcov/
 *~
 
 # ValidatedWorld transient files. Canonical HTML documents are tracked source.
+.*.tmp.html
 *.vw.db-journal
 *.vw.db-wal
 *.vw.db-shm

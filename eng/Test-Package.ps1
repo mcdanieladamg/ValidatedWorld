@@ -13,6 +13,29 @@ if ([string]::IsNullOrWhiteSpace($PackagesDirectory)) { $PackagesDirectory = Joi
 $packages = [IO.Path]::GetFullPath($PackagesDirectory)
 $hashes = Join-Path $packages 'SHA256SUMS.txt'
 if (-not (Test-Path -LiteralPath $hashes -PathType Leaf)) { throw "Missing package hashes: $hashes" }
+$releaseFiles = @(Get-ChildItem -LiteralPath $packages -File | Where-Object { $_.Extension -eq '.zip' -or $_.Name -like 'RELEASE_NOTES-*.md' })
+if ($releaseFiles.Count -ne 3) { throw 'Expected two release archives and one release notes file.' }
+$recordedHashes = @{}
+foreach ($line in Get-Content -LiteralPath $hashes) {
+    if ($line -notmatch '^([0-9a-f]{64})  ([^/\\]+)$') { throw 'Invalid release checksum entry.' }
+    if ($recordedHashes.ContainsKey($Matches[2])) { throw "Duplicate release checksum: $($Matches[2])" }
+    $recordedHashes[$Matches[2]] = $Matches[1]
+}
+if ($recordedHashes.Count -ne $releaseFiles.Count) { throw 'Release checksum coverage differs from release files.' }
+foreach ($file in $releaseFiles) {
+    if (-not $recordedHashes.ContainsKey($file.Name) -or
+        (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $recordedHashes[$file.Name]) {
+        throw "Release checksum mismatch: $($file.Name)"
+    }
+}
+$archives = @(Get-ChildItem -LiteralPath $packages -Filter '*.zip' -File)
+if ($archives.Count -ne 2) { throw 'Expected exactly two release archives.' }
+foreach ($archive in $archives) {
+    if ($archive.Name -notmatch '^validated-world-(skill|plugin)-(.+)\.zip$' -or
+        -not (Test-Path -LiteralPath (Join-Path $packages "RELEASE_NOTES-$($Matches[2]).md") -PathType Leaf)) {
+        throw "Release notes do not match archive: $($archive.Name)"
+    }
+}
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('ValidatedWorld-package-' + [Guid]::NewGuid().ToString('N'))
 $oldPythonPath = $env:PYTHONPATH
 New-Item -ItemType Directory -Force -Path $temporary | Out-Null
@@ -106,7 +129,7 @@ try {
             @{ version = 1; command = 'host.exit'; payload = @{} }
         )
         $protocolLines = @($protocolRequests | ForEach-Object { $_ | ConvertTo-Json -Depth 5 -Compress })
-        $protocolOutput = @($protocolLines | & $python -I -S $isolatedLauncher ndjson $isolatedParent)
+        $protocolOutput = @($protocolLines | & $python -I -S $isolatedLauncher ndjson)
         if ($LASTEXITCODE -ne 0 -or $protocolOutput.Count -ne 5) { throw "Packaged NDJSON recovery did not finish: $($archive.Name)" }
         $protocolResults = @($protocolOutput | ForEach-Object { $_ | ConvertFrom-Json })
         if ($protocolResults[0].status -ne 'error' -or $protocolResults[0].payload.message -notmatch 'payload') { throw "Missing payload was not rejected: $($archive.Name)" }
@@ -117,10 +140,10 @@ try {
         if (Test-Path -LiteralPath ($protocolProject + '.vw-lock')) { throw "Packaged NDJSON exit left a lock file: $($archive.Name)" }
         & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill
         if ($LASTEXITCODE -ne 0) { throw "Bundled author/review/save examples failed: $($archive.Name)" }
-        $sessionWorkflowOptions = @('--session-http')
-        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { $sessionWorkflowOptions += '--deny-hard-links' }
-        & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill @sessionWorkflowOptions
-        if ($LASTEXITCODE -ne 0) { throw "In-memory session workflow failed: $($archive.Name)" }
+        $logWorkflowOptions = @('--log-output')
+        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { $logWorkflowOptions += '--deny-hard-links' }
+        & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill @logWorkflowOptions
+        if ($LASTEXITCODE -ne 0) { throw "Live response-log workflow failed: $($archive.Name)" }
         $trialDocs = Join-Path $isolatedParent 'smoke-project.html'
         $trialDb = Join-Path $isolatedParent 'smoke-working.vw.db'
         $null = & $python -I -S $isolatedLauncher sample create technical-project $trialDocs

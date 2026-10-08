@@ -12,11 +12,8 @@ detect and resolve inconsistencies throughout the connected knowledge base,
 managed by your AI agent.
 
 The graph is stored in your project as a human-friendly HTML file that you can open in a browser
-to read and explore.
-
-Work in progress stays in memory. Saving updates the HTML file in your project.
-Agent authoring sessions keep file access within the document's folder and its
-subfolders.
+to read and explore. During operation, the agent uses a single hidden `.tmp.html`
+file beside it and removes it afterward.
 
 ValidatedWorld is available as the **ValidatedWorld** plugin and as a standalone
 **AI agent skill**. Ask the agent to understand the project or

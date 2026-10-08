@@ -415,7 +415,7 @@ class Application:
     def __init__(self, store: ProjectStore | None = None):
         self.store = store or ProjectFiles()
         self.sessions: dict[str, Session] = {}
-        self.packet_transport = None
+        self.review_exports: dict[str, tuple[str, int, int]] = {}
 
     def review_plan(self, reference, limit=100, cursor=None, refinements=None):
         from .review_packets import PacketReview
@@ -473,23 +473,40 @@ class Application:
         return {"reference": session.reference(), "supplementalFingerprint": fingerprint(evidence),
                 "entityIds": [v["entityId"] for v in evidence], "requiresNewPlan": True}
 
-    def review_export(self, reference, plan_fingerprint, packet_id, limit=100):
-        from .memory_transport import PacketTransport
-        self.packet_review(reference, plan_fingerprint)
-        if self.packet_transport is None: self.packet_transport = PacketTransport()
-        return self.packet_transport.export(self, reference, plan_fingerprint, packet_id, limit)
+    def review_export(self, reference, plan_fingerprint, packet_id, destination, limit=100):
+        from .review_packets import export_packet
+        review = self.packet_review(reference, plan_fingerprint)
+        result = export_packet(review, packet_id, destination, limit)
+        path = Path(result["manifestPath"]).parent
+        stat = path.stat()
+        self.review_exports[str(path)] = (reference["sessionId"], stat.st_dev, stat.st_ino)
+        return result
 
     def cleanup_review_exports(self, session_id=None):
-        if self.packet_transport is None: return {"revokedEndpoints": 0}
-        return self.packet_transport.revoke(session_id)
+        import shutil
+        cleaned = []
+        for name, (owner, device, inode) in list(self.review_exports.items()):
+            if session_id is not None and owner != session_id: continue
+            path = Path(name)
+            if path.exists():
+                stat = path.stat()
+                if path.is_symlink() or is_junction(path) or (stat.st_dev, stat.st_ino) != (device, inode):
+                    raise ValueError(f"review export directory changed; cleanup requires host inspection: {name}")
+                if any(p.is_dir() or p.is_symlink() or not (p.name == "manifest.json" or __import__("re").fullmatch(r"page-\d{6}\.json", p.name)) for p in path.iterdir()):
+                    raise ValueError(f"review export contains unknown files; cleanup requires host inspection: {name}")
+                shutil.rmtree(path)
+            cleaned.append(name)
+            del self.review_exports[name]
+        return {"removedDirectories": cleaned}
 
     def initialize(self, path: str, project_id: str, title: str, purpose_node_id: str, purpose_text: str) -> StoredProject:
         return self.store.initialize(path, Graph(project_id, title, purpose_node_id, (Node(purpose_node_id, purpose_text),), ()))
 
-    def begin(self, path: str, project_id: str, author: str, intent: str) -> Session:
+    def begin(self, path: str, project_id: str, author: str, intent: str, *, keep_working_db: bool = False) -> Session:
+        if not isinstance(keep_working_db, bool): raise ValueError("keepWorkingDb must be Boolean")
         if project_id in self.sessions: raise ValueError("project already has an active session")
         if isinstance(self.store, ProjectFiles):
-            project = self.store.begin_workspace(path)
+            project = self.store.begin_workspace(path, keep_working_db)
         else:
             project = self.store.load(path)
         if project.graph.project_id != project_id:
@@ -650,10 +667,10 @@ class Application:
             project = self.store.write(session.base.path, session.base.graph.project_id, session.base.state_fingerprint, session.proposed_fingerprint, session.operations)
         except PublicationError as exc:
             self.sessions.pop(session.base.graph.project_id, None)
-            return {"status": "failed", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": "html-publication-failure", "message": str(exc), "warnings": self._cleanup_warnings(session.session_id)}
+            return {"status": "unpublished", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": "html-publication-failure", "message": str(exc), "workingDbPath": str(exc.workspace.db), "warnings": self._cleanup_warnings(session.session_id)}
         except RuntimeError as exc:
             if str(exc) == "stale-base-fingerprint":
-                return {"status": "stale", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": "stale-base-fingerprint", "message": "The project changed before saving; review a fresh proposal."}
+                return {"status": "stale", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": "stale-base-fingerprint", "message": "The project changed before the atomic write; review a fresh proposal."}
             return {"status": "failed", "projectId": session.base.graph.project_id, "sessionId": session.session_id, "project": None, "storageErrorCode": "storage-failure", "message": str(exc)}
         except sqlite3.OperationalError as exc:
             status = "busy" if "locked" in str(exc).lower() or "busy" in str(exc).lower() else "failed"
@@ -665,6 +682,7 @@ class Application:
         result = {"status": "written", "projectId": project.graph.project_id, "sessionId": session.session_id, "project": _stored(project), "storageErrorCode": None, "message": "The reviewed proposal was saved.", "warnings": warnings}
         if isinstance(self.store, ProjectFiles):
             result["warnings"].extend(self.store.last_warnings)
+            if self.store.retained_db: result["workingDbPath"] = self.store.retained_db
         return result
 
     def _cleanup_warnings(self, session_id):
@@ -686,8 +704,6 @@ class Application:
         finally:
             if isinstance(self.store, ProjectFiles): self.store.close()
             self.sessions.clear()
-            if self.packet_transport is not None:
-                self.packet_transport.close(); self.packet_transport = None
 
 
 def _operations_between(base: Graph, target: Graph) -> tuple[Operation, ...]:

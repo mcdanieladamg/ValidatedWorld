@@ -46,10 +46,9 @@ For changes to product meaning, contracts or delivery state:
 
 Never edit SQLite or authoritative HTML records directly to update the blueprint.
 If the checkout cannot safely update or diff its own project, report the blocker.
-The document adapter uses in-memory SQLite and direct HTML saving. A successful
-RAM commit alone is not a saved document update. Failed saves discard WIP and
-may leave partial HTML; verify or restore the document before a fresh session.
-Preserve any pre-existing recovery files or unknown user data.
+The document adapter manages temporary SQLite and publication. Preserve a committed
+unpublished SQLite snapshot until recovery; a successful SQLite transaction alone is not a published
+document update.
 
 Meaningful artifact changes normally include the matching graph delta. Record
 delivered work with status markers, rather than restating plans. A corrective
@@ -85,6 +84,12 @@ may depend on chat history, app memory, ignored handoff notes or external files.
 Keep user docs focused on current behavior, without development transcripts.
 Do not maintain a complete Markdown, JSON, SQL or diagram mirror of the graph.
 
+Preserve the public OpenAI skill/plugin description verbatim. Change it only
+when the human explicitly authorizes or requests a description change. The
+accepted long description is the exact text in both tracked plugin manifests;
+routine implementation, packaging and documentation work is not authorization
+to rewrite it.
+
 Ignored files are regenerable outputs/caches or local settings/secrets. Preserve
 useful sanitized smoke foundations in tracked samples. Put trial DBs, proposals,
 evidence and diagnostics in unique OS temporary directories and remove them
@@ -93,20 +98,27 @@ preserve canonical data, unknown user files, settings and active installations.
 Report exact paths for blocked cleanup. Completed release archives may remain
 as documented regenerable outputs.
 
+Whenever a task updates distributables, deliver and link all four versioned
+release files: the standalone skill ZIP, plugin ZIP, RELEASE_NOTES-<version>.md
+and SHA256SUMS.txt under artifacts/release/<version>. Build into a fresh candidate
+directory, validate those exact bytes, then inspect and safely replace existing
+regenerable outputs. Keep both skill source copies synchronized and preserve the
+public listing description. GitHub publication and OpenAI uploads are human work.
+
 ## Implementation invariants
 
 - Use standard-library Python 3.11+. Core is independent of files, SQLite,
   JSON, UI and providers. The SQLite engine keeps the fixed four-table schema,
   parameterized writes, foreign keys, verified mappings and no extensions.
 - The default authority is a tracked HTML file: one passive typed JSON graph
-  with a versioned inline JavaScript browser view. Ordinary HTML work stays in
-  memory without temporary files. Explicit trusted DB-authority instructions and
-  caller-requested conversion outputs remain supported. Keep one selected authority.
+  with a versioned inline JavaScript browser view. Managed DB deletion follows successful publication.
+  Explicit trusted DB-authority instructions and working-DB retention remain
+  supported. Keep one selected authority.
 - Use stable node/edge IDs, directed review dependencies and one purpose-rooted
   `scope-parent` tree. Ordinary review includes full upstream scope lineage;
   direct scope edits select descendants, and purpose edits select the project.
 - Proposals/reviews remain process-local. Complete reviewed SQLite transactions
-  commit atomically in RAM; HTML saves write directly and can be partial on failure.
+  commit atomically; document replacement has its documented recovery contract.
   The skill's ordinary write requires a fresh host-subagent allow bound to the
   exact evidence. The engine checks bindings/coverage, not identity or truth.
   Rare dependency-skip cleanup is for absent or specific known consequences
