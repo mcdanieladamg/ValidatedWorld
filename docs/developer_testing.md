@@ -65,8 +65,10 @@ supplemental context, dialogue and synthesis gates continue to be exercised.
 Windows disk-DB tests separately deny hard links for intentional initialization
 and backup files. No test changes machine permissions.
 CLI fixtures resolve OS temporary directories before selecting a persistent
-project root and constructing file arguments. A regression exercises all four
-CLI fixture families through a real directory alias and Windows short paths
+project root and constructing file arguments. The review-packet sample generator
+also resolves its caller's destination before starting a persistent session.
+A regression exercises all four CLI fixture families and both game/scale
+review-packet fixtures through a real directory alias and Windows short paths
 when available. In-process controller tests cover authentication rejection,
 malformed requests, bounded review packets, endpoint revocation and unsaved-work
 cleanup; these complement child-process checks and count toward branch coverage.

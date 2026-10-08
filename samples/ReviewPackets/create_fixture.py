@@ -54,6 +54,9 @@ def fixture(extra_npcs=0):
 
 
 def create(path, extra_npcs=0):
+    # Use the same physical spelling for the selected folder and file arguments.
+    # OS temp paths can contain macOS links or Windows short-name aliases.
+    path = Path(path).expanduser().resolve()
     root = Path(__file__).resolve().parents[2]
     env = dict(os.environ, PYTHONPATH=str(root / "src"))
     process = subprocess.Popen([sys.executable, "-m", "validated_world", "ndjson", str(path.parent)], env=env,

@@ -10,6 +10,7 @@ from unittest.mock import patch
 import test_cli_protocol as protocol_tests
 import test_cli_surface as surface_tests
 import test_core as core_tests
+import test_review_packets as packet_tests
 import test_skip_dependencies as skip_tests
 
 
@@ -51,6 +52,8 @@ class CliTempPathTests(unittest.TestCase):
                             surface_tests.CliSurfaceTests('test_ndjson_dispatches_every_stateless_family'),
                             core_tests.PythonProductTests('test_ndjson_exact_preview_gate_and_persistent_session'),
                             skip_tests.SkipDependenciesTests('test_ndjson_boolean_flag_is_explicit_and_reset_on_patch'),
+                            packet_tests.GameAndScaleTests('test_continent_count_rule_dependency_context_and_missing_link'),
+                            packet_tests.GameAndScaleTests('test_large_purpose_review_can_refine_without_truncating_analysis'),
                         )
                         with patch('tempfile.tempdir', spelling):
                             result = unittest.TextTestRunner(stream=io.StringIO()).run(unittest.TestSuite(cases))
