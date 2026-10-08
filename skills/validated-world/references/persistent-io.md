@@ -1,73 +1,112 @@
-# Persistent input/output without work files
+# Keep requests and responses live
 
-Keep one application process alive through authoring, review and save. Proposals,
-SQLite state, approvals and packets exist only in that process. A completed
-one-shot command cannot supply a live session handle. Use the same interpreter
-that passed the launcher's version check.
+The NDJSON host flushes each result before reading the next request. Shell
+pipelines/redirection and command-result capture can still buffer output until
+exit. Closing the process to flush it loses unfinished proposals. Do not parse
+an empty capture or wait for EOF to receive an individual response.
 
-Start the session with its working directory set to the folder containing the
-selected HTML file (or its intended location for a new project). Both native
-NDJSON and the controller fix that folder as `projectRoot` at startup. All file
-reads and writes, custom templates, import manifests, backups, exports and
-artifact allowed roots must stay inside it or its subfolders. Absolute paths
-inside the root work; relative paths resolve from that root. Traversal escapes,
-symlinks, junctions and Windows device/stream aliases are rejected. Requests
-cannot enlarge the root. Keep explicit backups and exports in that project.
+## Terminal tools with retained stdin
 
-If the host cannot set a process working directory, pass the same selected
-folder as the sole positional argument: `ndjson <project-folder>` or
-`serve <project-folder>`. This selects one root, not an additional allowed folder.
-Check `host.help.payload.projectRoot` before mutation. If it differs from the
-HTML's containing folder, close and relaunch with that folder; do not work around
-a rejected path by selecting a broader parent or filesystem root.
+Use the bundled optional `scripts/ndjson_log.py` when terminal output is buffered
+or includes echoes, ANSI controls or wrapping. It runs the same launcher in one
+process and writes raw responses directly to a UTF-8 file, flushing each line.
+It adds no network service, model client, durable draft or review bypass.
 
-## Native pipes or live terminal
-
-Launch the bundled `scripts/validated_world.py ndjson` directly with
-`-B -X utf8 -u`; retain its stdin/stdout pipes in the host's persistent execution
-environment. With Python `subprocess.Popen`, use text pipes and `encoding="utf-8"`;
-write one JSON line, flush stdin, and read one complete stdout line per request.
-For terminal tools, start a retained interactive process and send subsequent
-lines through its live session ID. Read structured response lines from each
-tool result; terminal echoes are not responses. Check `host.help` while the
-process remains alive before mutation. Allow each command up to 30 seconds.
-
-Do not redirect to a log file or use shell capture that withholds responses until
-process exit. Do not parse an incomplete line. If the host cannot retain pipes or
-read live terminal responses, use the optional controller below when available.
-
-## Optional in-memory controller
-
-For a host that permits loopback connections but buffers terminal stdout, start:
+Start a live interactive terminal session with the selected interpreter and
+set the execution tool's working directory to the identified, authorized
+project folder. The helper creates a unique `vw-ndjson-*` directory there by
+default, in the same process that opens its log. No log-path argument or
+separate directory-creation command is needed:
 
 ```text
-<python> -B -X utf8 -u <skill>/scripts/validated_world.py serve
+<python> -X utf8 -u <skill>/scripts/ndjson_log.py
 ```
 
-It announces one JSON object with `controllerUrl` and `projectRoot`, and stays
-alive. Confirm the root is the selected HTML's containing folder. Retain the
-actual running process handle and exact URL; never invent a session ID if the
-launcher exited. The random controller URL is local and authorizes commands, so
-keep it with the authoring controller rather than sharing it with reviewers.
+Quote shell arguments containing spaces. Use the host's session-capable
+execution tool. Retain a session handle only when the result actually supplies
+one for a still-running process; an exited command has no usable session handle.
+Send later input through the host's stdin/write tool. The helper announces
+`NDJSON ready; responses: <absolute-path>` on stderr. Use that actual path,
+inside the selected project folder. Send one request plus newline:
 
-Send each request as a completed command with the JSON envelope on stdin:
-
-```text
-<python> -B -X utf8 <skill>/scripts/validated_world.py request <controllerUrl>
+```json
+{"version":1,"command":"host.help","payload":{}}
 ```
 
-The client prints one complete response and exits; the server retains the same
-application state. Alternatively POST the envelope with Python `urllib.request`
-and `ProxyHandler({})`, using a 30-second timeout. All protocol commands and
-payloads are unchanged. No logs or temporary files are created. `host.exit`
-returns its response and closes the server. An invalid exit request leaves it
-alive so the payload can be corrected.
+Read the log with a separate filesystem/read command **while the session is
+still running**, before initializing or changing a project. Confirm that the
+`host.help` response has `status: "ok"` and the process remains alive. This
+checks both the session handle and cross-command log visibility.
+Each complete newline-terminated line is one response object.
+Track consumed lines or a byte offset and parse only new complete lines. A file
+read may race with a write: keep an incomplete final line for the next read;
+an empty read means no complete response yet. Wait briefly/check the live
+session rather than parsing empty text or closing it. Do not parse terminal
+echoes or readiness messages as protocol JSON. Serialize paths and requests
+with a JSON library; see [payload templates](command-workflow.md).
 
-Both transports require the host's ordinary permissions. If loopback is denied,
-use native pipes/live NDJSON; do not broaden permissions or change security
-controls. If neither transport works, report the missing capability and leave
-the change unsaved.
+The default uses the shared project folder rather than OS temp, whose visibility
+can differ between sandboxed executions. If log allocation or the live response
+check fails, report the diagnostic and stop before project changes; the helper
+does not fall back to another directory. Do not change sandbox settings or
+request broader access just to store logs. The log is temporary transport
+evidence, not project storage; keep `docs-vw.html` outside the log directory.
+Report inaccessible temporary paths that cannot be cleaned up.
 
-EOF, discard, exit or process loss releases in-memory work. Before save the HTML
-remains the last saved state. Saving itself writes directly and may leave partial
-HTML if interrupted; follow the skill's save-failure instructions.
+For callers with a deliberately separate shared working area, `--temp-root`
+accepts an absolute authorized root instead of the working directory. An
+explicit absolute response-log argument also remains supported for a
+caller-owned temporary directory already visible to the host; its parent must
+exist and the helper refuses an existing log. These overrides are not needed
+for the ordinary skill workflow.
+
+Keep this same session for `change.begin`, authoring, evidence, host review and
+`change.agent-write`. Reviewer tools may run separately while it waits. The log
+is temporary evidence, not a way to resume session references after process
+loss. On a crash, verify the existing project and begin a fresh proposal;
+preserve any reported committed-unpublished working DB for recovery.
+
+Read save results and all required review evidence while the session is alive.
+After completing or discarding the proposal, close any external log readers,
+send `host.exit` with `payload: {}`, and confirm process exit code zero. The
+helper automatically removes its owned log and directory on normal exit or EOF,
+including after a structured request error. Its final exit response may be
+removed before a separate read; use process status to confirm shutdown.
+
+Use `--keep-log` only when diagnostics are explicitly needed after shutdown.
+Caller-supplied logs are also retained. Abnormal exits preserve diagnostics;
+forced termination may leave temporary directories because cleanup cannot run.
+Cleanup refuses unexpected or replaced files and reports the exact remaining
+path on failure. Inspect retained contents before removing only known owned
+files. Never delete the project or a recovery DB as log cleanup.
+
+## Hosts with a persistent Python execution environment
+
+If the host can retain a Python object across tool calls, ordinary pipes also
+work. Keep this process object in that environment:
+
+```python
+import json
+import subprocess
+
+process = subprocess.Popen(
+    [python_executable, "-X", "utf8", launcher_path, "ndjson"],
+    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    text=True, encoding="utf-8",
+)
+
+def request(command, payload):
+    process.stdin.write(json.dumps({"version": 1, "command": command,
+                                   "payload": payload}) + "\n")
+    process.stdin.flush()
+    line = process.stdout.readline()
+    if not line:
+        raise RuntimeError("NDJSON host closed before responding")
+    return json.loads(line)
+```
+
+Use `readline()` for one response; reading the whole stdout stream waits for
+EOF. This is not persistent if each tool call starts a new Python interpreter.
+Send `host.exit` only after saving/discarding, then close streams and wait for
+exit. Hosts must supply retained process control; command-only tools that
+cannot keep stdin open cannot carry a process-local change session.

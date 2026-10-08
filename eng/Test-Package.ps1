@@ -9,7 +9,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-if ([string]::IsNullOrWhiteSpace($PackagesDirectory)) { $PackagesDirectory = Join-Path $root 'artifacts/release/1.0.3' }
+if ([string]::IsNullOrWhiteSpace($PackagesDirectory)) { $PackagesDirectory = Join-Path $root 'artifacts/release/1.0.2' }
 $packages = [IO.Path]::GetFullPath($PackagesDirectory)
 $hashes = Join-Path $packages 'SHA256SUMS.txt'
 if (-not (Test-Path -LiteralPath $hashes -PathType Leaf)) { throw "Missing package hashes: $hashes" }
@@ -106,7 +106,7 @@ try {
             @{ version = 1; command = 'host.exit'; payload = @{} }
         )
         $protocolLines = @($protocolRequests | ForEach-Object { $_ | ConvertTo-Json -Depth 5 -Compress })
-        $protocolOutput = @($protocolLines | & $python -I -S $isolatedLauncher ndjson $isolatedParent)
+        $protocolOutput = @($protocolLines | & $python -I -S $isolatedLauncher ndjson)
         if ($LASTEXITCODE -ne 0 -or $protocolOutput.Count -ne 5) { throw "Packaged NDJSON recovery did not finish: $($archive.Name)" }
         $protocolResults = @($protocolOutput | ForEach-Object { $_ | ConvertFrom-Json })
         if ($protocolResults[0].status -ne 'error' -or $protocolResults[0].payload.message -notmatch 'payload') { throw "Missing payload was not rejected: $($archive.Name)" }
@@ -117,10 +117,10 @@ try {
         if (Test-Path -LiteralPath ($protocolProject + '.vw-lock')) { throw "Packaged NDJSON exit left a lock file: $($archive.Name)" }
         & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill
         if ($LASTEXITCODE -ne 0) { throw "Bundled author/review/save examples failed: $($archive.Name)" }
-        $sessionWorkflowOptions = @('--session-http')
-        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { $sessionWorkflowOptions += '--deny-hard-links' }
-        & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill @sessionWorkflowOptions
-        if ($LASTEXITCODE -ne 0) { throw "In-memory session workflow failed: $($archive.Name)" }
+        $logWorkflowOptions = @('--log-output')
+        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { $logWorkflowOptions += '--deny-hard-links' }
+        & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill @logWorkflowOptions
+        if ($LASTEXITCODE -ne 0) { throw "Live response-log workflow failed: $($archive.Name)" }
         $trialDocs = Join-Path $isolatedParent 'smoke-project.html'
         $trialDb = Join-Path $isolatedParent 'smoke-working.vw.db'
         $null = & $python -I -S $isolatedLauncher sample create technical-project $trialDocs

@@ -21,7 +21,7 @@ from validated_world.storage import ProjectStore
 class CliSurfaceTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(); self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name).resolve()
+        self.root = Path(self.temporary.name)
         self.path = self.root / "sample.vw.db"
         ProjectStore().initialize(self.path, sample_graph())
 
@@ -148,7 +148,7 @@ class CliSurfaceTests(unittest.TestCase):
             json.dumps({"version": 1, "command": "read.context", "payload": {"path": str(self.path), "nodeIds": [1]}}),
             json.dumps({"version": 1, "command": "host.exit", "payload": {}}),
         ]
-        output = io.StringIO(); self.assertEqual(ndjson_loop(lines, output, io.StringIO(), project_root=self.root), SUCCESS)
+        output = io.StringIO(); self.assertEqual(ndjson_loop(lines, output, io.StringIO()), SUCCESS)
         results = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertTrue(all(item["status"] == "ok" for item in results[:len(requests)]))
         commands = results[0]["payload"]["commands"]
@@ -216,7 +216,7 @@ class CliSurfaceTests(unittest.TestCase):
             self.assertEqual(latest()["payload"]["projectId"], "technical-project")
             yield send("host.exit", {})
 
-        self.assertEqual(ndjson_loop(script(), output, io.StringIO(), project_root=self.root), SUCCESS)
+        self.assertEqual(ndjson_loop(script(), output, io.StringIO()), SUCCESS)
         graph = ProjectStore().load(self.path).graph
         self.assertIn("new-scope", {item.id for item in graph.nodes})
         self.assertEqual(next(item.text for item in graph.nodes if item.id == "purpose"), "An offline privacy-preserving sensor")
@@ -263,7 +263,7 @@ class CliSurfaceTests(unittest.TestCase):
             ("read.health", {"path": path, "limit": 2}),
         )
         lines = [json.dumps({"version": 1, "command": command, "payload": payload}) for command, payload in requests]
-        output = io.StringIO(); self.assertEqual(ndjson_loop(lines, output, io.StringIO(), project_root=self.root), SUCCESS)
+        output = io.StringIO(); self.assertEqual(ndjson_loop(lines, output, io.StringIO()), SUCCESS)
         results = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual(len(results), len(requests))
         self.assertTrue(all(item["status"] == "ok" for item in results), results)
@@ -289,7 +289,7 @@ class CliSurfaceTests(unittest.TestCase):
             ("change.focus", {"reference": reference, "operations": {"operations": []}, "scopeParents": [{"childNodeId": "", "parentNodeId": "x", "edgeId": "x"}]}),
         )
         lines = [json.dumps({"version": 1, "command": command, "payload": payload}) for command, payload in invalid]
-        output = io.StringIO(); ndjson_loop(lines, output, io.StringIO(), project_root=self.root)
+        output = io.StringIO(); ndjson_loop(lines, output, io.StringIO())
         results = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual([item["status"] for item in results], ["error"] * len(invalid))
 

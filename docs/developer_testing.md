@@ -22,9 +22,9 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 & $vwPython -m coverage report --skip-covered
 .\eng\Test-DeveloperTools.ps1
 .\eng\Test-Blueprint.ps1 -PythonExecutable $vwPython
-.\eng\Build-Package.ps1 -Version 1.0.3
-.\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/1.0.3 -PythonExecutable $vwPython
-.\eng\Test-PackageTempAlias.ps1 -PackagesDirectory artifacts/release/1.0.3 -PythonExecutable $vwPython
+.\eng\Build-Package.ps1 -Version 1.0.2
+.\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/1.0.2 -PythonExecutable $vwPython
+.\eng\Test-PackageTempAlias.ps1 -PackagesDirectory artifacts/release/1.0.2 -PythonExecutable $vwPython
 ```
 
 The build deliberately refuses an existing output directory. Inspect an old
@@ -46,32 +46,32 @@ launcher: create, retrieve, add a scoped claim, patch, page evidence, acknowledg
 review, preview and publish. A write without host approval must block. Its later
 allow is synthetic offline test data; this does not establish fresh-host review
 acceptance, which requires the separate host smoke below.
-The same walkthrough runs through the optional in-memory controller, receiving
-each complete UTF-8 response before server exit. A child-process audit hook
-rejects every filesystem write except the selected HTML, and rejects temporary
-allocation, rename, hard links, directory creation and deletion. Both native
-pipes and the controller must complete create/read/review/save without work
-files. The controller is tested with loopback access; native pipes remain the
-default when the host denies it. Unit tests cover read-only project directories,
-launch-selected project roots for both transports, normalized inside paths,
-outside read/write rejection, sibling-prefix escapes, links/junctions, Windows
-device and stream aliases, and rejection of request-supplied root expansion.
-Templates, backups and exports remain usable inside subfolders. Unit tests cover
-RAM transaction rollback, optimistic stale checks, occupied destinations, direct
-save failure and disposal of unsaved state. Packet tests fetch hashed bounded
-pages in memory, require full presentation, reject stale evidence, revoke URLs,
-and preserve Unicode graph IDs as data. Existing batching, refinement,
-supplemental context, dialogue and synthesis gates continue to be exercised.
-Windows disk-DB tests separately deny hard links for intentional initialization
-and backup files. No test changes machine permissions.
-CLI fixtures resolve OS temporary directories before selecting a persistent
-project root and constructing file arguments. The review-packet sample generator
-also resolves its caller's destination before starting a persistent session.
-A regression exercises all four CLI fixture families and both game/scale
-review-packet fixtures through a real directory alias and Windows short paths
-when available. In-process controller tests cover authentication rejection,
-malformed requests, bounded review packets, endpoint revocation and unsaved-work
-cleanup; these complement child-process checks and count toward branch coverage.
+The same walkthrough runs through the bundled response-log launcher, reading
+each flushed UTF-8 response before process exit. Unit checks protect existing
+logs and cover Unicode/structured diagnostics, default project-folder allocation
+despite differing process temp environments, and explicit shared-root overrides.
+The packaged walkthrough starts in its disposable project folder with no log
+arguments and follows the announced path. Startup must produce a readable live help
+response before project mutation; an exited command supplies no session handle.
+Terminal smoke keeps stdin live,
+reads complete response lines from the log between requests, then confirms
+graceful exit; shell redirection/capture is not used as the response transport.
+Close external log readers before shutdown. Default helper shutdown removes its
+owned response directory; confirm exit code zero instead of rereading a deleted
+final response. Tests cover error followed by graceful EOF, requested diagnostic
+retention, abnormal exit and preservation of unexpected neighboring files.
+HTML workflow tests deny every OS-temp SQLite allocation while exercising
+initialization, reads, SQL export, backup, reviewed publication and discard.
+Each allocation must use the selected document's parent. A denied selected
+parent must fail with its path, without a fallback or an HTML publication.
+Windows regressions also deny hard-link creation across database initialization,
+database backup, HTML creation/backup, reads, SQL export and reviewed updates.
+Competing destinations created after preflight must retain their bytes, and
+denied publication must clean staging files while preserving neighboring data.
+The isolated Windows log walkthrough installs a test-only Python audit hook in
+the child host that rejects every hard-link call through the complete author/
+review/save sequence. This does not modify machine permissions or imply clean
+remote-host acceptance.
 The temp-alias regression launches the same package smoke in a fresh shell with
 an OS temp directory supplied through a directory link (a Windows junction or
 Unix symlink). Both extracted and isolated trial paths use the physical directory;
@@ -145,16 +145,19 @@ $vwDocs = Join-Path $vwTrial 'docs-vw.html'
 & $vwPython -m validated_world project backup $vwDocs (Join-Path $vwTrial 'before.html')
 ```
 
-Use one persistent `ndjson $vwTrial` process for a reviewed change, following
+Use one persistent `ndjson` process for a reviewed change, following
 [the manual command reference](cli_usage.md#persistent-ndjson-interface), with the
 HTML file as `change.begin.path`. Inspect every affected/context and exact preview
 page, then save. Compare bounded `project diff` with the backup, inspect changed
 HTML source, reimport into a new temporary DB and verify it. Confirm that default
-managed success leaves only the selected HTML and explicit developer baseline.
-Exercise intentional DB-authority paths separately when changing those contracts.
-Confirm read, init, review, discard and exit create no implicit files or folders.
-Ordinary sessions have no filesystem lock; concurrent writers are unsupported,
-and optimistic checks must reject an already changed base.
+managed success removes the working DB. Exercise explicit `keepWorkingDb` and
+DB-authoritative paths separately when changing those contracts.
+Check that creation, export, backup, session close/discard and publication retry
+leave no `.vw-lock` sidecars. An open session holds its sidecar until release;
+an OS cleanup failure must report its path without reversing a successful export.
+Exercise temporary-directory aliases on macOS (where `/var` links to
+`/private/var`); engine-owned allocations are canonicalized before project-path
+checks, while explicitly linked project files remain rejected.
 
 For project isolation, create a second project at an explicit custom path and
 inspect both through the public CLI. A wrong project ID must reject change.begin.
@@ -174,14 +177,13 @@ Explore realistic mistakes: corrupt a required JSON block and observe import
 failure with no destination DB; restore it, edit a compatible record and confirm
 import accepts it. A presentation-only edit must not alter graph meaning. Try an
 occupied export destination and inspect the diagnostic. Unit fault injection
-covers rendering failures before writing, changed source bytes, interrupted direct
-saves and disposal of RAM state. Never
+covers staging and atomic replacement failures, changed source bytes, cleanup
+reporting and committed-unpublished retry. Never
 weaken OS permissions or bypass browser policy to complete a smoke check.
 
 Remove owned temporary copies after inspecting their contents. Resolve each
 recursive cleanup target and verify it remains under the unique trial directory.
-Preserve unknown diagnostics or user files. Verify or restore any failed-save
-HTML before reusing it; the product creates no recoverable WIP database.
+Retain a committed unpublished DB until recovery, and report its exact path.
 
 ## Browser smoke
 

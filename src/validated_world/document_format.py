@@ -68,10 +68,10 @@ class _JsonBlock(HTMLParser):
         if self.active: self.parts.append(data)
 
 
-def _read_text(text, path, required):
+def _read(path, required):
     parser = _JsonBlock(str(path))
     try:
-        parser.feed(text); parser.close()
+        parser.feed(path.read_text(encoding='utf-8')); parser.close()
         if not parser.closed or parser.active: parser.fail('missing or unclosed JSON record')
         data = json_loads_strict(''.join(parser.parts))
         if not isinstance(data, dict) or set(data) != set(required): parser.fail('missing or unsupported JSON record fields')
@@ -96,12 +96,7 @@ def _read_attributes(values):
 
 def parse(path):
     path = safe_path(path)
-    return parse_text(path.read_text(encoding='utf-8'), path)
-
-
-def parse_text(text, path):
-    """Validate a rendered document in RAM before touching its destination."""
-    p = _read_text(text, path, ('format', 'id', 'title', 'purpose', 'created', 'updated', 'nodes', 'edges'))
+    p = _read(path, ('format', 'id', 'title', 'purpose', 'created', 'updated', 'nodes', 'edges'))
     if p['format'] != FORMAT: raise HtmlParseError(f'{path}: unsupported documentation representation')
     nodes = []; edges = []
     for kind, output in [('node', nodes), ('edge', edges)]:
@@ -124,3 +119,11 @@ def parse_text(text, path):
     for name in ('created', 'updated'):
         if not isinstance(p[name], str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}\+00:00', p[name]): raise HtmlParseError(f'{path}: invalid UTC timestamp: {name}')
     return StoredProject(str(path), graph, state_fingerprint(graph), p['created'], p['updated'])
+
+
+def write_stage(project, path: Path):
+    import os
+    with path.open('x', encoding='utf-8', newline='\n') as stream:
+        stream.write(render(project)); stream.flush(); os.fsync(stream.fileno())
+    check = parse(path)
+    if (check.graph, check.created_utc, check.updated_utc) != (project.graph, project.created_utc, project.updated_utc): raise ValueError('export round-trip verification failed')

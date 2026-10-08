@@ -5,7 +5,7 @@ submission. GitHub availability and OpenAI directory approval are independent;
 directory approval is not a prerequisite for publishing a GitHub release.
 Version 1.0.0 establishes the document compatibility contract in
 [document format](document_format.md#compatibility). Use the
-[release notes](releases/1.0.3.md) as the GitHub release description;
+[release notes](releases/1.0.2.md) as the GitHub release description;
 [host acceptance](host_acceptance.md) records the scope and limits of the
 external-machine reports.
 
@@ -29,12 +29,12 @@ Pick an unused version/output directory; builds do not
 overwrite existing output.
 
 ```powershell
-.\eng\Build-Package.ps1 -Version 1.0.3
-.\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/1.0.3 -PythonExecutable .\.venv\Scripts\python.exe
+.\eng\Build-Package.ps1 -Version 1.0.2
+.\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/1.0.2 -PythonExecutable .\.venv\Scripts\python.exe
 ```
 
 The ZIPs and `SHA256SUMS.txt` are regenerable outputs under
-`artifacts/release/1.0.3`. The archives can be built and tested before the
+`artifacts/release/1.0.2`. The archives can be built and tested before the
 human commits the release preparation. Before publication, merge exactly those
 reviewed sources and target that commit with the release tag. If packaged sources
 change after testing, build into a fresh output directory and test the new bytes.
@@ -51,7 +51,7 @@ these source archives. Keep the test project outside installation directories.
 Exercise a technical project and a non-code project: create and browse HTML,
 retrieve bounded context, propose a change, obtain a fresh reviewer allow or
 block, and save only an allowed exact proposal. Cover stale reviewer bindings,
-batched branch review and synthesis, question workers, direct-save failure,
+batched branch review and synthesis, question workers, publication recovery,
 package replacement and the strongly discouraged dependency-skip workflow.
 Use the methods in developer verification and preserve sanitized reusable
 findings rather than real project data. A host without persistent process access
@@ -69,7 +69,7 @@ the remaining publication and directory conditions are met.
    policy URLs target the `main` branch's privacy, terms and support documents;
    confirm those exact pages are publicly accessible after publication.
 2. Draft a GitHub release targeting the tested commit and a matching tag, such
-   as `v1.0.3`. Attach the generated plugin ZIP, standalone skill ZIP and checksum
+   as `v1.0.2`. Attach the generated plugin ZIP, standalone skill ZIP and checksum
    file. Use concise release notes describing requirements and tested clients.
    The automatic repository source ZIP is not the built installable skill.
 3. Download and check the attached files before publishing the release. Keep the

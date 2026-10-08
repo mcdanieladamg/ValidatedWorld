@@ -13,14 +13,13 @@ These records may contain personal information if you put it in your project.
 Their purpose is documentation, retrieval and review of proposed changes.
 
 The selected HTML document normally holds durable project data. SQLite working
-state, proposals, reviews and packet bytes stay in process memory, without
-temporary files. Optional loopback transports serve commands or read-only packet
-evidence locally using separate random capability URLs; they do not send data
-to the publisher. Process exit loses unsaved state and revokes access. Saving
-writes directly to the selected HTML and can leave partial data if interrupted.
-Explicit backups, conversion exports, DB authority and host-captured command
-output may create additional copies. User-created documents and copies remain
-until you delete or replace them.
+files support transformation and transactions. Proposals and reviews are held
+in one running process; optional evidence exports, backups, retained databases
+and command output may create additional copies. Managed working databases are
+deleted after successful publication; a committed unpublished database is
+retained for recovery. Explicit database-authority or retention instructions
+also preserve a database. User-created documents and copies have no automatic
+retention deadline: they remain until you delete or replace them.
 
 ## Agent hosts and recipients
 
@@ -37,7 +36,7 @@ ValidatedWorld application.
 
 Choose which project the agent can access, use the host's permission and data
 controls, inspect proposed changes, and keep backups where appropriate. You can
-inspect or delete your project documents and other retained local
+inspect or delete your project documents, exported evidence and retained local
 copies. Uninstalling the skill does not delete project documents. Local deletion
 does not delete host chat history, remote backups or version-control history;
 manage those through their respective services.
