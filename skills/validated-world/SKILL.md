@@ -58,8 +58,11 @@ so future agents can retrieve it without the current conversation.
 ## Review and save
 
 Read [persistent input/output](references/persistent-io.md) when launching the
-session. Use unbuffered native pipes or a live terminal session; read complete
-responses between commands. Do not redirect output to a file or close the
+session. Launch in the selected HTML's containing folder; the session confines
+file access to that folder and its subfolders. Check the returned `projectRoot`
+before mutation and keep backups/exports inside it. Use unbuffered native pipes
+or a live terminal session; read complete responses between commands.
+Do not redirect output to a file or close the
 process to make buffered output appear. The reference includes an optional
 in-memory controller for hosts that cannot retain live pipes.
 Keep one launcher `ndjson` process alive. Send one JSON object per input line;

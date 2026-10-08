@@ -106,7 +106,7 @@ try {
             @{ version = 1; command = 'host.exit'; payload = @{} }
         )
         $protocolLines = @($protocolRequests | ForEach-Object { $_ | ConvertTo-Json -Depth 5 -Compress })
-        $protocolOutput = @($protocolLines | & $python -I -S $isolatedLauncher ndjson)
+        $protocolOutput = @($protocolLines | & $python -I -S $isolatedLauncher ndjson $isolatedParent)
         if ($LASTEXITCODE -ne 0 -or $protocolOutput.Count -ne 5) { throw "Packaged NDJSON recovery did not finish: $($archive.Name)" }
         $protocolResults = @($protocolOutput | ForEach-Object { $_ | ConvertFrom-Json })
         if ($protocolResults[0].status -ne 'error' -or $protocolResults[0].payload.message -notmatch 'payload') { throw "Missing payload was not rejected: $($archive.Name)" }

@@ -302,7 +302,7 @@ class HtmlProjectTests(unittest.TestCase):
             {'version': 1, 'command': 'project.import-html', 'payload': {'sourcePath': str(self.folder), 'destinationPath': str(self.root / 'ndjson.vw.db')}},
             {'version': 1, 'command': 'project.export-html', 'payload': {'sourcePath': str(self.root / 'ndjson.vw.db'), 'destinationPath': str(self.root / 'ndjson-folder.html')}},
         ]
-        out = io.StringIO(); ndjson_loop(io.StringIO('\n'.join(json.dumps(r) for r in requests)), out, io.StringIO())
+        out = io.StringIO(); ndjson_loop(io.StringIO('\n'.join(json.dumps(r) for r in requests)), out, io.StringIO(), project_root=self.root)
         results = [json.loads(line) for line in out.getvalue().splitlines()]
         self.assertEqual(results[0]['payload'], self.store.status(self.folder)); self.assertEqual(results[1]['status'], 'error')
         self.assertEqual(results[2]['status'], 'ok'); self.assertEqual(results[3]['status'], 'ok'); self.assertEqual(self.files(), self.files(self.root / 'ndjson-folder.html'))

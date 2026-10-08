@@ -53,6 +53,10 @@ allocation, rename, hard links, directory creation and deletion. Both native
 pipes and the controller must complete create/read/review/save without work
 files. The controller is tested with loopback access; native pipes remain the
 default when the host denies it. Unit tests cover read-only project directories,
+launch-selected project roots for both transports, normalized inside paths,
+outside read/write rejection, sibling-prefix escapes, links/junctions, Windows
+device and stream aliases, and rejection of request-supplied root expansion.
+Templates, backups and exports remain usable inside subfolders. Unit tests cover
 RAM transaction rollback, optimistic stale checks, occupied destinations, direct
 save failure and disposal of unsaved state. Packet tests fetch hashed bounded
 pages in memory, require full presentation, reject stale evidence, revoke URLs,
@@ -133,7 +137,7 @@ $vwDocs = Join-Path $vwTrial 'docs-vw.html'
 & $vwPython -m validated_world project backup $vwDocs (Join-Path $vwTrial 'before.html')
 ```
 
-Use one persistent `ndjson` process for a reviewed change, following
+Use one persistent `ndjson $vwTrial` process for a reviewed change, following
 [the manual command reference](cli_usage.md#persistent-ndjson-interface), with the
 HTML file as `change.begin.path`. Inspect every affected/context and exact preview
 page, then save. Compare bounded `project diff` with the backup, inspect changed

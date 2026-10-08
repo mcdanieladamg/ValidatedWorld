@@ -61,7 +61,14 @@ unsaved work and approvals are intentionally discarded with the process.
 
 Version 1.0.3 removes reverse-DNS resolution from both optional loopback servers.
 DNS-denied regressions failed before the correction and passed afterward. Local
-verification passed 168 units with 90% branch coverage, both rebuilt archive
-workflows and temporary-path alias checks. The startup tests retain their
-30-second budget and now report child exit status/stderr. The reported macOS CI
-timeout requires a rerun on that runner; it was not reproduced on a local Mac.
+verification passed 176 units with 90% branch coverage, both rebuilt archive
+workflows and temporary-path alias checks. Persistent sessions now confine file
+access to one launch-selected project folder and its subfolders. Regressions
+reject outside reads/writes, root expansion, links/junctions and Windows aliases;
+inside-root templates, backups and normal authoring remain usable. A separate
+candidate-launcher garden trial blocked saving without host approval, accepted
+an actual fresh no-history reviewer's unchanged allow decision, saved and verified
+the change, and left only the selected HTML after shutdown. Browser inspection
+confirmed readable saved text, record navigation and deep-link reload with no
+console or CSP errors. The startup tests retain their 30-second budget and report
+child exit status/stderr. CodeQL alert clearance requires the next CI analysis.

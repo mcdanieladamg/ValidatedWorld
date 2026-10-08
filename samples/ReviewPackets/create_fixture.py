@@ -56,7 +56,7 @@ def fixture(extra_npcs=0):
 def create(path, extra_npcs=0):
     root = Path(__file__).resolve().parents[2]
     env = dict(os.environ, PYTHONPATH=str(root / "src"))
-    process = subprocess.Popen([sys.executable, "-m", "validated_world", "ndjson"], env=env,
+    process = subprocess.Popen([sys.executable, "-m", "validated_world", "ndjson", str(path.parent)], env=env,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8")
     def send(command, payload):
         process.stdin.write(json.dumps({"version": 1, "command": command, "payload": payload}) + "\n"); process.stdin.flush()

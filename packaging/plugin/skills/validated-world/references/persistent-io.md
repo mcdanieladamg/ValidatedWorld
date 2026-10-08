@@ -5,6 +5,22 @@ SQLite state, approvals and packets exist only in that process. A completed
 one-shot command cannot supply a live session handle. Use the same interpreter
 that passed the launcher's version check.
 
+Start the session with its working directory set to the folder containing the
+selected HTML file (or its intended location for a new project). Both native
+NDJSON and the controller fix that folder as `projectRoot` at startup. All file
+reads and writes, custom templates, import manifests, backups, exports and
+artifact allowed roots must stay inside it or its subfolders. Absolute paths
+inside the root work; relative paths resolve from that root. Traversal escapes,
+symlinks, junctions and Windows device/stream aliases are rejected. Requests
+cannot enlarge the root. Keep explicit backups and exports in that project.
+
+If the host cannot set a process working directory, pass the same selected
+folder as the sole positional argument: `ndjson <project-folder>` or
+`serve <project-folder>`. This selects one root, not an additional allowed folder.
+Check `host.help.payload.projectRoot` before mutation. If it differs from the
+HTML's containing folder, close and relaunch with that folder; do not work around
+a rejected path by selecting a broader parent or filesystem root.
+
 ## Native pipes or live terminal
 
 Launch the bundled `scripts/validated_world.py ndjson` directly with
@@ -28,7 +44,8 @@ For a host that permits loopback connections but buffers terminal stdout, start:
 <python> -B -X utf8 -u <skill>/scripts/validated_world.py serve
 ```
 
-It announces one JSON object with `controllerUrl` and stays alive. Retain the
+It announces one JSON object with `controllerUrl` and `projectRoot`, and stays
+alive. Confirm the root is the selected HTML's containing folder. Retain the
 actual running process handle and exact URL; never invent a session ID if the
 launcher exited. The random controller URL is local and authorizes commands, so
 keep it with the authoring controller rather than sharing it with reviewers.

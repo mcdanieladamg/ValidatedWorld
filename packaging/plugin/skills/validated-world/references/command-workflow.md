@@ -2,7 +2,9 @@
 
 Use this reference for ordinary skill-led changes. Start the selected Python
 executable with this skill's `scripts/validated_world.py ndjson` and keep that
-process alive through the write. Send one JSON object per line and read its
+process alive through the write. Launch in the HTML file's containing folder
+and confirm `host.help.payload.projectRoot`; every file path must remain inside
+that fixed folder or its subfolders. Send one JSON object per line and read its
 result before the next request. Serialize JSON rather than hand-escaping paths.
 Use [persistent input/output](persistent-io.md) for retained Python pipes, a live
 terminal session or the optional in-memory controller. Reading responses must not

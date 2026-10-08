@@ -145,6 +145,16 @@ to read responses while keeping the process alive. Native pipes are the default;
 `serve` / `request <controller-url>` provide an optional in-memory transport for
 hosts that buffer terminal output and permit loopback access.
 
+Persistent sessions confine reads and writes to one existing project folder,
+selected at startup. Launch in the HTML file's containing folder, or pass that
+folder as `ndjson <project-folder>` / `serve <project-folder>`. `host.help` and
+the controller announcement return `projectRoot`. File arguments, custom
+templates, bulk manifests, backups, conversions and artifact allowed roots must
+stay inside it or its subfolders. Relative paths resolve from that root; absolute
+paths inside it remain supported. Requests cannot authorize an additional root.
+Traversal escapes and linked paths are rejected. The separate one-shot CLI
+commands retain explicit caller-selected paths for deliberate manual operations.
+
 Authoring, consequence review, your review acknowledgments and saving all happen
 sequentially in this same terminal and process. No second window or reviewer is
 required. The current interface accepts NDJSON requests; it does not display an

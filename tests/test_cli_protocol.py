@@ -28,7 +28,7 @@ class CliProtocolTests(unittest.TestCase):
         environment = os.environ.copy()
         environment["PYTHONPATH"] = str(Path(__file__).parents[1] / "src")
         process = subprocess.Popen(
-            [sys.executable, "-m", "validated_world", "ndjson"],
+            [sys.executable, "-m", "validated_world", "ndjson", str(self.root)],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, env=environment,
         )

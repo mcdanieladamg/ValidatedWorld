@@ -64,6 +64,37 @@ class SessionTransportTests(unittest.TestCase):
         for url in ('https://127.0.0.1:10/token', 'http://example.com:10/token', 'http://user@127.0.0.1:10/token', 'http://127.0.0.1:10/token?x=1', 'http://127.0.0.1:10/token#x', 'http://127.0.0.1/token'):
             with self.assertRaisesRegex(ValueError, 'loopback'): request(url, io.StringIO('{}'), io.StringIO())
 
+    def test_controller_rejects_external_reads_writes_and_root_expansion(self):
+        with tempfile.TemporaryDirectory() as outside_directory:
+            outside = Path(outside_directory).resolve() / 'untouched.html'
+            outside.write_text('untouched', encoding='utf-8')
+            requests = [
+                ('project.init', {'path': str(outside), 'projectId': 'p', 'title': 'P', 'purposeNodeId': 'purpose', 'purposeText': 'P'}),
+                ('project.open', {'path': str(outside)}),
+                ('template.describe', {'name': str(outside)}),
+                ('template.export', {'name': 'research-notebook', 'destinationPath': str(outside)}),
+                ('project.init', {'path': '../escape.html', 'projectId': 'p', 'title': 'P', 'purposeNodeId': 'purpose', 'purposeText': 'P'}),
+            ]
+            for command, payload in requests:
+                result = self.send(command, payload)
+                self.assertEqual(result['status'], 'error', result)
+                self.assertIn('outside the session project folder', result['payload']['message'])
+            result = self.send('host.help', {'projectRoot': str(outside.parent)})
+            self.assertEqual(result['status'], 'error')
+            self.assertEqual(Path(self.send('host.help')['payload']['projectRoot']), self.root)
+            self.assertEqual(outside.read_text(encoding='utf-8'), 'untouched')
+            self.assertEqual(list(outside.parent.iterdir()), [outside])
+            self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_controller_supports_descendants_and_custom_templates_inside_root(self):
+        result = self.send('template.export', {'name': 'research-notebook', 'destinationPath': 'notebook.json'})
+        self.assertEqual(result['status'], 'ok', result)
+        result = self.send('template.instantiate', {'name': 'notebook.json', 'path': 'sub/docs.html', 'projectId': 'p', 'title': 'P', 'purposeText': 'P'})
+        self.assertEqual(result['status'], 'ok', result)
+        result = self.send('project.backup', {'sourcePath': 'sub/docs.html', 'destinationPath': 'backups/baseline.html'})
+        self.assertEqual(result['status'], 'ok', result)
+        self.assertEqual(self.send('project.verify', {'path': 'backups/baseline.html'})['status'], 'ok')
+
     def test_packet_startup_does_not_require_reverse_dns(self):
         with patch('socket.getfqdn', side_effect=AssertionError('reverse DNS is unavailable')):
             transport = PacketTransport()
@@ -81,7 +112,7 @@ socket.getfqdn = deny_dns
 sys.argv = sys.argv[1:]
 runpy.run_path(sys.argv[0], run_name="__main__")
 '''
-        with subprocess.Popen([sys.executable, '-B', '-u', '-I', '-S', '-c', bootstrap, str(self.launcher), 'serve'], cwd=self.root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8') as process:
+        with subprocess.Popen([sys.executable, '-B', '-u', '-I', '-S', '-c', bootstrap, str(self.launcher), 'serve', str(self.root)], cwd=self.launcher.parent, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8') as process:
             try:
                 lines = Queue()
                 Thread(target=lambda: lines.put(process.stdout.readline()), daemon=True).start()
@@ -90,6 +121,7 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                     process.wait(timeout=30)
                     self.fail(f'Controller failed with DNS denied: {process.stderr.read()}')
                 url = json.loads(announcement)['controllerUrl']
+                self.assertEqual(Path(json.loads(announcement)['projectRoot']), self.root)
                 output = io.StringIO()
                 request(url, io.StringIO(json.dumps({'version': 1, 'command': 'host.help', 'payload': {}})), output)
                 self.assertEqual(json.loads(output.getvalue())['status'], 'ok')

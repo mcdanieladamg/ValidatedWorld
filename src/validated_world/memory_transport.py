@@ -112,11 +112,14 @@ class PacketTransport:
         self.server.shutdown(); self.server.server_close(); self.thread.join()
 
 
-def serve(out, err):
+def serve(out, err, *, project_root=None):
     """Serial controller requests keep SQLite ownership on the serving thread."""
     from .application import Application
     from .cli import ndjson_loop
     from .protocol import json_loads_strict
+    from pathlib import Path
+    from .project_paths import ProjectPaths
+    paths = ProjectPaths(Path.cwd() if project_root is None else project_root)
     app = Application()
     token = '/' + secrets.token_urlsafe(32)
     exiting = False
@@ -133,7 +136,7 @@ def serve(out, err):
                 raw = self.rfile.read(size).decode('utf-8')
                 request = json_loads_strict(raw)
                 response = StringIO()
-                ndjson_loop(StringIO(json.dumps(request) + '\n'), response, err, app=app, close_on_eof=False)
+                ndjson_loop(StringIO(json.dumps(request) + '\n'), response, err, app=app, close_on_eof=False, project_root=paths.root)
                 self.respond(200, response.getvalue().encode('utf-8'))
                 if isinstance(request, dict) and request.get('command') == 'host.exit' and json_loads_strict(response.getvalue())['status'] == 'ok':
                     exiting = True
@@ -142,7 +145,7 @@ def serve(out, err):
 
     server = LoopbackHTTPServer(('127.0.0.1', 0), Handler)
     try:
-        out.write(json.dumps({'controllerUrl': f'http://127.0.0.1:{server.server_port}{token}'}) + '\n'); out.flush()
+        out.write(json.dumps({'controllerUrl': f'http://127.0.0.1:{server.server_port}{token}', 'projectRoot': paths.root}) + '\n'); out.flush()
         while not exiting: server.handle_request()
     finally:
         app.close(); server.server_close()
