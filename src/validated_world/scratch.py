@@ -7,7 +7,7 @@ import io
 import base64
 import os
 from pathlib import Path
-import tempfile
+import stat
 import time
 
 from .html_project import safe_path
@@ -41,7 +41,9 @@ class Lease:
         self.key = sha256((role + ':' + os.path.normcase(str(target))).encode()).hexdigest()
         self.file = None
         self.handle = None
-        self.path = Path(tempfile.gettempdir()).resolve() / ('vw-lock-' + self.key)
+        # Locks must rendezvous even when clients use different TMPDIR/TEMP/TMP.
+        # Resolve the OS-owned /tmp alias on macOS, then reject user-owned links.
+        self.path = None if os.name == 'nt' else Path('/tmp').resolve() / f'validated-world-locks-{os.getuid()}' / self.key
 
     def acquire(self, wait=False):
         if self.key in self.active:
@@ -66,6 +68,11 @@ class Lease:
             self.handle = handle
         else:
             import fcntl
+            directory = safe_path(self.path.parent)
+            directory.mkdir(mode=0o700, exist_ok=True)
+            metadata = directory.stat()
+            if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) & 0o077:
+                raise PermissionError(f'lease directory is not private to the current user: {directory}')
             safe_path(self.path)
             descriptor = os.open(self.path, os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0), 0o600)
             self.file = os.fdopen(descriptor, 'r+b')
@@ -149,6 +156,7 @@ class ResponseTransport:
         self.path = scratch_path(document)
         self.lease = Lease(document, 'scratch').acquire()
         self.identity = None
+        self.anchor = None
         self.recovery = None
         self.spool = io.StringIO()
         try:
@@ -161,6 +169,7 @@ class ResponseTransport:
             self._record({'temporary': MARKER, 'document': str(self.document)})
             transports[str(self.document)] = self
         except BaseException:
+            self._close_anchor()
             self.spool.close(); self.lease.close()
             raise
 
@@ -169,7 +178,18 @@ class ResponseTransport:
         with self.path.open('x', encoding='utf-8', newline='\n') as stream:
             metadata = os.fstat(stream.fileno())
             self.identity = (metadata.st_dev, metadata.st_ino)
+            # POSIX permits unlink/replacement with an open descriptor. Pin the
+            # original inode so unlink/recreate cannot recycle its identity.
+            # Windows handles remain short-lived to permit publication there.
+            anchor = os.dup(stream.fileno()) if os.name != 'nt' else None
+        self._close_anchor()
+        self.anchor = anchor
         hide(self.path)
+
+    def _close_anchor(self):
+        if self.anchor is not None:
+            os.close(self.anchor)
+            self.anchor = None
 
     def _check(self):
         safe_path(self.path)
@@ -231,6 +251,7 @@ class ResponseTransport:
                 self._check(); self.path.unlink()
         finally:
             transports.pop(str(self.document), None)
+            self._close_anchor()
             self.spool.close(); self.lease.close()
 
 

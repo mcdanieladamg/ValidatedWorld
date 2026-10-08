@@ -150,6 +150,56 @@ class ScratchTests(unittest.TestCase):
                 self.assertEqual(read_responses(with_transport.path)['responses'], [])
             finally: with_transport.close()
 
+    def test_different_process_temp_settings_share_writer_and_publication_leases(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            document = root / 'docs-vw.html'
+            other_temp = root / 'other-temp'
+            other_temp.mkdir()
+            env = dict(os.environ, TMP=str(other_temp), TEMP=str(other_temp), TMPDIR=str(other_temp))
+            transport = ResponseTransport(document)
+            try:
+                writer = subprocess.run([sys.executable, '-c',
+                    'from validated_world.scratch import ResponseTransport; import sys; ResponseTransport(sys.argv[1])',
+                    str(document)], env=env, capture_output=True, text=True, timeout=10)
+                self.assertNotEqual(writer.returncode, 0)
+                self.assertIn('busy', writer.stderr)
+                self.assertEqual(list(other_temp.iterdir()), [])
+                with Lease(document, 'scratch-io'):
+                    reader = subprocess.run([sys.executable, '-c',
+                        'from validated_world.scratch import read_responses; import json, sys; print(json.dumps(read_responses(sys.argv[1])))',
+                        str(transport.path)], env=env, capture_output=True, text=True, timeout=10)
+                    self.assertEqual(reader.returncode, 0, reader.stderr)
+                    self.assertTrue(json.loads(reader.stdout)['busy'])
+                self.assertEqual(read_responses(transport.path)['responses'], [])
+            finally: transport.close()
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX inode lifetime regression')
+    def test_transport_pins_inode_until_recreation_and_releases_all_descriptors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            document = Path(directory).resolve() / 'docs-vw.html'
+            transport = ResponseTransport(document)
+            anchor = transport.anchor
+            self.assertEqual(os.fstat(anchor).st_ino, transport.identity[1])
+            transport.path.unlink()
+            transport.path.write_bytes(b'preserve replacement')
+            self.assertNotEqual(transport.path.stat().st_ino, os.fstat(anchor).st_ino)
+            with self.assertRaisesRegex(ValueError, 'replaced'): transport.close()
+            self.assertEqual(transport.path.read_bytes(), b'preserve replacement')
+            with self.assertRaises(OSError): os.fstat(anchor)
+            transport.path.unlink()
+            transport = ResponseTransport(document)
+            anchor = transport.anchor
+            # Successful publication consumes the owned scratch inode and then
+            # recreates the transport, releasing its previous pin.
+            with transport.staging() as path: path.unlink()
+            self.assertIsNotNone(transport.anchor)
+            with self.assertRaises(OSError): os.fstat(anchor)
+            anchor = transport.anchor
+            transport.close(clean=False)
+            with self.assertRaises(OSError): os.fstat(anchor)
+            self.assertTrue(transport.path.exists())
+
     def test_complete_stale_transport_is_reclaimed_but_unknown_or_recovery_data_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             document = Path(directory).resolve() / 'docs-vw.html'

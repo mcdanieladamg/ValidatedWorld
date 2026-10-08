@@ -57,8 +57,13 @@ must not affect managed HTML operations. Custom document names, Unicode, protect
 caller logs, fresh-start reclamation, replaced/unknown files, concurrent readers,
 cross-process writer exclusion and retained unpublished recovery are covered.
 Readers release file handles before publication; Windows uses named mutexes
-without project lock files. POSIX keeps private OS-temp flock inodes stable to
-avoid an unlink/reacquire race. Normal helper exit removes owned transport data;
+without project lock files. POSIX keeps stable flock inodes in a private per-user
+directory under resolved `/tmp`, independent of `TMPDIR`, `TEMP` and `TMP`, to
+avoid split lock ownership and unlink/reacquire races. A transport descriptor
+pins its POSIX inode until recreation or close, preventing unlink/recreate from
+reusing an identity and deleting replacement data. Regressions preserve the
+original empty-project/launch-temp assertions and test different-temp competing
+writers, publication readers and descriptor release. Normal helper exit removes owned transport data;
 explicit retention and unpublished snapshots remain protected.
 Windows regressions also deny hard-link creation across database initialization,
 database backup, HTML creation/backup, reads, SQL export and reviewed updates.
