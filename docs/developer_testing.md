@@ -63,7 +63,10 @@ avoid split lock ownership and unlink/reacquire races. A transport descriptor
 pins its POSIX inode until recreation or close, preventing unlink/recreate from
 reusing an identity and deleting replacement data. Regressions preserve the
 original empty-project/launch-temp assertions and test different-temp competing
-writers, publication readers and descriptor release. Normal helper exit removes owned transport data;
+writers, publication readers and descriptor release. Portable native-API fixtures
+exercise Windows mutex/attribute failures and POSIX ownership, timeout and cleanup
+paths on every CI host; real cross-process tests still use the host's native locks.
+Normal helper exit removes owned transport data;
 explicit retention and unpublished snapshots remain protected.
 Windows regressions also deny hard-link creation across database initialization,
 database backup, HTML creation/backup, reads, SQL export and reviewed updates.
