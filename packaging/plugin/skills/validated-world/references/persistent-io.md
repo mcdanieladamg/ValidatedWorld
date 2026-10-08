@@ -26,6 +26,46 @@ Send one request and newline through the host's retained stdin tool:
 {"version":1,"command":"host.help","payload":{}}
 ```
 
+For a long request, use **input frames**, rather than pasting one long terminal
+line. The helper buffers them in memory and dispatches one complete request only
+after its SHA-256 matches. It creates no additional files and does not split the
+semantic operation batch. Direct launcher `ndjson` accepts ordinary NDJSON only;
+these frames belong to `ndjson_log.py`.
+
+Generate frames with the bundled helper's `request_frames(request)` in a host
+Python execution tool:
+
+```python
+import runpy
+frames = list(runpy.run_path(helper_path)["request_frames"](request))
+```
+
+Here `request` is the complete request object and `helper_path` is the installed
+`scripts/ndjson_log.py`. Return the frames to the agent for separate stdin calls;
+run this in the host's Python execution tool, not at the live engine prompt.
+Alternatively, pipe NDJSON through its file-free encoder:
+
+```text
+<python> <skill>/scripts/ndjson_log.py --frame-input [--chunk-size 600]
+```
+
+The encoder reads stdin and prints `@vw-begin`, `@vw-part <fragment>` lines and
+`@vw-end <sha256>`. Its default fragments are 600 ASCII characters, including
+escaped Unicode; each complete frame is below 1,000 bytes. **Send each generated
+line in its own retained-stdin tool call**, including its newline. Do not combine
+the frames into one oversized call. Choose a smaller `--chunk-size` if the host's
+limit requires it. Preserve every character, including spaces and escapes;
+terminal visual wrapping is not an extra newline to copy.
+
+There is no engine response until the end frame. Read the ordinary command result
+through `--read`. A missing, truncated, duplicated or reordered fragment causes
+an `input.frame` error instead of a partial mutation. Resend the complete request
+from `@vw-begin`; `@vw-cancel` discards an unfinished input buffer. EOF discards
+unfinished input and cannot restore a draft. Do not enter Python code at the live
+helper prompt or restart the engine between frames. If ordinary NDJSON is split
+across tool calls instead, include its newline only in the final call; framing
+also avoids physical terminal line limits and detects altered input.
+
 Read the announced file through a separate helper invocation while the host lives:
 
 ```text

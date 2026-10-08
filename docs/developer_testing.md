@@ -50,7 +50,11 @@ allow is synthetic offline test data; this does not establish fresh-host review
 acceptance, which requires the separate host smoke below.
 The same walkthrough runs through the bundled response-log launcher and its
 coordinated `--read` mode, reading responses before process exit. Regressions
-assert one hidden `.tmp.html` sibling throughout initialization, reads, review
+send a large Unicode `change.apply` through isolated `--frame-input` encoding
+and separate calls under 1,000 bytes. Framing buffers one request in memory;
+damaged, missing, repeated or reordered fragments cannot mutate a proposal.
+Rendering, sync and verification failures preserve publication/recovery bytes.
+Regressions assert one hidden `.tmp.html` sibling throughout initialization, reads, review
 and publication; in-memory SQLite keeps the fixed schema, verified mappings,
 foreign keys and atomic rollback. Denied filesystem SQLite and OS-temp allocations
 must not affect managed HTML operations. Custom document names, Unicode, protected

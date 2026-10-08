@@ -65,8 +65,11 @@ file beside that document for live responses, review evidence and publication
 recovery. Check live `host.help` with the helper's `--read` mode before changes;
 use its returned byte offset for later reads. Normal exit removes the owned file.
 See the reference for protected recovery and requested diagnostic retention.
-Keep one launcher `ndjson` process alive. Send one JSON object per input line;
-every request requires `version`, `command` and an object `payload`, including
+Keep one launcher `ndjson` process alive. Send one JSON object per input line.
+for long requests through terminal tools, use the helper's short, integrity-checked
+input frames described in [persistent input/output](references/persistent-io.md).
+Send each frame separately below the tool's input limit; keep one semantic batch.
+Every request requires `version`, `command` and an object `payload`, including
 commands with no arguments:
 
 ```json

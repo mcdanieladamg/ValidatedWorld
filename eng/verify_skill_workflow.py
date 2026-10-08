@@ -129,8 +129,20 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             request = expand(examples[command][index])
             if overrides:
                 request["payload"].update(overrides)
-            process.stdin.write(json.dumps(request) + "\n")
-            process.stdin.flush()
+            if log_output and command == 'change.apply':
+                request['payload']['operations']['operations'][0]['node']['text'] = 'Weekly watering Ω 😀 "quotes" \\ escapes. ' * 300
+            wire = json.dumps(request) + '\n'
+            if log_output:
+                encoded = subprocess.run([sys.executable, '-I', '-S', str(skill / 'scripts/ndjson_log.py'), '--frame-input'],
+                                         input=wire, capture_output=True, text=True, encoding='utf-8', timeout=10)
+                if encoded.returncode: raise AssertionError(encoded.stderr)
+                for frame in encoded.stdout.splitlines(keepends=True):
+                    if len(frame.encode('utf-8')) >= 1000: raise AssertionError('Input frame exceeds terminal-call budget')
+                    process.stdin.write(frame)
+                    process.stdin.flush()
+            else:
+                process.stdin.write(wire)
+                process.stdin.flush()
             line = response_line(command)
             if not line:
                 raise AssertionError(f"Host closed during {command}: {process.stderr.read()}")
@@ -158,6 +170,11 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                             "read.node", "read.search", "read.dependencies", "read.context",
                             "change.begin", "change.apply", "change.patch", "change.show"):
                 send(command)
+                if log_output and command == 'change.apply':
+                    shown = send('change.show')
+                    claim = next(item['node'] for item in shown['operations']['operations'] if item['entityId'] == 'water-budget')
+                    if claim['text'] != 'Weekly watering Ω 😀 "quotes" \\ escapes. ' * 300:
+                        raise AssertionError('Framed change.apply altered the large Unicode claim')
             page = send("change.affected")
             evidence = list(page["items"])
             while page["page"]["nextCursor"]:
