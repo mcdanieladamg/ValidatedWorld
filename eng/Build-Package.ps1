@@ -3,7 +3,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$')]
-    [string] $Version = '1.0.2',
+    [string] $Version = '1.0.3',
     [string] $OutputDirectory
 )
 
@@ -13,6 +13,10 @@ $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) { $OutputDirectory = Join-Path $root "artifacts/release/$Version" }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $output) { throw "Release output already exists: $output" }
+$releaseNotes = Join-Path $root "docs/releases/$Version.md"
+if (-not (Test-Path -LiteralPath $releaseNotes -PathType Leaf) -and $Version -notmatch '-dev(?:\.[0-9]+)?$') {
+    throw "Missing tracked release notes: $releaseNotes"
+}
 $stage = Join-Path $output 'staging'
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 $pythonVersion = $Version
@@ -102,6 +106,13 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($skill, (Join-Path $output "validated-world-skill-$Version.zip"), [IO.Compression.CompressionLevel]::Optimal, $false)
 [IO.Compression.ZipFile]::CreateFromDirectory($plugin, (Join-Path $output "validated-world-plugin-$Version.zip"), [IO.Compression.CompressionLevel]::Optimal, $false)
-$hashLines = @(Get-ChildItem -LiteralPath $output -Filter '*.zip' | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_.Path))" })
+$notesOutput = Join-Path $output "RELEASE_NOTES-$Version.md"
+if (Test-Path -LiteralPath $releaseNotes -PathType Leaf) {
+    Copy-Item -LiteralPath $releaseNotes -Destination $notesOutput
+}
+else {
+    [IO.File]::WriteAllText($notesOutput, "# ValidatedWorld $Version`n`nDevelopment build for validation; not a published release.`n", [Text.UTF8Encoding]::new($false))
+}
+$hashLines = @(Get-ChildItem -LiteralPath $output -File | Where-Object { $_.Extension -eq '.zip' -or $_.FullName -eq $notesOutput } | Sort-Object Name | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_.Path))" })
 [IO.File]::WriteAllText((Join-Path $output 'SHA256SUMS.txt'), (($hashLines -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
 Write-Output "Packages created in $output"

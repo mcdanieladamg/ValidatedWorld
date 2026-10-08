@@ -47,7 +47,7 @@ For changes to product meaning, contracts or delivery state:
 Never edit SQLite or authoritative HTML records directly to update the blueprint.
 If the checkout cannot safely update or diff its own project, report the blocker.
 The document adapter manages temporary SQLite and publication. Preserve a committed
-unpublished DB until recovery; a successful DB commit alone is not a published
+unpublished SQLite snapshot until recovery; a successful SQLite transaction alone is not a published
 document update.
 
 Meaningful artifact changes normally include the matching graph delta. Record
@@ -84,6 +84,12 @@ may depend on chat history, app memory, ignored handoff notes or external files.
 Keep user docs focused on current behavior, without development transcripts.
 Do not maintain a complete Markdown, JSON, SQL or diagram mirror of the graph.
 
+Preserve the public OpenAI skill/plugin description verbatim. Change it only
+when the human explicitly authorizes or requests a description change. The
+accepted long description is the exact text in both tracked plugin manifests;
+routine implementation, packaging and documentation work is not authorization
+to rewrite it.
+
 Ignored files are regenerable outputs/caches or local settings/secrets. Preserve
 useful sanitized smoke foundations in tracked samples. Put trial DBs, proposals,
 evidence and diagnostics in unique OS temporary directories and remove them
@@ -91,6 +97,13 @@ after review. Inspect contents and resolved containment before recursive cleanup
 preserve canonical data, unknown user files, settings and active installations.
 Report exact paths for blocked cleanup. Completed release archives may remain
 as documented regenerable outputs.
+
+Whenever a task updates distributables, deliver and link all four versioned
+release files: the standalone skill ZIP, plugin ZIP, RELEASE_NOTES-<version>.md
+and SHA256SUMS.txt under artifacts/release/<version>. Build into a fresh candidate
+directory, validate those exact bytes, then inspect and safely replace existing
+regenerable outputs. Keep both skill source copies synchronized and preserve the
+public listing description. GitHub publication and OpenAI uploads are human work.
 
 ## Implementation invariants
 

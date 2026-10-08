@@ -90,20 +90,25 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             text=True, encoding="utf-8",
         )
         log_reader = None
+        log_offset = 0
 
         def response_line(request_command):
-            nonlocal log_reader
+            nonlocal log_reader, log_offset
             if not log_output:
                 return process.stdout.readline()
             deadline = time.monotonic() + COMMAND_TIMEOUT_SECONDS
             pending = ""
             while time.monotonic() < deadline:
-                if log_reader is None and response_log.exists():
-                    log_reader = response_log.open(encoding="utf-8")
-                if log_reader is not None:
-                    pending += log_reader.readline()
-                    if pending.endswith("\n"):
-                        return pending
+                if response_log.exists():
+                    read = subprocess.run([sys.executable, '-I', '-S', str(skill / 'scripts/ndjson_log.py'),
+                                           '--read', str(response_log), '--offset', str(log_offset)],
+                                          capture_output=True, text=True, encoding='utf-8', timeout=10)
+                    if read.returncode != 0: raise AssertionError(read.stderr)
+                    payload = json.loads(read.stdout)
+                    log_offset = payload['nextOffset']
+                    if payload['responses']:
+                        if len(payload['responses']) != 1: raise AssertionError('Unexpected extra responses')
+                        return json.dumps(payload['responses'][0])
                 if process.poll() is not None:
                     raise AssertionError(f"Log host exited without a complete response: {process.stderr.read()}")
                 time.sleep(0.02)
@@ -147,8 +152,7 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                 if not readiness.startswith(prefix):
                     raise AssertionError(f"Log host did not start: {readiness}")
                 response_log = Path(readiness.removeprefix(prefix).rstrip("\n"))
-                if (response_log.parent.parent != trial["path"] or response_log.name != "responses.jsonl"
-                        or not response_log.parent.name.startswith("vw-ndjson-")):
+                if response_log != trial['path'] / '.docs-vw.tmp.html':
                     raise AssertionError(f"Unexpected log allocation: {response_log}")
             for command in ("host.help", "project.init", "project.verify", "project.status",
                             "read.node", "read.search", "read.dependencies", "read.context",
@@ -206,8 +210,8 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             diagnostics = process.stderr.read()
             if exit_code != 0 or diagnostics != "":
                 raise AssertionError(f"Example host did not exit cleanly: {exit_code}, {diagnostics}")
-            if log_output and response_log.parent.exists():
-                raise AssertionError("Example left its owned response directory")
+            if log_output and response_log.exists():
+                raise AssertionError("Example left its owned temporary file")
             if any(document.parent.glob("vw-*-*")):
                 raise AssertionError("Example left a temporary workspace")
             if list(document.parent.glob("*.vw-lock")) or list(document.parent.glob("*.vw.db")):

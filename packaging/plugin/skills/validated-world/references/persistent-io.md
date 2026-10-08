@@ -1,89 +1,75 @@
 # Keep requests and responses live
 
-The NDJSON host flushes each result before reading the next request. Shell
-pipelines/redirection and command-result capture can still buffer output until
-exit. Closing the process to flush it loses unfinished proposals. Do not parse
-an empty capture or wait for EOF to receive an individual response.
+The NDJSON host flushes each result before reading the next request. Closing the
+process loses unfinished proposals. Shell capture can buffer output until exit;
+do not parse terminal echoes or close the host to receive a response.
 
 ## Terminal tools with retained stdin
 
-Use the bundled optional `scripts/ndjson_log.py` when terminal output is buffered
-or includes echoes, ANSI controls or wrapping. It runs the same launcher in one
-process and writes raw responses directly to a UTF-8 file, flushing each line.
-It adds no network service, model client, durable draft or review bypass.
-
-Start a live interactive terminal session with the selected interpreter and
-set the execution tool's working directory to the identified, authorized
-project folder. The helper creates a unique `vw-ndjson-*` directory there by
-default, in the same process that opens its log. No log-path argument or
-separate directory-creation command is needed:
+Start the bundled helper with Python 3.11+ in the authorized project folder:
 
 ```text
-<python> -X utf8 -u <skill>/scripts/ndjson_log.py
+<python> -X utf8 -u <skill>/scripts/ndjson_log.py --document <selected-html>
 ```
 
-Quote shell arguments containing spaces. Use the host's session-capable
-execution tool. Retain a session handle only when the result actually supplies
-one for a still-running process; an exited command has no usable session handle.
-Send later input through the host's stdin/write tool. The helper announces
-`NDJSON ready; responses: <absolute-path>` on stderr. Use that actual path,
-inside the selected project folder. Send one request plus newline:
+Quote paths containing spaces. The default document is `docs-vw.html` in that
+folder. For a custom document, always pass its selected path. Retain only a
+session handle actually returned for a running process. The helper announces
+`NDJSON ready; responses: <absolute-path>` on stderr. It creates one hidden
+`.<document-stem>.tmp.html` sibling (`design.html` uses `.design.tmp.html`), shared by live
+responses, review evidence and publication staging. It does not restore drafts
+or authorize another session.
+
+Send one request and newline through the host's retained stdin tool:
 
 ```json
 {"version":1,"command":"host.help","payload":{}}
 ```
 
-Read the log with a separate filesystem/read command **while the session is
-still running**, before initializing or changing a project. Confirm that the
-`host.help` response has `status: "ok"` and the process remains alive. This
-checks both the session handle and cross-command log visibility.
-Each complete newline-terminated line is one response object.
-Track consumed lines or a byte offset and parse only new complete lines. A file
-read may race with a write: keep an incomplete final line for the next read;
-an empty read means no complete response yet. Wait briefly/check the live
-session rather than parsing empty text or closing it. Do not parse terminal
-echoes or readiness messages as protocol JSON. Serialize paths and requests
-with a JSON library; see [payload templates](command-workflow.md).
+Read the announced file through a separate helper invocation while the host lives:
 
-The default uses the shared project folder rather than OS temp, whose visibility
-can differ between sandboxed executions. If log allocation or the live response
-check fails, report the diagnostic and stop before project changes; the helper
-does not fall back to another directory. Do not change sandbox settings or
-request broader access just to store logs. The log is temporary transport
-evidence, not project storage; keep `docs-vw.html` outside the log directory.
-Report inaccessible temporary paths that cannot be cleaned up.
+```text
+<python> <skill>/scripts/ndjson_log.py --read <announced-path> --offset 0
+```
 
-For callers with a deliberately separate shared working area, `--temp-root`
-accepts an absolute authorized root instead of the working directory. An
-explicit absolute response-log argument also remains supported for a
-caller-owned temporary directory already visible to the host; its parent must
-exist and the helper refuses an existing log. These overrides are not needed
-for the ordinary skill workflow.
+This returns `responses`, `nextOffset` and `busy`. Check the live `host.help`
+response has `status: "ok"` before project mutation. Save `nextOffset` and pass
+it on the next read to receive only new complete response objects. Empty results
+or `busy: true` mean check again briefly; neither means approval or process loss.
+The reader excludes publication windows, skips internal recovery records and
+retains incomplete final lines. Do not keep a raw file handle open: Windows
+readers can prevent the atomic replacement. The internal file is temporary
+transport, sometimes a staged HTML candidate, and is not another project authority.
 
-Keep this same session for `change.begin`, authoring, evidence, host review and
-`change.agent-write`. Reviewer tools may run separately while it waits. The log
-is temporary evidence, not a way to resume session references after process
-loss. On a crash, verify the existing project and begin a fresh proposal;
-preserve any reported committed-unpublished working DB for recovery.
+Keep the same live session for authoring, review, dialogue and save. Independent
+reviewers can inspect committed project context concurrently; competing writers
+to the same document are rejected as busy. Complete packet pages are already
+returned through this transport; pass exact evidence to fresh workers without
+creating separate evidence files. Bind every decision to current evidence.
 
-Read save results and all required review evidence while the session is alive.
-After completing or discarding the proposal, close any external log readers,
-send `host.exit` with `payload: {}`, and confirm process exit code zero. The
-helper automatically removes its owned log and directory on normal exit or EOF,
-including after a structured request error. Its final exit response may be
-removed before a separate read; use process status to confirm shutdown.
+No shared-directory creation is needed. Allocation errors stop startup without
+falling back elsewhere. `--temp-root` selects an explicit authorized shared folder;
+a caller-supplied absolute log path remains available for deliberate diagnostics
+and never overwrites an existing file. Caller-owned logs remain caller-owned.
 
-Use `--keep-log` only when diagnostics are explicitly needed after shutdown.
-Caller-supplied logs are also retained. Abnormal exits preserve diagnostics;
-forced termination may leave temporary directories because cleanup cannot run.
-Cleanup refuses unexpected or replaced files and reports the exact remaining
-path on failure. Inspect retained contents before removing only known owned
-files. Never delete the project or a recovery DB as log cleanup.
+Read save results and required evidence before sending `host.exit` with an empty
+payload, then confirm exit code zero. Normal helper exit/EOF removes its owned
+scratch file, including after structured request errors. The final exit response
+may already be gone. `--keep-log` retains requested diagnostics; abnormal exits
+also retain data. Fresh startup reclaims only recognized complete abandoned
+transport records after acquiring the document's scratch lease. It preserves
+unknown/replaced files, active sessions and unpublished recovery. Exact paths
+are reported for cleanup failures; never delete a recovery snapshot as log cleanup.
 
-## Hosts with a persistent Python execution environment
+An `unpublished` save reports its recovery path as `workingDbPath`. Preserve that
+hidden file and use `project retry-export <reported-path>` after resolving the
+cause. Never repeat the semantic change. Changed source bytes block retry. A
+crash during final staging may leave a complete HTML candidate requiring
+inspection and reconciliation; fresh startup preserves it.
 
-If the host can retain a Python object across tool calls, ordinary pipes also
-work. Keep this process object in that environment:
+## Hosts with persistent Python execution
+
+Ordinary pipes also work when a host can retain a process object across calls:
 
 ```python
 import json
@@ -105,8 +91,6 @@ def request(command, payload):
     return json.loads(line)
 ```
 
-Use `readline()` for one response; reading the whole stdout stream waits for
-EOF. This is not persistent if each tool call starts a new Python interpreter.
-Send `host.exit` only after saving/discarding, then close streams and wait for
-exit. Hosts must supply retained process control; command-only tools that
-cannot keep stdin open cannot carry a process-local change session.
+Use `readline()` for one response; whole-stream reads wait for EOF. This is not
+persistent if every tool call creates a new interpreter. Send `host.exit` only
+after saving/discarding, close streams and wait for exit.

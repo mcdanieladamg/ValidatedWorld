@@ -22,15 +22,17 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 & $vwPython -m coverage report --skip-covered
 .\eng\Test-DeveloperTools.ps1
 .\eng\Test-Blueprint.ps1 -PythonExecutable $vwPython
-.\eng\Build-Package.ps1 -Version 1.0.2
-.\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/1.0.2 -PythonExecutable $vwPython
-.\eng\Test-PackageTempAlias.ps1 -PackagesDirectory artifacts/release/1.0.2 -PythonExecutable $vwPython
+.\eng\Build-Package.ps1 -Version 1.0.3
+.\eng\Test-Package.ps1 -PackagesDirectory artifacts/release/1.0.3 -PythonExecutable $vwPython
+.\eng\Test-PackageTempAlias.ps1 -PackagesDirectory artifacts/release/1.0.3 -PythonExecutable $vwPython
 ```
 
 The build deliberately refuses an existing output directory. Inspect an old
 release output before removing it, or select a fresh `-OutputDirectory` and pass
 that exact directory to the package test. Archives are regenerable outputs.
-The package test extracts each archive temporarily and exercises the included
+The builder emits both ZIPs, versioned release notes and checksums; stable builds
+require tracked notes in `docs/releases/<version>.md`. The package test verifies
+all three checksums before extracting each archive temporarily and exercises the included
 launcher, document creation, import/export, verification and deterministic bytes.
 Generated Python caches are excluded from all staged content, including helper
 scripts and plugin resources; the extracted-package check rejects leaked caches.
@@ -46,24 +48,18 @@ launcher: create, retrieve, add a scoped claim, patch, page evidence, acknowledg
 review, preview and publish. A write without host approval must block. Its later
 allow is synthetic offline test data; this does not establish fresh-host review
 acceptance, which requires the separate host smoke below.
-The same walkthrough runs through the bundled response-log launcher, reading
-each flushed UTF-8 response before process exit. Unit checks protect existing
-logs and cover Unicode/structured diagnostics, default project-folder allocation
-despite differing process temp environments, and explicit shared-root overrides.
-The packaged walkthrough starts in its disposable project folder with no log
-arguments and follows the announced path. Startup must produce a readable live help
-response before project mutation; an exited command supplies no session handle.
-Terminal smoke keeps stdin live,
-reads complete response lines from the log between requests, then confirms
-graceful exit; shell redirection/capture is not used as the response transport.
-Close external log readers before shutdown. Default helper shutdown removes its
-owned response directory; confirm exit code zero instead of rereading a deleted
-final response. Tests cover error followed by graceful EOF, requested diagnostic
-retention, abnormal exit and preservation of unexpected neighboring files.
-HTML workflow tests deny every OS-temp SQLite allocation while exercising
-initialization, reads, SQL export, backup, reviewed publication and discard.
-Each allocation must use the selected document's parent. A denied selected
-parent must fail with its path, without a fallback or an HTML publication.
+The same walkthrough runs through the bundled response-log launcher and its
+coordinated `--read` mode, reading responses before process exit. Regressions
+assert one hidden `.tmp.html` sibling throughout initialization, reads, review
+and publication; in-memory SQLite keeps the fixed schema, verified mappings,
+foreign keys and atomic rollback. Denied filesystem SQLite and OS-temp allocations
+must not affect managed HTML operations. Custom document names, Unicode, protected
+caller logs, fresh-start reclamation, replaced/unknown files, concurrent readers,
+cross-process writer exclusion and retained unpublished recovery are covered.
+Readers release file handles before publication; Windows uses named mutexes
+without project lock files. POSIX keeps private OS-temp flock inodes stable to
+avoid an unlink/reacquire race. Normal helper exit removes owned transport data;
+explicit retention and unpublished snapshots remain protected.
 Windows regressions also deny hard-link creation across database initialization,
 database backup, HTML creation/backup, reads, SQL export and reviewed updates.
 Competing destinations created after preflight must retain their bytes, and
@@ -150,14 +146,12 @@ Use one persistent `ndjson` process for a reviewed change, following
 HTML file as `change.begin.path`. Inspect every affected/context and exact preview
 page, then save. Compare bounded `project diff` with the backup, inspect changed
 HTML source, reimport into a new temporary DB and verify it. Confirm that default
-managed success removes the working DB. Exercise explicit `keepWorkingDb` and
+managed success removes the recovery scratch data. Exercise explicit `keepWorkingDb` and
 DB-authoritative paths separately when changing those contracts.
 Check that creation, export, backup, session close/discard and publication retry
-leave no `.vw-lock` sidecars. An open session holds its sidecar until release;
-an OS cleanup failure must report its path without reversing a successful export.
-Exercise temporary-directory aliases on macOS (where `/var` links to
-`/private/var`); engine-owned allocations are canonicalized before project-path
-checks, while explicitly linked project files remain rejected.
+leave only the selected HTML file. Exercise a competing live writer and concurrent
+readers; no project-local lock sidecars or SQLite directories may appear. Inspect
+staging/transport boundaries and verify a published file is not hidden on Windows.
 
 For project isolation, create a second project at an explicit custom path and
 inspect both through the public CLI. A wrong project ID must reject change.begin.
@@ -183,7 +177,7 @@ weaken OS permissions or bypass browser policy to complete a smoke check.
 
 Remove owned temporary copies after inspecting their contents. Resolve each
 recursive cleanup target and verify it remains under the unique trial directory.
-Retain a committed unpublished DB until recovery, and report its exact path.
+Retain a committed unpublished snapshot until recovery, and report its exact path.
 
 ## Browser smoke
 

@@ -50,7 +50,7 @@ formats.
 Export stages and verifies one sibling file before atomically replacing the
 selected `.html` destination. Neighbors are untouched. New projects and backups
 are non-overwriting. Failed publication after the reviewed SQLite commit retains
-the temporary DB for `project retry-export`; successful publication precedes its
+the reviewed SQLite snapshot in the hidden file for `project retry-export`; successful publication precedes its
 managed cleanup. Explicit caller-owned DBs are never automatically deleted.
 
 New-file publication uses a same-directory no-overwrite rename on Windows,
@@ -59,12 +59,17 @@ backups. POSIX uses hard-link publication because its ordinary rename can replac
 an existing file. Both refuse a destination created by another writer after
 preflight; existing-document updates continue to use atomic replacement.
 
-HTML initialization, reads, SQL export and managed changes allocate unique SQLite
-workspaces beside the selected document, independent of the process's OS-temp
-configuration or working directory. The selected parent must be writable even
-for reads. Allocation failure reports that parent and does not fall back elsewhere.
-Ordinary completion, discard and graceful shutdown remove owned workspaces;
-explicit retention and committed unpublished results preserve their reported DBs.
+Managed HTML reads and edits use verified SQLite in memory. Live responses,
+review evidence and publication recovery share one hidden sibling,
+`.docs-vw.tmp.html` for `docs-vw.html` (custom names follow the same pattern).
+Publication reuses that file to stage the complete HTML and atomically replaces
+the selected document. Normal completion removes the scratch file. Active
+writers are excluded; independent readers remain available. Fresh startup
+reclaims recognized, complete abandoned transport data, preserving unknown data
+and unpublished recovery. A crash during final staging can leave a complete
+candidate requiring inspection and reconciliation; it is never deleted as a log.
+Explicit `keepWorkingDb` materializes a caller-requested `.working.vw.db` after
+publication; instructed DB authority and conversion outputs remain caller-owned.
 
 ## JSON fields
 

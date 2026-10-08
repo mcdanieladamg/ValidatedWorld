@@ -121,9 +121,23 @@ def parse(path):
     return StoredProject(str(path), graph, state_fingerprint(graph), p['created'], p['updated'])
 
 
-def write_stage(project, path: Path):
+def write_stage(project, path: Path, *, append=False):
     import os
-    with path.open('x', encoding='utf-8', newline='\n') as stream:
-        stream.write(render(project)); stream.flush(); os.fsync(stream.fileno())
-    check = parse(path)
-    if (check.graph, check.created_utc, check.updated_utc) != (project.graph, project.created_utc, project.updated_utc): raise ValueError('export round-trip verification failed')
+    size = path.stat().st_size if append else None
+    with path.open('a' if append else 'x', encoding='utf-8', newline='\n') as stream:
+        try:
+            stream.write(render(project)); stream.flush(); os.fsync(stream.fileno())
+        except BaseException:
+            stream.close()
+            if append:
+                with path.open('r+b') as rollback: rollback.truncate(size)
+            else: path.unlink()
+            raise
+    try:
+        check = parse(path)
+        if (check.graph, check.created_utc, check.updated_utc) != (project.graph, project.created_utc, project.updated_utc): raise ValueError('export round-trip verification failed')
+    except BaseException:
+        if append:
+            with path.open('r+b') as rollback: rollback.truncate(size)
+        else: path.unlink()
+        raise

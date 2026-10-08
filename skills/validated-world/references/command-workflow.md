@@ -170,7 +170,8 @@ previous evidence and approval; refresh them before trying to save.
 ```
 
 Inspect `payload.status`: `written` means published; `agentReviewBlocked` means
-unsaved. `unpublished` means SQLite committed but HTML publication failed: retain
+unsaved. `unpublished` means the reviewed SQLite snapshot was retained in the hidden
+`.tmp.html` file but HTML publication failed: retain
 `workingDbPath` and follow the skill's publication recovery instructions without
 repeating the semantic mutation. Do not substitute manual `change.write` to
 bypass the skill's host review. Verify the file and read back changed IDs with

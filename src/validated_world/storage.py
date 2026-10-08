@@ -217,6 +217,9 @@ class ProjectStore:
         if self._write_fault is not None:
             self._write_fault(stage)
 
+    def _open(self, path, read_only=False):
+        return _connect(path, read_only)
+
     @staticmethod
     def _publish_no_overwrite(temporary: str, destination: str) -> None:
         """Atomically publish a same-directory file without replacing a winner."""
@@ -270,7 +273,7 @@ class ProjectStore:
 
     def status(self, path: str) -> dict:
         project = self.load(path)
-        connection = _connect(project.path, True)
+        connection = self._open(project.path, True)
         try:
             sqlite_version = connection.execute("select sqlite_version()").fetchone()[0]
         finally:
@@ -305,7 +308,7 @@ class ProjectStore:
     def export_sql(self, path: str) -> str:
         """Return SQLite's schema/data dump without changing the database."""
         project = self.load(path)
-        connection = _connect(project.path, True)
+        connection = self._open(project.path, True)
         try:
             return "\n".join(connection.iterdump()) + "\n"
         finally:
@@ -327,7 +330,7 @@ class ProjectStore:
         expected = state_fingerprint(proposed)
         if expected != proposed_fingerprint:
             raise RuntimeError("proposed-fingerprint-mismatch")
-        connection = _connect(full)
+        connection = self._open(full)
         try:
             connection.execute("BEGIN IMMEDIATE")
             self._fault("transaction-begun")

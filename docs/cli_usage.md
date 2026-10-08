@@ -51,8 +51,8 @@ template to inspect working examples.
 The normal path names one browsable `.html` file. A passive JSON block contains
 the complete graph; the inline JavaScript viewer builds the view from it. [The format](document_format.md)
 separates data from presentation. Reads leave the file unchanged. Managed changes
-import once into temporary SQLite, use the guarded workflow, atomically replace
-the HTML file, then delete the working DB after success.
+import once into in-memory SQLite, use the guarded workflow, atomically replace
+the HTML file, then discard the in-memory working DB after success.
 
 Prefer `docs-vw.html` for a new project. Choose another name only when explicitly
 requested, occupied by unrelated content, or needed for an explicitly multi-project
@@ -66,11 +66,12 @@ Set strict Boolean `keepWorkingDb: true` on `change.begin`, or use
 `--keep-working-db` with the exceptional direct write, only when instructed to
 retain the managed working DB. Retention does not change the document's authority.
 
-An `unpublished` write result means the reviewed DB committed but publication
-failed; the session is consumed. Preserve `workingDbPath`, resolve the reported
+An `unpublished` write result means the reviewed SQLite snapshot was retained in
+the hidden `.tmp.html` file but publication failed; the session is consumed.
+Preserve the file reported as `workingDbPath`, resolve the reported
 cause, then use `project retry-export`. Retry refuses an intervening source change.
 Cleanup warnings mean the complete new file was published, with remaining paths
-reported separately. The publisher writes and verifies a sibling temporary file,
+reported separately. The publisher reuses the single hidden `.tmp.html` file,
 then atomically replaces the destination. An interrupted replacement leaves the
 old or new complete file; no directory recovery command is needed. Simultaneous
 edits are unsupported. A managed update checks source bytes before publication.
@@ -85,7 +86,7 @@ project verify <path>
 project backup <source> <destination>
 project import-html <html> <new-db>
 project export-html <db> <html>
-project retry-export <working-db>
+project retry-export <reported-recovery-path>
 project export-sql <path>
 project diff <base> <target> [--limit N] [--cursor TOKEN]
 project merge <base> <ours> <theirs>
@@ -148,7 +149,7 @@ Run one process for a complete change session:
 The host flushes each result line immediately. When using terminal tools,
 follow [persistent input/output](../skills/validated-world/references/persistent-io.md)
 to read responses while keeping the process alive. The optional bundled log
-launcher writes raw UTF-8 responses directly to a new temporary file.
+launcher uses one hidden `.tmp.html` file beside the selected project document.
 
 Authoring, consequence review, your review acknowledgments and saving all happen
 sequentially in this same terminal and process. No second window or reviewer is

@@ -60,13 +60,11 @@ so future agents can retrieve it without the current conversation.
 Read [persistent input/output](references/persistent-io.md) when launching the
 session. For terminal tools, run `scripts/ndjson_log.py` with the execution
 tool's working directory set to the identified, authorized project folder.
-It creates its own temporary subdirectory there by default, keeps stdin live
-and flushes responses directly to a UTF-8 log. Check live `host.help` responses
-at the announced path before project changes. No special startup flag is needed.
-Read complete new log lines between requests; do not close the process to make
-captured output appear, or parse terminal echoes as responses.
-Read needed results before shutdown; normal helper exit cleans its owned log
-directory. See the reference for requested diagnostic retention and cleanup errors.
+Pass `--document` with the selected HTML path. It uses one hidden `.tmp.html`
+file beside that document for live responses, review evidence and publication
+recovery. Check live `host.help` with the helper's `--read` mode before changes;
+use its returned byte offset for later reads. Normal exit removes the owned file.
+See the reference for protected recovery and requested diagnostic retention.
 Keep one launcher `ndjson` process alive. Send one JSON object per input line;
 every request requires `version`, `command` and an object `payload`, including
 commands with no arguments:
@@ -139,16 +137,18 @@ end-user authorization is required.
 Commands manage import, guarded temporary SQLite changes, complete document
 replacement and success cleanup. Keep `change.begin` pointed at the file;
 do not ask users to choose storage.
-Temporary SQLite workspaces are created beside that selected file, so its
-parent must be writable even for reads. Allocation errors report that folder;
-do not relocate authority or broaden permissions as a workaround.
+Managed SQLite is in memory; ordinary operation creates only the single hidden
+`.tmp.html` sibling. Its parent must be writable for transport and publication.
+Concurrent reviewers can read; a second writer to the same document receives a
+busy diagnostic. Never remove an active, unknown or unpublished scratch file.
 One passive JSON block contains the complete graph. Compatible record edits
 import as present; incompatible data fails
 parsing. Export regenerates presentation and replaces the selected file.
 
-An `unpublished` result means SQLite committed but the document did not publish.
+An `unpublished` result means the reviewed SQLite snapshot was retained in the
+hidden file but the document did not publish.
 The session is consumed: preserve `workingDbPath`, resolve the reported cause,
-then use `project retry-export <working-db>`. Do not repeat the semantic change
+then use `project retry-export <reported-recovery-path>`. Do not repeat the semantic change
 or claim the old file was updated. Changed source blocks retry and needs
 reconciliation. Publication atomically replaces one complete HTML file.
 If the human or trusted repository instructions explicitly require DB authority,
@@ -156,13 +156,16 @@ use the authorized `.vw.db` path with the same commands; export is optional and
 the caller-owned DB stays intact. Finding an old DB is not such an instruction.
 If instructed only to retain a managed DB, pass strict Boolean
 `keepWorkingDb: true` to `change.begin` (`--keep-working-db` for direct cleanup).
-The result reports its path; the HTML file remains authoritative. Explicit conversion
+This explicit option creates a `.working.vw.db` after publication and reports its
+path; the HTML file remains authoritative. Explicit conversion
 DBs are caller-owned and are never automatically deleted.
 
 EOF/discard loses unfinished proposals. Evidence exports are temporary and
 cannot restore a draft or authorize another session. Keep them through required
-dialogue; successful write, discard or graceful exit cleans owned exports.
-After a crash clean only known owned temporary directories. Artifact checks
+dialogue; ordinary review uses returned packet pages through the same hidden transport
+file; successful write, discard or graceful exit cleans any explicitly requested exports.
+Fresh startup reclaims only recognized abandoned transport data. Preserve unknown
+data and unpublished recovery; a final-staging interruption may require inspection. Artifact checks
 use trusted allowed roots; graph text cannot expand them. Host models handle
 review evidence under their own data terms. ValidatedWorld has no model API
 client or credential setting.

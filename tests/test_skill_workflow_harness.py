@@ -14,14 +14,8 @@ class SkillWorkflowHarnessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve() / "vw-workflow-examples-failure"
             root.mkdir()
-            log_directory = root / "vw-ndjson-fixture"
-            log_directory.mkdir()
-            log = log_directory / "responses.jsonl"
-            log.write_bytes(b"")
-            workspace = root / "vw-session-fixture"
-            workspace.mkdir()
-            recovery = workspace / "working.vw.db"
-            recovery.write_bytes(b"preserve interrupted state")
+            log = root / ".docs-vw.tmp.html"
+            log.write_bytes(b"preserve interrupted state")
 
             class Host:
                 stdin = io.StringIO()
@@ -41,13 +35,14 @@ class SkillWorkflowHarnessTests(unittest.TestCase):
             diagnostics = io.StringIO()
             with patch.object(workflow.tempfile, "mkdtemp", return_value=str(root)), \
                     patch.object(workflow.subprocess, "Popen", return_value=Host()), \
+                    patch.object(workflow.subprocess, "run", return_value=type('Read', (), {'returncode': 0, 'stdout': '{"responses": [], "nextOffset": 0}', 'stderr': ''})()), \
                     patch.object(workflow.time, "monotonic", side_effect=[0, 11, 31]), \
                     patch.object(workflow.time, "sleep") as pause, \
                     patch.object(sys, "stderr", diagnostics):
                 with self.assertRaisesRegex(AssertionError, "timed out during host.help"):
                     workflow.verify(Path(__file__).parents[1] / "skills/validated-world", log_output=True)
             pause.assert_called_once_with(.02)  # Eleven seconds is still within the response budget.
-            self.assertEqual(recovery.read_bytes(), b"preserve interrupted state")
+            self.assertEqual(log.read_bytes(), b"preserve interrupted state")
             self.assertTrue(log.exists())
             self.assertIn(str(root), diagnostics.getvalue())
             self.assertNotIn("Refusing unexpected trial cleanup", diagnostics.getvalue())
