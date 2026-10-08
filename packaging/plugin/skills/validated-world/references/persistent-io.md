@@ -17,6 +17,9 @@ work around a rejected path.
 Run this recipe once in the host's persistent Python environment. Supply
 `python_executable`, `launcher_path` and `project_folder` from the verified
 runtime and selected project. It uses Python's standard library only.
+Execute it in the retained interpreter; no generated controller script,
+proposal file, response log, evidence file or working folder is permitted.
+The memory helper is initialized before authoring; keep this controller alive.
 
 ```python
 import json
@@ -27,9 +30,11 @@ import sys
 from threading import Thread
 
 project_folder = str(Path(project_folder).resolve())
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(launcher_path).parent))
-from review_handoff import ReviewFiles, compact
-review_files = ReviewFiles(project_folder)
+from review_memory import ReviewMemory, compact, response
+review_memory = ReviewMemory()
+protocol_responses = []
 process = subprocess.Popen(
     [python_executable, "-B", "-X", "utf8", "-u", launcher_path, "ndjson"],
     cwd=project_folder,
@@ -59,11 +64,8 @@ def request(command, payload):
     if line is None:
         raise RuntimeError("ValidatedWorld exited before replying; check host stderr")
     result = json.loads(line)
-    if result["command"] != command:
-        raise RuntimeError("Unexpected response; stop this session")
-    if result["status"] != "ok":
-        raise RuntimeError(result)
-    return result
+    protocol_responses.append(result)
+    return response(result, command)
 
 def close_session():
     try:
@@ -81,9 +83,8 @@ def close_session():
                 process.wait(timeout=30)
         process.stdin.close()
         process.stdout.close()
-        warnings = review_files.close()
-        if warnings:
-            print({"reviewFileCleanupWarnings": warnings})
+        review_memory.close()
+        protocol_responses.clear()
 ```
 
 Call `request("host.help", {})` first. Verify its `payload.projectRoot` matches
@@ -105,10 +106,12 @@ output. Keep `result` unchanged for later commands. Do not print full snapshots,
 affected pages, ownership manifests, packet pages or a save's collection of
 reviewer decisions into the orchestrator's context. Inspect only the records,
 diagnostics or questions needed for its current decision. Use the bundled
-`review_files` helper for workers to read complete evidence independently.
-After a reviewed save or discard and the required worker dialogue, call
-`review_files.close()`; report any returned cleanup warnings. `close_session()`
-also performs this cleanup on handled failures.
+`review_memory` helper to retain complete evidence in RAM. Its methods take this
+exact `request` function returning the full protocol envelope. Do not pass a
+payload-only or compact wrapper. Unwrap `result["payload"]` only at individual
+use sites. `review_memory.message(descriptor)` is an explicit delivery object,
+not routine output. Follow [packet review](packet-review.md) to assess a real
+host route before exporting it. Clear memory after save/discard and dialogue.
 
 ## Hosts with retained interactive terminals
 
@@ -122,33 +125,11 @@ process cannot serve this purpose.
 Parse the child's stdout inside Python before displaying results. Terminal
 echoes, prompts, wrapping and cursor-control sequences are not protocol data.
 Do not add a separate Node or .NET runtime to manage the session. Give fresh
-reviewers the file handoffs in [packet review](packet-review.md); do not
+reviewers complete evidence through [packet review](packet-review.md); do not
 assume another agent can use the author's terminal handle.
 
-## Optional: local HTTP controller
-
-When the host cannot retain Python pipes but permits a retained server and
-loopback requests, launch from the selected project folder:
-
-```text
-<python> -B -X utf8 -u <skill>/scripts/validated_world.py serve
-```
-
-It announces `controllerUrl` and `projectRoot`. Verify the root before mutation
-and retain the exact URL and actual running server handle. The secret controller
-URL authorizes commands; keep it with the author rather than sharing it with
-reviewers. Send each JSON request envelope on stdin to a completed client call:
-
-```text
-<python> -B -X utf8 <skill>/scripts/validated_world.py request <controllerUrl>
-```
-
-The client returns one complete response; the server retains the session. Python
-`urllib.request` with `ProxyHandler({})` and a 30-second timeout also works.
-Payloads are unchanged. `host.exit` returns its response and closes the server;
-a rejected exit request leaves it usable for correction.
-
 If the host cannot set a working directory, pass the selected folder as the
-sole positional argument to `ndjson` or `serve`. If these transports are
-unavailable, report the host limitation and leave the change unsaved. Do not
-install another runtime or broaden permissions to make them work.
+sole positional argument to `ndjson`. If the host cannot retain an authoring
+process, report that limitation and leave the change unsaved. Do not create a
+controller script or install another runtime. Native reviewer channels are
+read-only and described in [packet review](packet-review.md).

@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -9,6 +10,53 @@ from unittest.mock import patch
 
 
 class PersistentRecipeTests(unittest.TestCase):
+    def test_controller_and_memory_helper_deny_all_writes_except_selected_html(self):
+        checkout = Path(__file__).resolve().parents[1]
+        skill = checkout / 'skills/validated-world'
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            code = r'''
+import json, os, pathlib, re, sys
+from queue import Empty, Queue
+import subprocess
+from threading import Thread
+python_executable = sys.executable
+launcher_path = str(pathlib.Path(sys.argv[1]) / 'scripts/validated_world.py')
+project_folder = sys.argv[2]
+document = str(pathlib.Path(project_folder) / 'only.html')
+recipe = re.search(r'```python\n(.*?)\n```', (pathlib.Path(sys.argv[1]) / 'references/persistent-io.md').read_text(encoding='utf-8'), re.S).group(1)
+def audit(event, arguments):
+    if event == 'open':
+        path, mode, flags = arguments
+        writes = (isinstance(mode, str) and any(c in mode for c in 'wax+')) or flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND)
+        if writes and not isinstance(path, int) and os.path.abspath(path) != document:
+            raise PermissionError('unexpected controller write: ' + str(path))
+    if event in {'os.mkdir', 'os.remove', 'os.rmdir', 'os.rename', 'os.link', 'os.symlink', 'tempfile.mkstemp', 'tempfile.mkdtemp'}:
+        raise PermissionError('unexpected controller filesystem operation: ' + event)
+sys.addaudithook(audit)
+exec(compile(recipe, '<retained-controller>', 'exec'))
+try:
+    request('host.help', {})
+    request('project.init', {'path': document, 'projectId': 'garden', 'title': 'Garden', 'purposeNodeId': 'purpose', 'purposeText': 'Grow plants.'})
+    ref = request('change.begin', {'path': document, 'projectId': 'garden', 'author': 'audit', 'intent': 'Clarify plants'})['payload']['reference']
+    node = request('read.node', {'path': document, 'entityId': 'purpose'})['payload']
+    node['text'] = 'Grow native plants.'
+    ref = request('change.apply', {'reference': ref, 'operations': {'operations': [{'kind': 'replace', 'entityKind': 'node', 'entityId': 'purpose', 'node': node, 'edge': None}]}})['payload']['reference']
+    descriptor = review_memory.affected(request, ref, limit=1)
+    assert review_memory.message(descriptor)['responses']
+    assert len(protocol_responses) > 5
+    request('change.discard', {'reference': ref})
+finally:
+    close_session()
+assert not review_memory.messages and not protocol_responses
+assert list(pathlib.Path(project_folder).iterdir()) == [pathlib.Path(document)]
+print('controller memory audit passed')
+'''
+            result = subprocess.run([sys.executable, '-B', '-X', 'utf8', '-c', code, str(skill), str(root)],
+                                    capture_output=True, text=True, encoding='utf-8', timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('controller memory audit passed', result.stdout)
+
     def test_documented_recipe_retains_review_saves_unicode_and_closes_cleanly(self):
         checkout = Path(__file__).resolve().parents[1]
         skill = checkout / 'skills/validated-world'
@@ -40,6 +88,7 @@ class PersistentRecipeTests(unittest.TestCase):
 
             try:
                 self.assertEqual(Path(send('host.help', {})['projectRoot']), root)
+                self.assertEqual(send('sample.list', {}), ['technical-project'])
                 with self.assertRaisesRegex(RuntimeError, 'unknown member'):
                     request('host.help', {'unexpected': True})
                 send('project.init', {'path': str(document), 'projectId': 'garden', 'title': 'Jardín 日本語',

@@ -474,7 +474,7 @@ class Application:
                 "entityIds": [v["entityId"] for v in evidence], "requiresNewPlan": True}
 
     def review_export(self, reference, plan_fingerprint, packet_id, limit=100):
-        from .memory_transport import PacketTransport
+        from .review_transport import PacketTransport
         self.packet_review(reference, plan_fingerprint)
         if self.packet_transport is None: self.packet_transport = PacketTransport()
         return self.packet_transport.export(self, reference, plan_fingerprint, packet_id, limit)
@@ -482,6 +482,12 @@ class Application:
     def cleanup_review_exports(self, session_id=None):
         if self.packet_transport is None: return {"revokedEndpoints": 0}
         return self.packet_transport.revoke(session_id)
+
+    def affected_export(self, reference, limit=100):
+        from .review_transport import PacketTransport
+        self.session(reference)
+        if self.packet_transport is None: self.packet_transport = PacketTransport()
+        return self.packet_transport.export_affected(self, reference, limit)
 
     def initialize(self, path: str, project_id: str, title: str, purpose_node_id: str, purpose_text: str) -> StoredProject:
         return self.store.initialize(path, Graph(project_id, title, purpose_node_id, (Node(purpose_node_id, purpose_text),), ()))

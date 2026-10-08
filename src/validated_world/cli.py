@@ -113,14 +113,16 @@ def direct_command(arguments: list[str], out, err) -> int:
         _print_help(out); return SUCCESS
     if len(arguments) == 1 and arguments[0] in {"version", "--version", "-v"}:
         out.write(f"ValidatedWorld {__version__}\n"); return SUCCESS
-    if arguments[0] == "serve" and len(arguments) in {1, 2}:
-        from .memory_transport import serve
-        return serve(out, err, project_root=arguments[1] if len(arguments) == 2 else None)
-    if len(arguments) == 2 and arguments[0] == "request":
-        from .memory_transport import request
-        return request(arguments[1], sys.stdin, out)
     store = ProjectStore(); group = arguments[0]
     try:
+        if group == "review-read" and len(arguments) == 3:
+            from .review_transport import fetch
+            raw = fetch(json_loads_strict(arguments[1]), arguments[2])
+            if hasattr(out, 'buffer'):
+                out.buffer.write(raw); out.buffer.flush()
+            else:
+                out.write(raw.decode("utf-8"))
+            return SUCCESS
         if group == "change":
             if len(arguments) < 2 or arguments[1] in {"help", "--help", "-h"}:
                 out.write("change write <project-html> <operation-batch.json> --skip-dependencies\nReview the operation file before invoking this immediate save. Prints only its before/after edits. Highly discouraged for routine changes. Use rare cleanup only for absent downstream consequences or specific known consequential edits contained in the batch. Uncertain impact needs ordinary review. Structural validity, active graph rules and stale-write protection remain. For preview before a separate save, use NDJSON change.apply with skipDependencies:true, change.preview, then change.write.\n")
@@ -309,6 +311,7 @@ def _validate_payload(command: str, payload: Any) -> dict:
         "change.review-context": ({"reference", "entityIds"}, set()),
         "change.review-result": ({"reference", "binding", "result"}, set()),
         "change.review-export": ({"reference", "planFingerprint", "packetId"}, {"limit"}),
+        "change.affected-export": ({"reference"}, {"limit"}),
         "change.review-cleanup": ({"reference"}, set()),
         "change.review": ({"reference", "dispositions", "presentedContextNodeIds"}, {"includeOperations", "includeProposedGraph"}),
         "change.validate": ({"reference"}, {"includeOperations", "includeProposedGraph"}),
@@ -397,7 +400,7 @@ def ndjson_loop(inp, out, err, *, app=None, close_on_eof=True, project_root=None
             if command not in {"host.help", "host.exit"}:
                 for session in app.sessions.values(): paths.file(session.base.path)
             if command == "host.help":
-                value = {"projectRoot": paths.root, "protocolVersion": 1, "framing": "One request and one result JSON object per line. Unknown fields are rejected.", "supportedProductLanguage": "English recommended for stored workflow guidance; other languages permitted", "graphTextSupport": "Unicode project text is preserved without language interpretation.", "commands": ["host.help", "host.exit", "project.init", "project.status", "project.open", "project.verify", "project.backup", "project.export-sql", "project.import-html", "project.export-html", "project.diff", "project.merge", "project.bulk_plan", "artifact.check", "sample.list", "sample.create", "template.list", "template.describe", "template.export", "template.instantiate", "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope", "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report", "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand", "change.affected", "change.omission-details", "change.preview", "change.review-plan", "change.review-packet", "change.review-context", "change.review-result", "change.review-export", "change.review-cleanup", "change.review", "change.validate", "change.agent-review", "change.agent-write", "change.write", "change.discard"]}
+                value = {"projectRoot": paths.root, "protocolVersion": 1, "framing": "One request and one result JSON object per line. Unknown fields are rejected.", "supportedProductLanguage": "English recommended for stored workflow guidance; other languages permitted", "graphTextSupport": "Unicode project text is preserved without language interpretation.", "commands": ["host.help", "host.exit", "project.init", "project.status", "project.open", "project.verify", "project.backup", "project.export-sql", "project.import-html", "project.export-html", "project.diff", "project.merge", "project.bulk_plan", "artifact.check", "sample.list", "sample.create", "template.list", "template.describe", "template.export", "template.instantiate", "read.node", "read.edge", "read.nodes", "read.edges", "read.search", "read.ranked_search", "read.tag", "read.scope", "read.neighbors", "read.dependencies", "read.path", "read.context", "read.health", "read.report", "change.begin", "change.show", "change.focus", "change.apply", "change.patch", "change.expand", "change.affected", "change.omission-details", "change.preview", "change.review-plan", "change.review-packet", "change.review-context", "change.review-result", "change.review-export", "change.affected-export", "change.review-cleanup", "change.review", "change.validate", "change.agent-review", "change.agent-write", "change.write", "change.discard"]}
             elif command == "host.exit":
                 app.close()
                 out.write(_json(_result(command, {"warnings": []})) + "\n"); out.flush(); return SUCCESS
@@ -455,6 +458,8 @@ def ndjson_loop(inp, out, err, *, app=None, close_on_eof=True, project_root=None
                 value = app.review_result(payload["reference"], payload["binding"], payload["result"])
             elif command == "change.review-export":
                 value = app.review_export(payload["reference"], payload["planFingerprint"], payload["packetId"], payload.get("limit", 100))
+            elif command == "change.affected-export":
+                value = app.affected_export(payload["reference"], payload.get("limit", 100))
             elif command == "change.review-cleanup":
                 app.session(payload["reference"])
                 value = app.cleanup_review_exports(payload["reference"]["sessionId"])

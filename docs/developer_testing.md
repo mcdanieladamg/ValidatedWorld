@@ -46,20 +46,19 @@ launcher: create, retrieve, add a scoped claim, patch, page evidence, acknowledg
 review, preview and publish. A write without host approval must block. Its later
 allow is synthetic offline test data; this does not establish fresh-host review
 acceptance, which requires the separate host smoke below.
-The same walkthrough runs through the optional in-memory controller, receiving
-each complete UTF-8 response before server exit. A child-process audit hook
-rejects every filesystem write except the selected HTML, and rejects temporary
-allocation, rename, hard links, directory creation and deletion. Both native
-pipes and the controller must complete create/read/review/save without work
-files. The controller is tested with loopback access; native pipes remain the
-default when the host denies it. Unit tests cover read-only project directories,
-launch-selected project roots for both transports, normalized inside paths,
+The same walkthrough also runs branch and fresh-synthesis protocol fixtures
+through native reviewer channels, receiving exact UTF-8 bytes before exit.
+A child-process audit hook rejects every filesystem write except the selected
+HTML, temporary allocation, rename, hard links, directory creation and deletion.
+Subprocess authoring pipes and native reviewer channels must complete
+create/read/review/save without work files. Unit tests cover read-only project
+directories, launch-selected roots, normalized inside paths,
 outside read/write rejection, sibling-prefix escapes, links/junctions, Windows
 device and stream aliases, and rejection of request-supplied root expansion.
 Templates, backups and exports remain usable inside subfolders. Unit tests cover
 RAM transaction rollback, optimistic stale checks, occupied destinations, direct
 save failure and disposal of unsaved state. Packet tests fetch hashed bounded
-pages in memory, require full presentation, reject stale evidence, revoke URLs,
+pages in memory, require full presentation, reject stale evidence, revoke channels,
 and preserve Unicode graph IDs as data. Existing batching, refinement,
 supplemental context, dialogue and synthesis gates continue to be exercised.
 Windows disk-DB tests separately deny hard links for intentional initialization
@@ -69,26 +68,24 @@ project root and constructing file arguments. The review-packet sample generator
 also resolves its caller's destination before starting a persistent session.
 A regression exercises all four CLI fixture families and both game/scale
 review-packet fixtures through a real directory alias and Windows short paths
-when available. In-process controller tests cover authentication rejection,
-malformed requests, bounded review packets, endpoint revocation and unsaved-work
-cleanup; these complement child-process checks and count toward branch coverage.
+when available. Native-channel tests cover capability rejection, malformed and oversized
+control frames, exact raw bytes, bounded review packets and revocation; these complement child-process checks and count toward branch coverage.
 The persistent-recipe regression executes the Python block from the agent
 reference against the public launcher, retaining one session through an error,
 Unicode authoring, review, guarded save and clean shutdown. Its approval is an
 offline fixture; fresh-host review remains a separate check.
 It also simulates a host denying strict path resolution while allowing the
 selected working directory, so the recipe cannot reintroduce that preflight.
-File-handoff regressions exercise complete affected analysis, independent
-compressed-page reading, branch decisions and synthesis with socket creation
-denied. They reject changed bytes, wrong bindings, incomplete receipts and stale
-authoring references. Cleanup removes only owned unchanged files and preserves
-unknown or modified entries. Compact-output tests retain exact references while
-excluding evidence bodies and the save response's full decision collection.
-Affected-page summaries read the nested pagination metadata and retain accurate
-totals and continuation flags through the final page without exposing evidence.
-These explicit reviewer handoffs are separate from the engine's no-implicit-file
-audits above: the default skill route creates `.vw-review` under the selected
-project and removes its owned artifacts after review or handled shutdown.
+In-memory message regressions exercise complete affected analysis, independent
+stdin delivery, branch decisions and synthesis with socket creation denied.
+They reject payload-only wrappers, different protocol responses, altered or
+incomplete pages, wrong bindings/receipts and restarted-session references.
+Complete responses remain in memory; compact output omits evidence bodies and
+save-time reviewer collections. Affected summaries retain numeric totalCount
+and accurate hasMore through the final page. The documented controller suppresses
+bytecode caches before importing helpers; ordinary skill use creates no helper
+files or working folders. Explicit developer backups and trial directories are
+separate authorized test artifacts.
 The temp-alias regression launches the same package smoke in a fresh shell with
 an OS temp directory supplied through a directory link (a Windows junction or
 Unix symlink). Both extracted and isolated trial paths use the physical directory;
@@ -180,13 +177,19 @@ the other file is unchanged. Reuse an existing custom file rather than
 creating a second copy under the default name.
 
 For host acceptance use the exact candidate archive's launcher in a disposable
-project. The main agent authors the proposal; a fresh read-only, no-history
-subagent independently reads the bundled file handoff's complete exact evidence
-and returns its binding, full receipt and unchanged cited decision. Use the
-bundled `ReviewFiles.submit` helper for branch and fresh synthesis results, then exercise
-`change.agent-write`. Include block and stale/incomplete evidence probes as
-appropriate. Do not substitute same-context review or an installed old engine
-for the candidate. This host check is separate from offline tests.
+project. The main agent authors the proposal; fresh read-only no-history
+subagents receive complete exact evidence through a deliberately selected native
+channel or host message route. Confirm native access by fetching the exact
+manifest; verify actual context capacity before copying complete messages.
+Exercise branch and separate synthesis decisions with exact bindings. Native
+readers verify every raw page hash and submit unchanged change.review-result
+decisions. Message reviewers return full receipts through ReviewMemory.submit.
+Then use change.agent-write. Record any host permission requirement separately
+from successful delivery; do not change machine security settings.
+Test only Windows locally; Linux and macOS acceptance belongs to CI.
+Include blocked-save, stale and incomplete-evidence probes. Do not substitute
+same-context review or an installed old engine for the candidate. This host
+check is separate from offline tests; report unavailable routes honestly.
 
 Explore realistic mistakes: corrupt a required JSON block and observe import
 failure with no destination DB; restore it, edit a compatible record and confirm

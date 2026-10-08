@@ -46,7 +46,7 @@ def trial_directory():
             shutil.rmtree(root)
 
 
-def verify(skill: Path, *, session_http: bool = False, deny_hard_links: bool = False) -> None:
+def verify(skill: Path, *, packet_channel: bool = False, deny_hard_links: bool = False) -> None:
     if deny_hard_links and os.name != 'nt':
         raise ValueError('Hard-link denial exercises the Windows publication contract.')
     reference_text = (skill / "references" / "command-workflow.md").read_text(encoding="utf-8")
@@ -58,7 +58,7 @@ def verify(skill: Path, *, session_http: bool = False, deny_hard_links: bool = F
     with trial_directory() as trial:
         document = trial["path"] / "docs-vw.html"
         bindings: dict = {"$PATH": str(document)}
-        command = [sys.executable, "-B", "-X", "utf8", "-I", "-S", str(launcher), "serve" if session_http else "ndjson"]
+        command = [sys.executable, "-B", "-X", "utf8", "-I", "-S", str(launcher), "ndjson"]
         # Reject every implicit filesystem write in the actual isolated child.
         # Only the human-selected HTML destination is writable by the product.
         bootstrap = '''import os, pathlib, runpy, sys
@@ -78,10 +78,6 @@ runpy.run_path(sys.argv[0], run_name="__main__")
         command = command[:6] + ['-c', bootstrap, str(document)] + command[6:]
         process = subprocess.Popen(command, cwd=trial["path"], stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
-        from urllib.request import Request, ProxyHandler, build_opener
-        client = build_opener(ProxyHandler({}))
-        controller = None
-
         def pipe_line():
             from queue import Queue, Empty
             from threading import Thread
@@ -103,15 +99,12 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             request = expand(examples[command][index])
             if overrides:
                 request["payload"].update(overrides)
-            if session_http:
-                try:
-                    with client.open(Request(controller, data=json.dumps(request).encode('utf-8'), headers={'Content-Type': 'application/json'}), timeout=COMMAND_TIMEOUT_SECONDS) as response:
-                        line = response.read().decode('utf-8')
-                except OSError as exc:
-                    raise AssertionError(f"Session response failed during {command}: {exc}") from exc
-            else:
-                process.stdin.write(json.dumps(request) + "\n"); process.stdin.flush()
-                line = pipe_line()
+            return send_envelope(request)
+
+        def send_envelope(request):
+            command = request['command']
+            process.stdin.write(json.dumps(request) + "\n"); process.stdin.flush()
+            line = pipe_line()
             if not line:
                 raise AssertionError(f"Host closed during {command}: {process.stderr.read()}")
             result = json.loads(line)
@@ -126,9 +119,6 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             return payload
 
         try:
-            if session_http:
-                readiness = pipe_line()
-                controller = json.loads(readiness)["controllerUrl"]
             for command in ("host.help", "project.init", "project.verify", "project.status",
                             "read.node", "read.search", "read.dependencies", "read.context",
                             "change.begin", "change.apply", "change.patch", "change.show"):
@@ -144,19 +134,43 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                 raise AssertionError(f"Walkthrough review lists drifted: {affected}, {context}")
             send("change.review")
             before_write = document.read_bytes()
-            page = send("change.preview")
-            while page["reviewPage"]["nextCursor"]:
-                bindings["$CURSOR"] = page["reviewPage"]["nextCursor"]
-                page = send("change.preview", 1)
-            blocked = send("change.agent-write")
-            if blocked["status"] != "agentReviewBlocked" or document.read_bytes() != before_write:
-                raise AssertionError("Ordinary example bypassed host review")
-            # Synthetic data for offline protocol verification, never an actual
-            # host reviewer or a claim that this proposal is semantically sound.
-            bindings["$HOST_DECISION"] = {
-                "decision": "allow", "summary": "Offline example fixture only.", "concerns": [],
-            }
-            send("change.agent-review")
+            if packet_channel:
+                def packet_send(command, payload):
+                    return send_envelope({'version': 1, 'command': command, 'payload': payload})
+                reference = bindings['$REF']
+                plan = packet_send('change.review-plan', {'reference': reference, 'limit': 2})
+                entries = list(plan['items']); cursor = plan['nextCursor']
+                while cursor:
+                    page = packet_send('change.review-plan', {'reference': reference, 'limit': 2, 'cursor': cursor})
+                    entries.extend(page['items']); cursor = page['nextCursor']
+                packet_ids = sorted({entry['packetId'] for entry in entries} - {'synthesis'}) + ['synthesis']
+                for packet_id in packet_ids:
+                    export = packet_send('change.review-export', {'reference': reference, 'planFingerprint': plan['planFingerprint'], 'packetId': packet_id, 'limit': 2})
+                    def fetch(key):
+                        raw = subprocess.check_output([sys.executable, '-B', '-X', 'utf8', '-I', '-S', str(launcher), 'review-read', json.dumps(export['channel']), key], timeout=30)
+                        return raw
+                    manifest = json.loads(fetch(export['manifestKey']))
+                    from hashlib import sha256
+                    for entry in manifest['pages']:
+                        raw = fetch(entry['key'])
+                        assert sha256(raw).hexdigest() == entry['sha256']
+                        assert json.loads(raw)['binding'] == export['binding']
+                    blocked = send('change.agent-write')
+                    if blocked['status'] != 'agentReviewBlocked':
+                        raise AssertionError('Missing native branch/synthesis decision did not block')
+                    packet_send('change.review-result', {'reference': reference, 'binding': export['binding'], 'result': {
+                        'decision': 'allow', 'summary': 'Offline native transport fixture only.',
+                        'citations': [{'entityId': 'water-budget'}], 'concerns': [], 'questions': []}})
+            else:
+                page = send("change.preview")
+                while page["reviewPage"]["nextCursor"]:
+                    bindings["$CURSOR"] = page["reviewPage"]["nextCursor"]
+                    page = send("change.preview", 1)
+                blocked = send("change.agent-write")
+                if blocked["status"] != "agentReviewBlocked" or document.read_bytes() != before_write:
+                    raise AssertionError("Ordinary example bypassed host review")
+                bindings["$HOST_DECISION"] = {"decision": "allow", "summary": "Offline example fixture only.", "concerns": []}
+                send("change.agent-review")
             written = send("change.agent-write")
             if written["status"] != "written":
                 raise AssertionError(f"Example failed to publish: {written}")
@@ -179,7 +193,6 @@ runpy.run_path(sys.argv[0], run_name="__main__")
             if process.poll() is None:
                 # Give the host EOF to release its own session and locks first.
                 process.stdin.close()
-                if session_http: process.terminate()
                 try:
                     process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
                 except subprocess.TimeoutExpired:
@@ -187,11 +200,11 @@ runpy.run_path(sys.argv[0], run_name="__main__")
                     process.wait(timeout=COMMAND_TIMEOUT_SECONDS)
             for stream in (process.stdin, process.stdout, process.stderr):
                 stream.close()
-    transport = "in-memory controller" if session_http else "pipes"
+    transport = "native reviewer channel" if packet_channel else "pipes"
     restriction = "; hard links denied" if deny_hard_links else ""
     print(f"Bundled author/review/save examples passed via {transport} (offline review fixture; only selected HTML writable{restriction}).")
 
 
 if __name__ == "__main__":
-    verify(Path(sys.argv[1]).resolve(), session_http="--session-http" in sys.argv[2:],
+    verify(Path(sys.argv[1]).resolve(), packet_channel="--packet-channel" in sys.argv[2:],
            deny_hard_links="--deny-hard-links" in sys.argv[2:])

@@ -8,8 +8,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
-from urllib.error import HTTPError
-from urllib.request import Request, ProxyHandler, build_opener
+from validated_world.review_transport import fetch
 
 sys.path.insert(0, str(Path(__file__).parents[1] / 'src'))
 from validated_world.application import Application, sample_graph
@@ -26,7 +25,6 @@ class MemoryWorkflowTests(unittest.TestCase):
         self.store = ProjectFiles(); self.addCleanup(self.store.close)
         self.project = self.store.initialize(self.path, sample_graph())
         self.app = Application(self.store); self.addCleanup(self.app.close)
-        self.client = build_opener(ProxyHandler({}))
 
     def proposal(self):
         session = self.app.begin(str(self.path), self.project.graph.project_id, 'test', 'Review the revised battery duration')
@@ -40,10 +38,11 @@ class MemoryWorkflowTests(unittest.TestCase):
         review = session.packet_review
         pid = packet_id or next(p for p in review.ownership if p != 'synthesis')
         export = self.app.review_export(session.reference(), plan['planFingerprint'], pid, 1)
+        self.channel = export['channel']
         return review, pid, export
 
-    def get(self, url):
-        with self.client.open(url, timeout=30) as response: return response.read()
+    def get(self, key):
+        return fetch(self.channel, key)
 
     def result(self):
         return {'decision': 'allow', 'summary': 'Offline fixture of complete review.', 'citations': [{'entityId': 'battery-assumption'}], 'concerns': [], 'questions': []}
@@ -129,28 +128,55 @@ class MemoryWorkflowTests(unittest.TestCase):
     def test_packet_endpoints_hashes_partial_coverage_readonly_and_cleanup(self):
         session = self.proposal(); review, pid, export = self.plan_export(session)
         self.assertEqual(review.seen.get(pid, set()), set())
-        manifest = json.loads(self.get(export['manifestUrl']))
+        manifest = json.loads(self.get(export['manifestKey']))
         self.assertEqual(manifest['binding'], export['binding'])
         self.assertEqual(review.seen.get(pid, set()), set())
         first = manifest['pages'][0]
-        self.assertEqual(sha256(self.get(first['url'])).hexdigest(), first['sha256'])
+        self.assertEqual(sha256(self.get(first['key'])).hexdigest(), first['sha256'])
         with self.assertRaisesRegex(ValueError, 'presented'): self.app.review_result(session.reference(), export['binding'], self.result())
         for page in manifest['pages'][1:]:
-            raw = self.get(page['url']); self.assertEqual(sha256(raw).hexdigest(), page['sha256'])
+            raw = self.get(page['key']); self.assertEqual(sha256(raw).hexdigest(), page['sha256'])
             self.assertEqual(json.loads(raw)['binding'], export['binding'])
         self.app.review_result(session.reference(), export['binding'], self.result())
-        with self.assertRaises(HTTPError): self.get(export['manifestUrl'] + '/unknown')
-        with self.assertRaises(HTTPError): self.client.open(Request(export['manifestUrl'], data=b'{}'), timeout=30)
+        with self.assertRaises(ValueError): self.get(export['manifestKey'] + '/unknown')
         self.app.cleanup_review_exports(session.session_id)
-        with self.assertRaises(HTTPError) as error: self.get(export['manifestUrl'])
-        self.assertEqual(error.exception.code, 404)
+        with self.assertRaises(ValueError) as error: self.get(export['manifestKey'])
+        self.assertIn('revoked', str(error.exception))
+        self.assertEqual(list(self.root.iterdir()), [self.path])
+
+    def test_native_authoring_export_has_complete_bound_context_and_rejects_mutation(self):
+        session = self.proposal()
+        export = self.app.affected_export(session.reference(), 1)
+        self.channel = export['channel']
+        manifest = json.loads(self.get(export['manifestKey']))
+        self.assertEqual(manifest['mode'], 'affected')
+        cursor = None; seen = []
+        for entry in manifest['pages']:
+            raw = self.get(entry['key'])
+            self.assertEqual(sha256(raw).hexdigest(), entry['sha256'])
+            value = json.loads(raw)
+            self.assertEqual(value['binding'], {'reference': session.reference()})
+            expected = session.affected(1, cursor)
+            self.assertEqual(value['evidence'], expected)
+            seen.extend(expected['items']); cursor = expected['page']['nextCursor']
+        self.assertIsNone(cursor)
+        self.assertEqual(len(seen), expected['page']['totalCount'])
+        self.assertGreater(len(manifest['pages']), 2)
+        # Authoring findings cannot be substituted for a terminal packet result.
+        with self.assertRaises(ValueError):
+            self.app.review_result(session.reference(), export['binding'], self.result())
+        old = session.operations[0].node
+        self.app.apply(session.reference(), (Operation(OperationKind.REPLACE, EntityKind.NODE, old.id,
+                       node=dataclasses.replace(old, text='A revised battery requirement')),))
+        with self.assertRaisesRegex(ValueError, 'stale'):
+            self.get(export['manifestKey'])
         self.assertEqual(list(self.root.iterdir()), [self.path])
 
     def test_supplemental_context_invalidates_endpoints_and_results(self):
         session = self.proposal(); _, _, export = self.plan_export(session)
         self.app.review_context(session.reference(), ['retention-policy'])
-        with self.assertRaises(HTTPError) as error: self.get(export['manifestUrl'])
-        self.assertEqual(error.exception.code, 410)
+        with self.assertRaises(ValueError) as error: self.get(export['manifestKey'])
+        self.assertIn('stale', str(error.exception))
         self.assertEqual(self.app.agent_write(session.reference())['status'], 'agentReviewBlocked')
 
     def test_export_failure_restores_seen_and_allocates_no_evidence(self):
@@ -166,7 +192,7 @@ class MemoryWorkflowTests(unittest.TestCase):
         self.assertEqual(self.app.packet_transport.exports, {})
         self.assertEqual(list(self.root.iterdir()), [self.path])
 
-    def test_unicode_graph_ids_remain_data_in_generated_capability_urls(self):
+    def test_unicode_graph_ids_remain_data_in_generated_capability_keys(self):
         from validated_world.models import Edge
         session = self.proposal(); nid = '../../café/🦊'
         self.app.apply(session.reference(), session.operations + (Operation(OperationKind.ADD, EntityKind.NODE, nid, node=Node(nid, 'Untrusted claim')), Operation(OperationKind.ADD, EntityKind.EDGE, 'unicode-parent', edge=Edge('unicode-parent', nid, 'scope-power', 'scope-parent'))))
@@ -174,9 +200,9 @@ class MemoryWorkflowTests(unittest.TestCase):
         self.app.review_plan(session.reference())
         pid = next(pid for pid, ordinals in session.packet_review.ownership.items() if any(session.packet_review.evidence[o].get('affectedNode', {}).get('nodeId') == nid for o in ordinals))
         _, _, export = self.plan_export(session, pid)
-        manifest = json.loads(self.get(export['manifestUrl']))
-        pages = [json.loads(self.get(p['url'])) for p in manifest['pages']]
+        manifest = json.loads(self.get(export['manifestKey']))
+        pages = [json.loads(self.get(p['key'])) for p in manifest['pages']]
         self.assertIn(nid, json.dumps(pages, ensure_ascii=False))
-        self.assertNotIn('café', export['manifestUrl'])
+        self.assertNotIn('café', export['manifestKey'])
         self.app.discard(session.reference())
-        with self.assertRaises(HTTPError): self.get(export['manifestUrl'])
+        with self.assertRaises(ValueError): self.get(export['manifestKey'])

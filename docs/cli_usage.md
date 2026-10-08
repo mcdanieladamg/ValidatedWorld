@@ -140,13 +140,12 @@ Run one process for a complete change session:
 The host flushes each result line immediately. When using terminal tools,
 follow [persistent input/output](../skills/validated-world/references/persistent-io.md)
 to read responses while keeping the process alive. The preferred agent recipe
-uses Python subprocess pipes; `serve` / `request <controller-url>` provide an
-optional local HTTP controller when the host permits loopback access.
+uses retained Python subprocess pipes. Fresh reviewers use read-only native
+packet channels or complete exact host messages; no HTTP controller is supplied.
 
 Persistent sessions confine reads and writes to one existing project folder,
 selected at startup. Launch in the HTML file's containing folder, or pass that
-folder as `ndjson <project-folder>` / `serve <project-folder>`. `host.help` and
-the controller announcement return `projectRoot`. File arguments, custom
+folder as `ndjson <project-folder>`. `host.help` returns `projectRoot`. File arguments, custom
 templates, bulk manifests, backups, conversions and artifact allowed roots must
 stay inside it or its subfolders. Relative paths resolve from that root; absolute
 paths inside it remain supported. Requests cannot authorize an additional root.

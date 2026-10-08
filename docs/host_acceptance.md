@@ -94,18 +94,36 @@ reviewer loopback failures (socket access denied, then connection timeout) and a
 successful compressed-file handoff. The exact isolation or permission cause
 was not established. Reviewers independently read complete packets; the author
 received progress and decisions rather than their private tool histories.
-The author nevertheless printed overly large controller responses. The skill
-now defaults to a bundled project-local file handoff and compact controller
-output, with URLs optional when shared loopback access is known to work.
+The author also printed overly large controller responses. The file handoff
+used in that trial was subsequently rejected by the maintainer because ordinary
+skill use must alter only the selected HTML. Those historical results do not
+establish acceptance of the current in-memory message route or cross-machine
+loopback reachability.
 
-The bundled file route also passed a local extracted-candidate trial with Python
-3.11: one fresh no-history branch reviewer and a separate fresh synthesis
-reviewer independently read all compressed pages and returned exact bindings,
-complete fixed-size hash receipts and cited decisions. A discrepancy in copied handoff
-metadata was caught and clarified before approval; corrected delivery
-metadata did not change the proposal. The guarded save, verification and record
-read-back passed. Normal shutdown closed both pipes and removed owned handoffs,
-leaving only the selected garden HTML. The full suite passed 185 tests with
-90.68% branch coverage, including socket-denied file delivery and compact-output
-regressions. Both final archives passed isolated engine workflows and temp-alias
-checks. These local checks are distinct from the external-machine report.
+A later external report described a restarted controller, session-reference
+mismatch and KeyError: 'payload' before saving or visibly launching reviewers.
+Direct change.show and all 26 affected pages reportedly worked; the unsaved
+proposal had 45 nodes and 81 edges while the saved HTML retained its purpose.
+The controller code and traceback are unavailable. A payload-only wrapper is a
+plausible explanation, reproduced by a local regression, not a diagnosis of that
+external run. The current helper validates the full NDJSON envelope before
+accessing payload; restarting a controller still discards its proposal and
+requires a fresh session against verified saved data.
+
+The corrected 1.0.3 standalone candidate was extracted and exercised locally on
+Windows with Python 3.11.3. Four fresh no-history branch reviewers fetched all
+24 assigned native-channel pages; a separate fresh synthesis reviewer fetched
+all five global pages and reconciled the four branch conclusions. Each verified
+exact raw hashes, binding and complete pagination. Their unchanged cited allows
+enabled the guarded save; missing branch/synthesis decisions blocked saving.
+Verification, Unicode read-back, affected-export completeness and post-save
+revocation passed. Shutdown left only the selected HTML. Sandbox pipe reads
+were denied; narrowly approved read-only calls reached the named pipe. This
+establishes delivery with that host permission, not universal sandbox access.
+Browser checks passed purpose-first display, children, breadcrumbs, relationships,
+endpoints, tags, deep-link reload, narrow-view readability and saved Unicode text
+with no console/CSP errors. The Windows suite passed 183 tests at 90.24% branch
+coverage; both archives and the temporary-path alias regression passed.
+Linux/macOS execution and security analysis remain CI checks. Native IPC does
+not cross inaccessible kernels; exact messages still consume real host context,
+and refinement cannot eliminate coherent synthesis obligations.

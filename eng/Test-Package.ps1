@@ -117,10 +117,10 @@ try {
         if (Test-Path -LiteralPath ($protocolProject + '.vw-lock')) { throw "Packaged NDJSON exit left a lock file: $($archive.Name)" }
         & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill
         if ($LASTEXITCODE -ne 0) { throw "Bundled author/review/save examples failed: $($archive.Name)" }
-        $sessionWorkflowOptions = @('--session-http')
+        $sessionWorkflowOptions = @('--packet-channel')
         if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { $sessionWorkflowOptions += '--deny-hard-links' }
         & $python (Join-Path $PSScriptRoot 'verify_skill_workflow.py') $isolatedSkill @sessionWorkflowOptions
-        if ($LASTEXITCODE -ne 0) { throw "In-memory session workflow failed: $($archive.Name)" }
+        if ($LASTEXITCODE -ne 0) { throw "Native reviewer workflow failed: $($archive.Name)" }
         $trialDocs = Join-Path $isolatedParent 'smoke-project.html'
         $trialDb = Join-Path $isolatedParent 'smoke-working.vw.db'
         $null = & $python -I -S $isolatedLauncher sample create technical-project $trialDocs

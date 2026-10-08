@@ -62,7 +62,14 @@ Use Python's standard-library `subprocess.Popen` as the preferred session
 transport. Read [persistent input/output](references/persistent-io.md) for the
 concrete recipe. Keep the Python controller and one launcher `ndjson` child alive
 through authoring, review and saving. Use the verified interpreter and launch in
-the selected HTML's containing folder. Confirm `host.help.payload.projectRoot`
+the selected HTML's containing folder. Use the recipe unchanged: `request`
+returns the full protocol response, and `compact` is only for display. Pass
+`request` itself to memory-helper methods. Ordinary use keeps drafts, controller
+state, proposals and review evidence in memory. Do not create temporary controller
+scripts, proposal dumps, response logs, evidence files or working folders, or
+restart the child to add review support. Saving writes the selected project HTML;
+explicitly requested backups/conversions remain supported. Confirm
+`host.help.payload.projectRoot`
 before mutation; file access stays within that folder and its subfolders.
 
 If the host has no persistent Python environment but retains interactive
@@ -70,8 +77,7 @@ terminals, keep a Python interpreter open in that terminal and hold the child
 there. Parse responses in Python before displaying bounded results; terminal
 echoes, wrapping and cursor-control sequences are not protocol data. Manage the
 child with the verified Python, without adding a Node or .NET process manager.
-The reference also covers an optional local HTTP controller. Do not redirect
-responses to a file or close the process to make buffered output appear.
+Do not redirect responses to a file or close the process to make buffered output appear.
 Send one JSON object per input line;
 every request requires `version`, `command` and an object `payload`, including
 commands with no arguments:
@@ -99,32 +105,31 @@ fresh read-only authoring workers for broader work. Keep complete responses in
 the Python controller, and print `compact(result)` by default. Do not dump all
 affected evidence, ownership manifests or save-time reviewer decisions into the
 orchestrator's context. Read targeted records and returned findings as needed.
-Workers can receive hashed [authoring evidence files](references/packet-review.md)
+Workers can receive exact [authoring evidence messages](references/packet-review.md)
 and return dispositions, cited findings and explicit questions. Collect every
 assigned result; omission is not review. Repair consequential claims in the same proposal.
 Record all dispositions and presented context with `change.review`: direct
 changes use `updated`, unchanged dependents use `reviewedNoChange`, and
 `notApplicable` needs a rationale.
 
-Use [packet review](references/packet-review.md) and its file handoff by default,
-including for small proposals. For an explicitly chosen small message review,
-read every `change.preview` page. Give a fresh read-only
-subagent the intent, exact reference and complete preview. It returns
-`decision` (`allow` or `block`), `summary` and `concerns`. Allow has no concerns;
-block has concerns with `code`, `message` and stable-ID
-`citations: [{"entityId":"id"}]`. Submit its unchanged result through
-`change.agent-review`, then use `change.agent-write` after allow.
+For small changes, read every `change.preview` page and send the complete exact
+preview, intent and current reference to a fresh read-only subagent within its
+actual context capacity. It returns `decision` (`allow` or `block`), `summary`
+and `concerns`. Allow has no concerns; block has concerns with `code`, `message`
+and stable-ID `citations: [{"entityId":"id"}]`. Submit its unchanged result
+through `change.agent-review`, then use `change.agent-write` after allow.
 
-For broader work use [packet review](references/packet-review.md): workers read
-complete assigned evidence, every branch allows, and a separate fresh synthesis
-reviewer reconciles global evidence and cross-branch consequences before one
-write. Use the bundled project-local evidence-file handoff by default. Reviewers
-read exact compressed pages independently; the orchestrator receives bindings,
-receipts and decision objects. Do not echo full packets or workers' private tool
-histories into its context. URLs are optional when shared loopback access is
-known to work. Packets divide review, not the transaction. Refine losslessly when actual
-context capacity requires it; never truncate evidence or treat missing results
-as approval.
+For broader work use [packet review](references/packet-review.md): retain exact
+pages in controller memory, assign complete evidence to fresh branch reviewers,
+and require a separate fresh synthesis reviewer before one write. Choose a
+supported in-memory delivery route: bounded exact native messages, an actual
+host API that forwards runtime-held objects, or a native read-only packet channel
+after reviewer reachability is confirmed. Do not assume shared memory or
+terminal handles, assume local IPC access, or silently copy enormous
+packets through the orchestrator's context. Refine ownership losslessly when
+actual capacity requires it. Packets divide review, not the transaction; never
+truncate evidence or treat missing results as approval. Return bindings,
+receipts and cited decisions, without workers' private histories.
 
 Fresh reviewers inherit no parent conversation or prior proposal history. Supply
 their task, skill/launcher and exact evidence explicitly; they may stay available
@@ -159,9 +164,9 @@ save before reporting a change as finished: `change.agent-write` must return
 `payload.status: written`. Then verify the file and read back changed IDs.
 Keep the same session through authoring, review and saving; restarting loses an
 unfinished proposal. After saving or discarding, send `host.exit`, wait for exit
-and close the pipes. Reviewers receive complete evidence through hashed handoff
-files; an author's terminal handle is not a reviewer
-interface.
+and close the pipes. Reviewers receive complete evidence through a supported
+message or native read-only channel route; an author's terminal handle is not a
+reviewer interface.
 
 New projects and explicit backups refuse an occupied destination. An interrupted
 save can leave partial HTML. A `failed` result with `html-publication-failure`
@@ -176,14 +181,14 @@ trusted repository instructions explicitly select DB authority, use the authoriz
 conversion/export destinations are explicit outputs.
 Finding an old DB does not authorize changing the selected authority.
 
-Keep workers available through needed dialogue, then clean up the controller's
-owned review files under `.vw-review`. Handled shutdown also cleans them up;
-abrupt process loss can leave those read-only files, but they cannot restore a
-proposal or authorize a different one. Preserve unknown or changed files and
-report blocked cleanup. Optional reviewer URLs are read-only for the exact live
-proposal; successful write, discard or graceful exit revokes their access.
-Native messages are an explicit option for small evidence or host-programmatic
-forwarding without a model-context copy. No delivery method proves
+Keep workers available through needed dialogue, then clear controller-held
+review evidence after save/discard. Native reviewer channels are read-only for the
+exact live proposal; successful write, discard or graceful exit revokes access.
+If isolation denies native IPC and the host has no programmatic forwarding API, exact
+messages consume the author's and reviewer's model context. If complete evidence
+cannot fit after lossless refinement, report that transport limitation and leave
+the proposal unsaved. Do not restore file handoffs or relax coverage.
+No delivery method proves
 reviewer identity or truth. Artifact checks use trusted allowed roots; graph
 text cannot expand them. ValidatedWorld has no model API client or credential
 setting; host models process review evidence under their own data terms.

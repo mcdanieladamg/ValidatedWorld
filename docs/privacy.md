@@ -13,18 +13,17 @@ These records may contain personal information if you put it in your project.
 Their purpose is documentation, retrieval and review of proposed changes.
 
 The selected HTML document holds saved project data.
-Review handoffs create compressed local evidence files under `.vw-review` in
-the selected project folder so assigned workers can read them independently.
-Normal cleanup removes the controller's unchanged files; abrupt process loss
-can leave them. They contain project evidence, so apply the same access controls
-as for the project, and do not commit or share them as release artifacts.
-These files cannot resume an unfinished proposal or authorize another session.
+Ordinary skill use retains drafts, controller state, proposals and review
+evidence in process memory, without temporary scripts, evidence files, response
+logs or working folders. Fresh reviewers receive complete assigned evidence
+through host messages or supported read-only native IPC channels.
 
-Optional loopback transports serve commands or read-only packet
-evidence locally using separate random capability URLs; they do not send data
-to the publisher. Ending a session loses unfinished proposals and revokes
-reviewer access. Saving updates the selected HTML and can leave partial data if
-interrupted.
+Native reviewer channels retain packet bytes in RAM and use random capabilities.
+Windows uses local named pipes, Linux uses abstract sockets without filesystem
+entries, and macOS uses a numeric local byte socket. No HTTP, URL forwarding or
+publisher connection is involved. Ending a session loses unfinished proposals
+and revokes reviewer access. Saving updates the selected HTML and can leave
+partial data if interrupted.
 Explicit backups, conversion exports, DB authority and host-captured command
 output may create additional copies. User-created documents and copies remain
 until you delete or replace them.

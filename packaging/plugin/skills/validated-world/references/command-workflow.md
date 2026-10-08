@@ -8,11 +8,10 @@ that fixed folder or its subfolders. Send one JSON object per line and read its
 result before the next request. Serialize JSON rather than hand-escaping paths.
 Use the preferred Python subprocess recipe in
 [persistent input/output](persistent-io.md), retaining its controller across
-requests. The reference also covers a retained Python terminal and an optional
-local HTTP controller. Reading responses must not
+requests. The reference also covers a retained Python terminal. Reading responses must not
 require closing the session. Retain full replies in Python and print
 `compact(result)` for routine output. These payloads illustrate commands;
-the default reviewer delivery is the bundled file handoff in
+choose an actually supported in-memory reviewer route in
 [packet review](packet-review.md), without printing full packets or save-time
 reviewer collections into the author's context.
 Top-level launcher `--help` describes one-shot syntax; `read --help` is not a
