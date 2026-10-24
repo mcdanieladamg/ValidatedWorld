@@ -15,8 +15,8 @@ The graph is stored in your project as a human-friendly HTML file that you can o
 to read and explore. During operation, the agent uses a single hidden `.tmp.html`
 file beside it and removes it afterward.
 
-ValidatedWorld is available as the **ValidatedWorld** plugin and as a standalone
-**AI agent skill**. Ask the agent to understand the project or
+ValidatedWorld is available as the **ValidatedWorld** plugin ( https://chatgpt.com/plugins/plugins_6ac820d4c0748191aab0d339b30b6a60 )
+and as a standalone **AI agent skill**. Ask the agent to understand the project or
 make a change; it retrieves relevant context, reviews the affected knowledge and
 saves the update in that HTML file.
 
